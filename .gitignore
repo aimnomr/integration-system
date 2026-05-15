@@ -1,0 +1,21 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Node.js
+node_modules/
+
+# Environment variables
+.env
+.env.*
+
+# Node-RED credentials
+flows_cred.json
+
+# OS
+.DS_Store
+Thumbs.db

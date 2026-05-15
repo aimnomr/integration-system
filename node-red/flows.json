@@ -1,0 +1,143 @@
+[
+    {
+        "id": "2ef70c56a6974a0a",
+        "type": "tab",
+        "label": "Flow 1",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "0486b4c73a824be3",
+        "type": "mqtt-broker",
+        "name": "Local MQTT",
+        "broker": "localhost",
+        "port": 1883,
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "5",
+        "keepalive": 60,
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "c8296c4aefb9adf1",
+        "type": "debug",
+        "z": "2ef70c56a6974a0a",
+        "name": "debug 1",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 420,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "eb6b9f9aaa5f3a81",
+        "type": "mqtt out",
+        "z": "2ef70c56a6974a0a",
+        "name": "",
+        "topic": "robot/cmd",
+        "qos": "1",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "0486b4c73a824be3",
+        "x": 460,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "d930377bb579677c",
+        "type": "inject",
+        "z": "2ef70c56a6974a0a",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "{     \"linear_x\": 0.2,     \"angular_z\": 0.0 }",
+        "payloadType": "json",
+        "x": 170,
+        "y": 240,
+        "wires": [
+            [
+                "eb6b9f9aaa5f3a81",
+                "c8296c4aefb9adf1"
+            ]
+        ]
+    },
+    {
+        "id": "3f0a62587fcd852c",
+        "type": "mqtt in",
+        "z": "2ef70c56a6974a0a",
+        "name": "",
+        "topic": "robot/cmd/raw",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "0486b4c73a824be3",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 170,
+        "y": 140,
+        "wires": [
+            [
+                "c8296c4aefb9adf1",
+                "0fe904050aad2e3c"
+            ]
+        ]
+    },
+    {
+        "id": "0fe904050aad2e3c",
+        "type": "function",
+        "z": "2ef70c56a6974a0a",
+        "name": "function 1",
+        "func": "\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 320,
+        "y": 160,
+        "wires": [
+            [
+                "eb6b9f9aaa5f3a81"
+            ]
+        ]
+    }
+]
