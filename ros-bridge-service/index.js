@@ -1,93 +1,46 @@
 import 'dotenv/config'
-import * as ROSLIB from 'roslib'
-import mqtt from 'mqtt'
+import mqttClient from './src/mqttClient.js'
+import logger from './src/logger.js'
+import { createRosConnection, reconnectRos, disconnectRos, getRos } from './src/rosConnection.js'
+import { setupOdomSubscription, teardownOdom } from './src/odomBridge.js'
+import { setupPoseSubscription, teardownPose } from './src/poseBridge.js'
+import { setupNavFeedback, teardownNavFeedback } from './src/navFeedback.js'
+import {
+    sendGoal, startWaypoints, cancelGoal, retryWaypoint, skipWaypoint,
+    resetWaypoints, handleGoalResult,
+} from './src/navigation.js'
 
-// --- MQTT ---
-const mqttClient = mqtt.connect(process.env.MQTT_BROKER)
-
-mqttClient.on('connect', () => {
-    console.log('[MQTT] Connected to broker')
+createRosConnection({
+    onConnect: (ros) => {
+        setupOdomSubscription(ros, mqttClient)
+        setupPoseSubscription(ros, mqttClient)
+        setupNavFeedback(ros, mqttClient, (status) => handleGoalResult(ros, status))
+    },
+    onDisconnect: () => {
+        teardownOdom()
+        teardownPose()
+        teardownNavFeedback()
+    },
 })
 
-mqttClient.on('error', (err) => {
-    console.error('[MQTT] Error:', err.message)
+mqttClient.on('message', (topic, message) => {
+    let data = {}
+    try { data = JSON.parse(message.toString()) } catch { /* empty payload is valid */ }
+
+    if (topic === 'amr/system/connect')    { reconnectRos(data.url); return }
+    if (topic === 'amr/system/disconnect') { resetWaypoints(); disconnectRos(); return }
+
+    const ros = getRos()
+    if (!ros) {
+        logger.warn('ROS not connected, dropping command', { topic })
+        return
+    }
+
+    switch (topic) {
+        case 'amr/cmd/goal':             sendGoal(ros, data);       break
+        case 'amr/cmd/waypoints':        startWaypoints(ros, data); break
+        case 'amr/cmd/cancel':           cancelGoal(ros);           break
+        case 'amr/cmd/waypoints/retry':  retryWaypoint(ros);        break
+        case 'amr/cmd/waypoints/skip':   skipWaypoint(ros);         break
+    }
 })
-
-// --- ROS ---
-function createRosConnection() {
-    const ros = new ROSLIB.Ros({ url: process.env.ROSBRIDGE_URL })
-
-    ros.on('connection', () => {
-        console.log('[ROS] Connected to rosbridge')
-        subscribeToTopics(ros)
-        listenToCommands(ros)  // 👈 added
-    })
-
-    ros.on('error', (err) => {
-        console.error('[ROS] Error:', err)
-    })
-
-    ros.on('close', () => {
-        console.warn('[ROS] Connection closed — reconnecting in 3s...')
-        setTimeout(createRosConnection, 3000)
-    })
-}
-
-// --- Subscriptions ---
-function subscribeToTopics(ros) {
-    const odom = new ROSLIB.Topic({
-        ros,
-        name: '/diff_controller/odom',
-        messageType: 'nav_msgs/Odometry'
-    })
-
-    odom.subscribe((msg) => {
-        const payload = {
-            timestamp: Date.now(),
-            position: msg.pose.pose.position,
-            orientation: msg.pose.pose.orientation,
-            linear_velocity: msg.twist.twist.linear,
-            angular_velocity: msg.twist.twist.angular
-        }
-
-        mqttClient.publish(
-            'robot/odom',
-            JSON.stringify(payload),
-            { qos: 1 },
-            (err) => {
-                if (err) console.error('[MQTT] Publish error:', err)
-                else console.log('[ROS→MQTT] odom published')
-            }
-        )
-    })
-}
-
-// --- Command Listener ---        // 👈 entirely new function
-function listenToCommands(ros) {
-    const cmdVel = new ROSLIB.Topic({
-        ros,
-        name: '/web_teleop/cmd_vel',
-        messageType: 'geometry_msgs/Twist'
-    })
-
-    mqttClient.subscribe('robot/cmd', (err) => {
-        if (err) console.error('[MQTT] Subscribe error:', err)
-        else console.log('[MQTT] Subscribed to robot/cmd')
-    })
-
-    mqttClient.on('message', (topic, message) => {
-        if (topic !== 'robot/cmd') return
-
-        const cmd = JSON.parse(message.toString())
-        console.log('[MQTT→ROS] Command received:', cmd)
-
-        cmdVel.publish({
-            linear: { x: cmd.linear_x ?? 0, y: 0, z: 0 },
-            angular: { x: 0, y: 0, z: cmd.angular_z ?? 0 }
-        })
-        console.log('[MQTT→ROS] cmd_vel published')
-    })
-}
-
-// --- Start ---
-createRosConnection()

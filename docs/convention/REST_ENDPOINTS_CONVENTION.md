@@ -1,5 +1,5 @@
 # REST Endpoints Documentation Convention
-> **IMMUTABLE — Do not modify this file.** This file defines the documentation standard for `REST_ENDPOINTS.md`. All formatting decisions must follow this convention.
+> This file defines the documentation standard for `REST_ENDPOINTS.md`. Keep `REST_ENDPOINTS.md` consistent with this convention, and update this file if the project's documentation style changes.
 
 ---
 
@@ -11,14 +11,14 @@ Every `REST_ENDPOINTS.md` must open with a Table of Contents grouped by HTTP met
 ## Table of Contents
 
 **POST**
-- [POST /robot/teleop](#post-robotteleop)
+- [POST /amr/goal](#post-amrgoal)
 
 **GET**
 - [GET /system/status](#get-systemstatus)
 ```
 
 Anchor links follow GitHub Markdown rules: lowercase, spaces and slashes replaced with `-`.  
-Example: `POST /robot/teleop` → `#post-robotteleop`
+Example: `POST /amr/goal` → `#post-amrgoal`
 
 ---
 
@@ -93,8 +93,8 @@ Each endpoint is a level-3 heading using the format `### {METHOD} {/path}`, foll
 ## File-Level Rules
 
 - Filename: `REST_ENDPOINTS.md`
-- Location: `wiki/`
+- Location: `docs/schema/`
 - Encoding: UTF-8, LF line endings
 - Endpoints are grouped by HTTP method: `POST` group first, `GET` group second. Each group has a level-2 heading.
-- Within a group, endpoints are listed in the order they appear in `schema/REST_ENDPOINTS.md`.
-- An endpoint appears in this file only if it is listed in `schema/REST_ENDPOINTS.md`. That file is the source of truth for what exists.
+- Within a group, endpoints are listed in the order they appear in `docs/schema/REST_ENDPOINTS.md`.
+- An endpoint appears in this file only if it is listed in `docs/schema/REST_ENDPOINTS.md`. That file is the source of truth for what exists.

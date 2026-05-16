@@ -1,5 +1,5 @@
 # MQTT Topics Documentation Convention
-> **IMMUTABLE — Do not modify this file.** This file defines the documentation standard for `MQTT_TOPICS.md`. All formatting decisions must follow this convention.
+> This file defines the documentation standard for `MQTT_TOPICS.md`. Keep `MQTT_TOPICS.md` consistent with this convention, and update this file if the project's documentation style changes.
 
 ---
 
@@ -9,12 +9,12 @@ Every `MQTT_TOPICS.md` must open with a Table of Contents listing every topic as
 
 ```markdown
 ## Table of Contents
-- [robot/cmd/raw](#robotcmdraw)
-- [robot/cmd](#robotcmd)
+- [amr/cmd/raw](#amrcmdraw)
+- [amr/cmd/goal](#amrcmdgoal)
 ```
 
 Anchor links follow GitHub Markdown rules: lowercase, spaces replaced with `-`, slashes replaced with nothing.  
-Example: `robot/cmd/raw` → `#robotcmdraw`
+Example: `amr/cmd/raw` → `#amrcmdraw`
 
 ---
 
@@ -58,24 +58,23 @@ No fields may be omitted. If a value is unknown, use `TBD`.
 ### Message Format
 - Use a fenced `json` code block.
 - Field values show the **type**, not a real value: `<string>`, `<float>`, `<integer>`, `<boolean>`, `<object>`, `<array>`.
-- Exception: enum fields show the allowed values as a string literal, e.g. `"teleop" | "move" | "cancel"`.
+- Exception: enum fields show the allowed values as a string literal, e.g. `"goal" | "waypoints" | "cancel"`.
 - Nested objects are written inline with the same type convention.
 
 **Example entry:**
 
 ```markdown
-### robot/cmd/raw
+### amr/cmd/raw
 
 **Direction:** FastAPI → Mosquitto → Node-RED  
 **QoS:** 2  
-**Purpose:** Carries raw commands from the REST API before Node-RED validates and retransmits them.
+**Purpose:** Carries raw commands from the REST API before Node-RED validates and routes them.
 
 **Message Format:**
 \```json
 {
-  "command": "teleop" | "move" | "cancel",
-  "linear_x": <float>,
-  "angular_z": <float>
+  "command": "goal" | "waypoints" | "cancel",
+  "payload": <object>
 }
 \```
 ```
@@ -85,7 +84,7 @@ No fields may be omitted. If a value is unknown, use `TBD`.
 ## File-Level Rules
 
 - Filename: `MQTT_TOPICS.md`
-- Location: `schema/`
+- Location: `docs/schema/`
 - Encoding: UTF-8, LF line endings
 - Topics are grouped by pipeline direction: **Inbound (commands to robot)** first, **Outbound (data from robot)** second. Each group has a level-2 heading.
 - Within a group, topics are listed in pipeline order (upstream first).

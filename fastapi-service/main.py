@@ -1,34 +1,37 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
-import paho.mqtt.client as mqtt
-import json
-import os
 from dotenv import load_dotenv
+load_dotenv()  # must run before app.mqtt is imported (reads env vars at module level)
 
-load_dotenv()
+import logging
+import time
 
-app = FastAPI()
+from fastapi import FastAPI, Request
 
-# --- MQTT ---
-mqtt_client = mqtt.Client()
-mqtt_client.connect(os.getenv("MQTT_BROKER"), int(os.getenv("MQTT_PORT")))
-mqtt_client.loop_start()
+from app.logging_config import configure_logging
+from app.routers import amr, system, oee
 
-# --- Schema ---
-class TeleopCommand(BaseModel):
-    linear_x: float
-    angular_z: float
+configure_logging()
+logger = logging.getLogger(__name__)
 
-# --- Endpoints ---
-@app.post("/robot/teleop")
-def teleop_robot(cmd: TeleopCommand):
-    payload = {
-                    "linear_x": cmd.linear_x,
-            "angular_z": cmd.angular_z,
-        "command": "teleop",
-    }
+app = FastAPI(title="AMR Integration API")
 
-    mqtt_client.publish("robot/cmd/raw", json.dumps(payload), qos=1)
-    print(f"[FastAPI→MQTT] Published to robot/cmd/raw: {payload}")
 
-    return { "status": "ok", "message": "Teleop command sent", "data": payload }
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = round((time.perf_counter() - start) * 1000, 1)
+    logger.info(
+        "request",
+        extra={
+            "method": request.method,
+            "path": request.url.path,
+            "status": response.status_code,
+            "duration_ms": duration_ms,
+        },
+    )
+    return response
+
+
+app.include_router(amr.router)
+app.include_router(system.router)
+app.include_router(oee.router)
