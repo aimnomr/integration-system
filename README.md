@@ -27,6 +27,7 @@ All documentation lives under `docs/`.
 | Setup & running | [docs/setup.md](docs/setup.md) |
 | Implementation status | [docs/status.md](docs/status.md) |
 | Gaps & flagged items | [docs/gaps.md](docs/gaps.md) |
+| Continuation / handoff notes | [docs/CONTINUATION.md](docs/CONTINUATION.md) |
 | Decision log (the *why*) | [docs/decisions.md](docs/decisions.md) |
 | Glossary | [docs/glossary.md](docs/glossary.md) |
 | Per-service reference | [docs/services/](docs/services/) |

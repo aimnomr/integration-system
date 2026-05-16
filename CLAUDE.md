@@ -5,6 +5,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Git
 No need to do git commands since the user will push it himself using github desktop.
 
+## Documents update
+Need to update the gaps.md immediately when problem is solved
+Need to update CONTINUATION.md before ending session
+
 ## Project Overview
 
 This is an **AMR (Autonomous Mobile Robot) Integration System** — middleware that
