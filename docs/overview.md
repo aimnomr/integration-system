@@ -31,8 +31,8 @@ stored in PostgreSQL.
 | [decisions.md](decisions.md) | Why key design choices were made |
 | [glossary.md](glossary.md) | Domain terms (AMR, AMCL, rosbridge, OEE, …) |
 | [services/](services/) | Per-service reference docs |
-| [../schema/](../schema/) | Contract definitions — REST, MQTT, ROS, database |
-| [../convention/](../convention/) | Documentation format standards |
-| [../plans/](../plans/) | Forward-looking refactor/migration plans |
+| [schema/](schema/) | Contract definitions — REST, MQTT, ROS, database |
+| [convention/](convention/) | Documentation format standards |
+| [plans/](plans/) | Forward-looking refactor/migration plans |
 
 New here? Read this page → [architecture.md](architecture.md) → [setup.md](setup.md).

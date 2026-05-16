@@ -14,7 +14,7 @@ Service).
 
 ## Knowledge Base
 
-Project documentation lives in `docs/`, `schema/`, and `plans/`. Start at
+All project documentation lives under `docs/`. Start at
 [`docs/overview.md`](docs/overview.md).
 
 | Topic | Doc |
@@ -26,20 +26,20 @@ Project documentation lives in `docs/`, `schema/`, and `plans/`. Start at
 | Why key design choices were made | `docs/decisions.md` |
 | Domain terms | `docs/glossary.md` |
 | Per-service reference | `docs/services/` |
-| Contracts — REST, MQTT, ROS, database | `schema/` |
-| Documentation format standards | `convention/` |
-| Forward-looking plans (e.g. VDA5050) | `plans/` |
+| Contracts — REST, MQTT, ROS, database | `docs/schema/` |
+| Documentation format standards | `docs/convention/` |
+| Forward-looking plans (e.g. VDA5050) | `docs/plans/` |
 
 ## Source of Truth
 
-Contract definitions live in `schema/` — **always update these when adding endpoints
-or topics**:
-- `schema/REST_ENDPOINTS.md` — REST API
-- `schema/MQTT_TOPICS.md` — MQTT topics
-- `schema/ROS_TOPICS.md` — ROS topics exposed by the robot
-- `schema/DATABASE_SCHEMA.md` — PostgreSQL schema
+Contract definitions live in `docs/schema/` — **always update these when adding
+endpoints or topics**:
+- `docs/schema/REST_ENDPOINTS.md` — REST API
+- `docs/schema/MQTT_TOPICS.md` — MQTT topics
+- `docs/schema/ROS_TOPICS.md` — ROS topics exposed by the robot
+- `docs/schema/DATABASE_SCHEMA.md` — PostgreSQL schema
 
-Documentation format standards are in `convention/`.
+Documentation format standards are in `docs/convention/`.
 
 ## Key Design Points
 

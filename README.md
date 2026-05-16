@@ -18,6 +18,8 @@ New to the project? Read in this order:
 
 ## Documentation map
 
+All documentation lives under `docs/`.
+
 | Area | Location |
 |---|---|
 | Overview & doc map | [docs/overview.md](docs/overview.md) |
@@ -27,9 +29,9 @@ New to the project? Read in this order:
 | Decision log (the *why*) | [docs/decisions.md](docs/decisions.md) |
 | Glossary | [docs/glossary.md](docs/glossary.md) |
 | Per-service reference | [docs/services/](docs/services/) |
-| Contracts — REST, MQTT, ROS, database | [schema/](schema/) |
-| Documentation format standards | [convention/](convention/) |
-| Forward-looking plans (e.g. VDA5050) | [plans/](plans/) |
+| Contracts — REST, MQTT, ROS, database | [docs/schema/](docs/schema/) |
+| Documentation format standards | [docs/convention/](docs/convention/) |
+| Forward-looking plans (e.g. VDA5050) | [docs/plans/](docs/plans/) |
 
 ## Services
 

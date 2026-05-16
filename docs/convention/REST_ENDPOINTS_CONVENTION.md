@@ -93,8 +93,8 @@ Each endpoint is a level-3 heading using the format `### {METHOD} {/path}`, foll
 ## File-Level Rules
 
 - Filename: `REST_ENDPOINTS.md`
-- Location: `schema/`
+- Location: `docs/schema/`
 - Encoding: UTF-8, LF line endings
 - Endpoints are grouped by HTTP method: `POST` group first, `GET` group second. Each group has a level-2 heading.
-- Within a group, endpoints are listed in the order they appear in `schema/REST_ENDPOINTS.md`.
-- An endpoint appears in this file only if it is listed in `schema/REST_ENDPOINTS.md`. That file is the source of truth for what exists.
+- Within a group, endpoints are listed in the order they appear in `docs/schema/REST_ENDPOINTS.md`.
+- An endpoint appears in this file only if it is listed in `docs/schema/REST_ENDPOINTS.md`. That file is the source of truth for what exists.

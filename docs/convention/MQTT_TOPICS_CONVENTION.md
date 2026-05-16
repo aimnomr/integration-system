@@ -84,7 +84,7 @@ No fields may be omitted. If a value is unknown, use `TBD`.
 ## File-Level Rules
 
 - Filename: `MQTT_TOPICS.md`
-- Location: `schema/`
+- Location: `docs/schema/`
 - Encoding: UTF-8, LF line endings
 - Topics are grouped by pipeline direction: **Inbound (commands to robot)** first, **Outbound (data from robot)** second. Each group has a level-2 heading.
 - Within a group, topics are listed in pipeline order (upstream first).

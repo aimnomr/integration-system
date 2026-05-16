@@ -221,7 +221,7 @@ The single consolidated telemetry message. Replaces all of today's `amr/state/*`
 
 | state field | ROS source |
 |---|---|
-| `agvPosition` | Map-frame pose via the `/tf` tree (`map → base_link`) — see §9-A |
+| `agvPosition` | `/amcl_pose` (map-frame pose; available in `mapping:=false` mode) |
 | `velocity`, `driving` | `/diff_controller/odom` |
 | `orderId`, `lastNodeId`, `nodeStates`, `actionStates` | order state machine (in-process) |
 | nav progress / completion | `/move_base/result`, `/move_base/status` |
@@ -382,19 +382,18 @@ everything else and carries no behaviour risk.
 | 5 | retry/skip modelling | Custom `retryNode` / `skipNode` instantActions (§4.3) |
 | 6 | Robot registry source | Config file now, PostgreSQL later |
 | 7 | `batteryState` | Removed entirely (§8) |
+| 8 | AGV pose source for `state.agvPosition` | `/amcl_pose` — see below |
+
+**§9-A — AGV pose source (resolved).**
+VDA5050 needs a **map-frame** pose. When the robot runs in `mapping:=false`
+(localization + navigation) mode it runs AMCL and publishes `/amcl_pose`
+(`geometry_msgs/PoseWithCovarianceStamped`) — the map-localised pose. The bridge
+subscribes to `/amcl_pose` for `state.agvPosition`. Note: `/amcl_pose` is **not**
+available in `mapping:=true` (SLAM) mode; the integration assumes the robot runs in
+`mapping:=false` mode. See [../schema/ROS_TOPICS.md](../schema/ROS_TOPICS.md).
 
 ### Still open
 
-**§9-A — AGV pose source for `state.agvPosition`.**
-VDA5050 needs a **map-frame** pose (where the robot is on the floor plan). The robot
-exposes **no AMCL pose topic** — `ROS_TOPICS.md` has only `/diff_controller/odom`
-(drifting wheel odometry), `/robot_pose_ekf_node/odom_combined` (fused but still no
-map reference), and `/initialpose` (an *input*). Since the robot navigates with
-move_base, a map localizer must be running and publishing the `map` frame on `/tf`.
-**Recommended:** read the `map → base_link` transform from `/tf` (roslib supports
-this via `TFClient`). *Needs confirmation that the robot runs map localization (AMCL
-or equivalent) against a saved map.*
-
 **§9-B — `mapId`.**
-VDA5050 positions require a map identifier. Once §9-A is settled this can be a simple
-configured string (the map / building name) in `robots.config.json`.
+VDA5050 positions require a map identifier. This can be a simple configured string
+(the map / building name) in `robots.config.json` — a value still needs to be chosen.

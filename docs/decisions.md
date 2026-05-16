@@ -17,7 +17,7 @@ author) don't have to re-derive them. Newest decisions first.
 - **Why:** VDA5050 is the industry-standard AGV/AMR fleet interface; aligning with it
   makes the project credible and fleet-ready. VDA5050's per-robot topic namespace
   means the standard-alignment work and the multi-robot work are largely the same.
-- **Status:** Planned — see [../plans/vda5050-migration.md](../plans/vda5050-migration.md).
+- **Status:** Planned — see [plans/vda5050-migration.md](plans/vda5050-migration.md).
 
 ---
 

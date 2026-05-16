@@ -36,7 +36,7 @@
 - **6 stubbed GET endpoints** — `/amr/state`, `/amr/health`, `/amr/nav/status`,
   `/oee/summary`, `/oee/cycles`, `/oee/availability` (return 503 pending DB).
 - **PostgreSQL integration** — no DB code yet; schema defined in
-  [../schema/DATABASE_SCHEMA.md](../schema/DATABASE_SCHEMA.md).
+  [schema/DATABASE_SCHEMA.md](schema/DATABASE_SCHEMA.md).
 - **Node-RED → PostgreSQL logging** — the outbound pipeline stops at Node-RED.
 - **Named locations from DB** — currently hardcoded in FastAPI (`app/data.py`).
 - **Authentication / authorization, rate limiting, structured logging.**

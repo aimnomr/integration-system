@@ -75,5 +75,5 @@ Same pattern for health topics.
 
 The State/Health/OEE handlers currently only display node status and write to debug
 output. The `INSERT INTO ...` steps to PostgreSQL are not implemented — see
-[../../schema/DATABASE_SCHEMA.md](../../schema/DATABASE_SCHEMA.md) for the target
+[../schema/DATABASE_SCHEMA.md](../schema/DATABASE_SCHEMA.md) for the target
 schema.

@@ -76,7 +76,7 @@ PostgreSQL  ← NOT YET IMPLEMENTED
 | **Node-RED** | Routes `amr/cmd/raw` → typed command topics; state/health/oee handler tabs (debug only); future DB logging. See [services/node-red.md](services/node-red.md) |
 | **ROS Bridge Service** | Executes navigation via ROS; publishes robot state to MQTT. See [services/ros-bridge-service.md](services/ros-bridge-service.md) |
 | **Mosquitto** | MQTT broker — routes all messages between services |
-| **PostgreSQL** | Persistent storage for state, health, OEE (not yet integrated). See [../schema/DATABASE_SCHEMA.md](../schema/DATABASE_SCHEMA.md) |
+| **PostgreSQL** | Persistent storage for state, health, OEE (not yet integrated). See [schema/DATABASE_SCHEMA.md](schema/DATABASE_SCHEMA.md) |
 
 ---
 
@@ -97,11 +97,11 @@ PostgreSQL  ← NOT YET IMPLEMENTED
 
 ## Contracts (source of truth)
 
-When adding endpoints or topics, update the contract docs in [`schema/`](../schema/):
+When adding endpoints or topics, update the contract docs in [`schema/`](schema/):
 
-- [schema/REST_ENDPOINTS.md](../schema/REST_ENDPOINTS.md) — REST API
-- [schema/MQTT_TOPICS.md](../schema/MQTT_TOPICS.md) — MQTT topics
-- [schema/ROS_TOPICS.md](../schema/ROS_TOPICS.md) — ROS topics exposed by the robot
-- [schema/DATABASE_SCHEMA.md](../schema/DATABASE_SCHEMA.md) — PostgreSQL schema
+- [schema/REST_ENDPOINTS.md](schema/REST_ENDPOINTS.md) — REST API
+- [schema/MQTT_TOPICS.md](schema/MQTT_TOPICS.md) — MQTT topics
+- [schema/ROS_TOPICS.md](schema/ROS_TOPICS.md) — ROS topics exposed by the robot
+- [schema/DATABASE_SCHEMA.md](schema/DATABASE_SCHEMA.md) — PostgreSQL schema
 
-Documentation format standards live in [`convention/`](../convention/).
+Documentation format standards live in [`convention/`](convention/).

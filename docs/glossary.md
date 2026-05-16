@@ -25,9 +25,9 @@ Domain terms used across this project.
 | **Node-RED** | A flow-based tool used here to validate and route MQTT messages. |
 | **FastAPI** | The Python web framework providing the project's REST API. |
 | **Heartbeat** | A periodic message sent to prove a component is alive even when nothing else changed (e.g. odometry every 5 s when stationary). |
-| **OEE** | Overall Equipment Effectiveness — a productivity metric, `Availability × Performance × Quality`. See [oee.md](oee.md) *(planned)*. |
+| **OEE** | Overall Equipment Effectiveness — a productivity metric, `Availability × Performance × Quality`. |
 | **Trip / cycle** | One completed navigation job (origin → destination), the unit of OEE measurement. |
-| **VDA5050** | Open standard defining the MQTT interface between a fleet manager and AGVs/AMRs. See [../plans/vda5050-migration.md](../plans/vda5050-migration.md). |
+| **VDA5050** | Open standard defining the MQTT interface between a fleet manager and AGVs/AMRs. See [plans/vda5050-migration.md](plans/vda5050-migration.md). |
 | **FMS** | Fleet Management System — the central system that issues orders to and monitors a fleet of robots (VDA5050 term). |
 | **Order** | In VDA5050, a navigation job expressed as a graph of nodes and edges. |
 | **instantActions** | In VDA5050, immediate commands not tied to an order (e.g. cancel). |
