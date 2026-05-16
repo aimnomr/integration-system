@@ -1,3 +1,20 @@
+# ROS Topics
+
+The 136 ROS topics exposed by the robot, as a flat list.
+
+> **Launch context.** This list is the topic set produced by the robot's launch
+> command with **`mapping:=true`** (mapping/SLAM mode). A separate launch with
+> **`mapping:=false`** (pure localization/navigation mode) exposes a *different* set
+> of topics — that set is not yet captured here.
+>
+> Only a handful of these topics are used by the integration. The integration-relevant
+> ones are documented with direction and message type in
+> [architecture.md](../docs/architecture.md) and [MQTT_TOPICS.md](MQTT_TOPICS.md):
+> `/diff_controller/odom` (subscribed), `/move_base_simple/goal` and
+> `/move_base/cancel` (published).
+
+---
+
 /bumper_stop
 /camera/front/camera_info
 /camera/front/image_raw

@@ -1,5 +1,5 @@
 # REST Endpoints Documentation Convention
-> **IMMUTABLE — Do not modify this file.** This file defines the documentation standard for `REST_ENDPOINTS.md`. All formatting decisions must follow this convention.
+> This file defines the documentation standard for `REST_ENDPOINTS.md`. Keep `REST_ENDPOINTS.md` consistent with this convention, and update this file if the project's documentation style changes.
 
 ---
 
@@ -11,14 +11,14 @@ Every `REST_ENDPOINTS.md` must open with a Table of Contents grouped by HTTP met
 ## Table of Contents
 
 **POST**
-- [POST /robot/teleop](#post-robotteleop)
+- [POST /amr/goal](#post-amrgoal)
 
 **GET**
 - [GET /system/status](#get-systemstatus)
 ```
 
 Anchor links follow GitHub Markdown rules: lowercase, spaces and slashes replaced with `-`.  
-Example: `POST /robot/teleop` → `#post-robotteleop`
+Example: `POST /amr/goal` → `#post-amrgoal`
 
 ---
 

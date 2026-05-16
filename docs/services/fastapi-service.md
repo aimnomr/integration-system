@@ -1,6 +1,6 @@
-# Refactor Plan: fastapi-service
+# Service Reference: fastapi-service
 
-## Status: Implemented
+> As-built reference for the current implementation.
 
 ## Structure
 

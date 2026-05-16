@@ -1,6 +1,8 @@
-# Refactor Plan: ros-bridge-service
+# Service Reference: ros-bridge-service
 
-## Proposed Structure
+> As-built reference for the current implementation.
+
+## Structure
 
 ```
 ros-bridge-service/
