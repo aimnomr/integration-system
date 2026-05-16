@@ -27,7 +27,8 @@ stored in PostgreSQL.
 |---|---|
 | [architecture.md](architecture.md) | How the services connect; message pathways |
 | [setup.md](setup.md) | Prerequisites and how to run everything |
-| [status.md](status.md) | What is implemented vs. pending |
+| [status.md](status.md) | What is implemented |
+| [gaps.md](gaps.md) | What is not yet addressed — flagged gaps G1–G14 |
 | [decisions.md](decisions.md) | Why key design choices were made |
 | [glossary.md](glossary.md) | Domain terms (AMR, AMCL, rosbridge, OEE, …) |
 | [services/](services/) | Per-service reference docs |

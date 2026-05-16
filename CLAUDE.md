@@ -22,7 +22,8 @@ All project documentation lives under `docs/`. Start at
 | What the project is + doc map | `docs/overview.md` |
 | How services connect, message pathways | `docs/architecture.md` |
 | Prerequisites and how to run everything | `docs/setup.md` |
-| What is implemented vs. pending | `docs/status.md` |
+| What is implemented | `docs/status.md` |
+| Gaps not yet addressed (G1–G14) | `docs/gaps.md` |
 | Why key design choices were made | `docs/decisions.md` |
 | Domain terms | `docs/glossary.md` |
 | Per-service reference | `docs/services/` |
