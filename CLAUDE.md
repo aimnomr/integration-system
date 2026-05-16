@@ -43,26 +43,27 @@ No test or lint commands are currently configured.
 ```
 External Client (HTTP)
   → FastAPI (port 8000)
-    → MQTT: robot/cmd/raw (QoS 2) → Mosquitto (port 1883)
-      → Node-RED (port 1880): validation + transform
-        → MQTT: robot/cmd (QoS 1)
+    → MQTT: amr/cmd/raw (QoS 2) → Mosquitto (port 1883)
+      → Node-RED (port 1880): routes by command type
+        → MQTT: amr/cmd/goal | amr/cmd/waypoints | amr/cmd/cancel (QoS 1)
           → ROS Bridge Service (Node.js)
             → roslib WebSocket (rosbridge, ws://localhost:9090)
-              → ROS topic: /web_teleop/cmd_vel → Robot
+              → ROS: /move_base_simple/goal | /move_base/cancel → Robot
 
 Robot
   → ROS topic: /diff_controller/odom
     → ROS Bridge Service
-      → MQTT: robot/odom (QoS 1) → Mosquitto
-        → Node-RED (TODO: transform + store)
+      → MQTT: amr/state/odom (QoS 1) → Mosquitto
+        → Node-RED (TODO: store to PostgreSQL)
           → PostgreSQL (not yet integrated)
 ```
 
 **Key design points:**
-- `robot/cmd/raw` is QoS 2 (exactly-once) — raw input from REST API
-- `robot/cmd` is QoS 1 (at-least-once) — after Node-RED validation
-- The ROS Bridge (`ros-bridge-service/index.js`) handles both directions and auto-reconnects to rosbridge on disconnect (3 s delay)
-- Node-RED's function node (validation logic) is currently a pass-through stub
+- `amr/cmd/raw` is QoS 2 (exactly-once) — carries `{ "command": "...", "payload": {...} }`
+- Node-RED's function node routes `amr/cmd/raw` to 5 typed output topics based on `command` field
+- `amr/state/odom` is published on distance (>0.05 m) or heading (>5°) change, plus a 5 s heartbeat
+- roslib.js manages waypoint sequencing in memory; retry/skip come in as `amr/cmd/waypoints/retry` and `amr/cmd/waypoints/skip`
+- `POST /system/connect` and `/system/disconnect` publish to `amr/system/connect` / `amr/system/disconnect`, which roslib.js handles directly (not via Node-RED)
 
 ## Source of Truth
 

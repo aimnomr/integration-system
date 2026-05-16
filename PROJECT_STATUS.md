@@ -1,14 +1,14 @@
 # Project Status — Integration System
 
-**Date:** 2026-05-15  
-**Project:** FYP — Robot Integration System  
+**Date:** 2026-05-15
+**Project:** FYP — Robot Integration System
 **Directory:** `D:\FYP\integration-system`
 
 ---
 
 ## What This Project Is
 
-A middleware integration layer that connects a ROS-based mobile robot to a REST API via MQTT messaging. External clients (e.g., a React frontend) send HTTP commands to a FastAPI service, which routes them through MQTT → Node-RED → MQTT → a Node.js ROS bridge that translates them into ROS topics. Robot state (odometry, pose) flows in the reverse direction back to MQTT, eventually to be stored in PostgreSQL.
+A middleware integration layer that connects a ROS-based mobile robot to a REST API via MQTT messaging. External clients (e.g., a React frontend) send HTTP commands to a FastAPI service, which routes them through MQTT → Node-RED → MQTT → a Node.js ROS bridge that translates them into ROS actions/topics. Robot state (odometry, pose, health) flows in the reverse direction back to MQTT, eventually to be stored in PostgreSQL.
 
 ---
 
@@ -19,24 +19,24 @@ A middleware integration layer that connects a ROS-based mobile robot to a REST 
 React / External Client
   → HTTP POST
   → FastAPI Service
-  → MQTT publish: robot/cmd/raw  (QoS 2)
+  → MQTT publish: amr/cmd/raw  (QoS 2)
   → Mosquitto Broker
-  → Node-RED (validation / transformation)
-  → MQTT publish: robot/cmd  (QoS 1)
+  → Node-RED (routes by command type)
+  → MQTT publish: amr/cmd/goal | amr/cmd/waypoints | amr/cmd/cancel  (QoS 1)
   → Mosquitto Broker
   → roslib.js (ROS Bridge Service)
   → WebSocket (rosbridge_server on robot)
-  → ROS topic: /web_teleop/cmd_vel
+  → ROS: /move_base_simple/goal | /move_base/cancel
   → Robot
 ```
 
 ### Outbound (Data FROM Robot)
 ```
 Robot
-  → ROS topic: /diff_controller/odom
+  → ROS topics (/diff_controller/odom, AMCL pose, battery, etc.)
   → WebSocket (rosbridge_server)
   → roslib.js (ROS Bridge Service)
-  → MQTT publish: robot/odom  (QoS 1)
+  → MQTT publish: amr/state/odom | amr/state/pose | amr/health/* | amr/oee/cycle  (QoS 1)
   → Mosquitto Broker
   → Node-RED
   → PostgreSQL  ← NOT YET IMPLEMENTED
@@ -48,65 +48,79 @@ Robot
 
 | Service | Tech | Port / Address | Role |
 |---|---|---|---|
-| **FastAPI Service** | Python, FastAPI, paho-mqtt | HTTP (default 8000) | REST gateway — validates & forwards commands to MQTT |
-| **Node-RED** | Node-RED | localhost:1880 | Message router & transformer, future DB logging |
+| **FastAPI Service** | Python, FastAPI, paho-mqtt | HTTP 8000 | REST gateway |
+| **Node-RED** | Node-RED | localhost:1880 | Command router & future DB logger |
 | **ROS Bridge Service** | Node.js, roslib, mqtt | — | Bidirectional ROS ↔ MQTT bridge |
 | **Mosquitto** | Mosquitto MQTT Broker | localhost:1883 | Central MQTT broker |
-| **PostgreSQL** | PostgreSQL | TBD | Persistent storage for robot state/telemetry |
+| **PostgreSQL** | PostgreSQL | TBD | Persistent storage (not yet integrated) |
 
 ---
 
 ## MQTT Topics
 
+### Inbound (Commands to Robot)
+
 | Topic | QoS | Direction | Status |
 |---|---|---|---|
-| `robot/cmd/raw` | 2 | FastAPI → Node-RED | Implemented |
-| `robot/cmd` | 1 | Node-RED → roslib.js | Implemented |
-| `robot/odom` | 1 | roslib.js → Node-RED | Implemented |
+| `amr/cmd/raw` | 2 | FastAPI → Node-RED | Implemented |
+| `amr/cmd/goal` | 1 | Node-RED → roslib.js | Implemented |
+| `amr/cmd/waypoints` | 1 | Node-RED → roslib.js | Implemented |
+| `amr/cmd/cancel` | 1 | Node-RED → roslib.js | Implemented |
+| `amr/cmd/waypoints/retry` | 1 | Node-RED → roslib.js | Implemented |
+| `amr/cmd/waypoints/skip` | 1 | Node-RED → roslib.js | Implemented |
+| `amr/system/connect` | 1 | FastAPI → roslib.js | Implemented |
+| `amr/system/disconnect` | 1 | FastAPI → roslib.js | Implemented |
 
-**Payload format — `robot/cmd/raw` and `robot/cmd`:**
+**`amr/cmd/raw` payload:**
 ```json
-{
-  "command": "teleop" | "move" | "cancel",
-  "linear_x": <float>,
-  "angular_z": <float>
-}
+{ "command": "goal" | "waypoints" | "cancel" | "waypoints_retry" | "waypoints_skip", "payload": <object> }
 ```
 
-**Payload format — `robot/odom`:**
-```json
-{
-  "timestamp": <string>,
-  "position": { "x": <float>, "y": <float>, "z": <float> },
-  "orientation": { "x": <float>, "y": <float>, "z": <float>, "w": <float> },
-  "linear_velocity": <float>,
-  "angular_velocity": <float>
-}
-```
+### Outbound (Data from Robot)
+
+| Topic | QoS | Direction | Status |
+|---|---|---|---|
+| `amr/state/odom` | 1 | roslib.js → Node-RED | Implemented |
+| `amr/state/pose` | 1 | roslib.js → Node-RED | Not started |
+| `amr/state/nav/status` | 1 | roslib.js → Node-RED | Not started |
+| `amr/state/nav/progress` | 0 | roslib.js → Node-RED | Not started |
+| `amr/health/connection` | 1 | roslib.js → Node-RED | Not started |
+| `amr/health/battery` | 1 | roslib.js → Node-RED | Not started |
+| `amr/health/error` | 2 | roslib.js → Node-RED | Not started |
+| `amr/oee/cycle` | 1 | roslib.js → Node-RED | Not started |
 
 ---
 
 ## REST Endpoints
 
-| Method | Path | Status | Description |
-|---|---|---|---|
-| `POST` | `/robot/teleop` | **Implemented** | Send velocity command (linear_x, angular_z) |
-| `POST` | `/robot/move` | **Not implemented** | Send single navigation goal |
-| `POST` | `/robot/waypoint` | **Not implemented** | Send ordered waypoint sequence |
-| `POST` | `/robot/cancel` | **Not implemented** | Cancel current active goal |
-| `GET` | `/system/status` | **Not implemented** | Get service connection status |
-| `GET` | `/robot/state` | **Not implemented** | Get current robot pose |
+| Method | Path | Status |
+|---|---|---|
+| `POST` | `/amr/goal` | **Implemented** |
+| `POST` | `/amr/goal/named` | **Implemented** (hardcoded locations) |
+| `POST` | `/amr/waypoints/start` | **Implemented** |
+| `POST` | `/amr/waypoints/stop` | **Implemented** |
+| `POST` | `/amr/waypoints/retry` | **Implemented** |
+| `POST` | `/amr/waypoints/skip` | **Implemented** |
+| `POST` | `/amr/cancel` | **Implemented** |
+| `POST` | `/system/connect` | **Implemented** |
+| `POST` | `/system/disconnect` | **Implemented** |
+| `GET` | `/system/status` | **Partial** (MQTT only; roslib/node-red/db unknown) |
+| `GET` | `/amr/state` | **Stubbed** (503 — awaiting DB) |
+| `GET` | `/amr/health` | **Stubbed** (503 — awaiting DB) |
+| `GET` | `/amr/nav/status` | **Stubbed** (503 — awaiting DB) |
+| `GET` | `/oee/summary` | **Stubbed** (503 — awaiting DB) |
+| `GET` | `/oee/cycles` | **Stubbed** (503 — awaiting DB) |
+| `GET` | `/oee/availability` | **Stubbed** (503 — awaiting DB) |
 
 ---
 
 ## ROS Topics (Robot Side)
 
-The robot exposes 137 ROS topics via rosbridge. Key topics used by this system:
-
 | ROS Topic | Direction | Description |
 |---|---|---|
-| `/web_teleop/cmd_vel` | Publish TO robot | Velocity commands (geometry_msgs/Twist) |
-| `/diff_controller/odom` | Subscribe FROM robot | Odometry data (nav_msgs/Odometry) |
+| `/move_base_simple/goal` | Publish TO robot | Single navigation goal (geometry_msgs/PoseStamped) |
+| `/move_base/cancel` | Publish TO robot | Cancel active goal (actionlib_msgs/GoalID) |
+| `/diff_controller/odom` | Subscribe FROM robot | Odometry (nav_msgs/Odometry) |
 
 Full list in `schema/ROS_TOPICS.md`.
 
@@ -115,34 +129,32 @@ Full list in `schema/ROS_TOPICS.md`.
 ## Implementation Status
 
 ### Done
-- [x] FastAPI service — `/robot/teleop` endpoint working, publishes to `robot/cmd/raw`
-- [x] ROS Bridge Service — full bidirectional bridge, auto-reconnect on disconnect
-  - Subscribes: `/diff_controller/odom` (ROS) → publishes `robot/odom` (MQTT)
-  - Subscribes: `robot/cmd` (MQTT) → publishes `/web_teleop/cmd_vel` (ROS)
-- [x] Node-RED flow — subscribes `robot/cmd/raw`, forwards to `robot/cmd`
-- [x] Mosquitto broker — configured and running on localhost:1883
-- [x] Schema documentation — MQTT topics, REST endpoints, ROS topics all documented
-- [x] Convention files — formatting standards for MQTT & REST docs
-
-### In Progress / Partial
-- [ ] **Node-RED command validation** — flow exists but the function node is empty (just passes msg through with no validation logic)
-- [ ] **REST endpoint schemas** — 5 of 6 endpoints defined in schema but have no code in FastAPI
+- [x] FastAPI — all 9 POST command endpoints
+- [x] FastAPI — GET /system/status (partial — MQTT status only)
+- [x] FastAPI — 6 GET endpoints stubbed with 503 pending DB
+- [x] ROS Bridge — bidirectional bridge with auto-reconnect
+  - Publishes `amr/state/odom` with throttle (distance/heading threshold + 5s heartbeat)
+  - Handles `amr/cmd/goal` → `/move_base_simple/goal`
+  - Handles `amr/cmd/waypoints` → sequential goal sending
+  - Handles `amr/cmd/cancel` → `/move_base/cancel`
+  - Handles `amr/cmd/waypoints/retry` and `amr/cmd/waypoints/skip`
+  - Handles `amr/system/connect` and `amr/system/disconnect`
+- [x] Node-RED — routing function: `amr/cmd/raw` → 5 typed output topics
+- [x] Mosquitto broker — configured on localhost:1883
+- [x] Schema documentation — MQTT topics, REST endpoints, ROS topics
 
 ### Not Started
-- [ ] FastAPI — `POST /robot/move` (navigation goal)
-- [ ] FastAPI — `POST /robot/waypoint` (waypoint sequence)
-- [ ] FastAPI — `POST /robot/cancel` (cancel goal)
-- [ ] FastAPI — `GET /system/status` (health/connection check)
-- [ ] FastAPI — `GET /robot/state` (current robot pose)
+- [ ] Outbound MQTT topics — `amr/state/pose`, `amr/state/nav/status`, `amr/state/nav/progress`
+- [ ] Health topics — `amr/health/connection`, `amr/health/battery`, `amr/health/error`
+- [ ] OEE topic — `amr/oee/cycle`
+- [ ] Nav status feedback — detecting when a goal is reached to advance waypoint sequence
 - [ ] PostgreSQL integration — no DB code anywhere yet
 - [ ] Node-RED → PostgreSQL logging — outbound pipeline stops at Node-RED
-- [ ] Error handling — minimal across all services (FastAPI, roslib.js)
-- [ ] Authentication / authorization — none
-- [ ] Rate limiting — none in FastAPI
-- [ ] Health checks / monitoring — no service status tracking
-- [ ] Tests — no test files exist in any service
-- [ ] Docker / docker-compose — no containerization setup
-- [ ] Logging — only basic console.log / print statements
+- [ ] Named locations from DB — currently hardcoded in FastAPI
+- [ ] Authentication / authorization
+- [ ] Tests — zero test coverage
+- [ ] Docker / docker-compose
+- [ ] Structured logging
 
 ---
 
@@ -150,68 +162,56 @@ Full list in `schema/ROS_TOPICS.md`.
 
 ```
 integration-system/
-├── PROJECT_STATUS.md                  ← this file
-├── COMMUNICATION_PATHWAY.md           ← architecture diagram
+├── PROJECT_STATUS.md
+├── COMMUNICATION_PATHWAY.md
+├── CLAUDE.md
+├── .gitignore
 ├── convention/
-│   ├── MQTT_TOPICS_CONVENTION.md      ← MQTT doc format spec
-│   └── REST_ENDPOINTS_CONVENTION.md   ← REST doc format spec
-├── schema/                            ← source of truth for contracts
+│   ├── MQTT_TOPICS_CONVENTION.md
+│   └── REST_ENDPOINTS_CONVENTION.md
+├── schema/
 │   ├── MQTT_TOPICS.md
 │   ├── REST_ENDPOINTS.md
-│   └── ROS_TOPICS.md                  ← 137 ROS topics from robot
-├── wiki/                              ← generated/expanded documentation
-│   ├── MQTT_TOPICS.md
-│   └── REST_ENDPOINTS.md
+│   └── ROS_TOPICS.md
 ├── fastapi-service/
-│   ├── main.py                        ← 34 lines, 1 endpoint implemented
-│   ├── .env                           ← MQTT_BROKER=localhost, MQTT_PORT=1883
+│   ├── main.py               ← 16 endpoints, all REST commands implemented
+│   ├── .env
 │   └── venv/
 ├── ros-bridge-service/
-│   ├── index.js                       ← 93 lines, full bidirectional bridge
+│   ├── index.js              ← bidirectional bridge, waypoint manager, dynamic connect
 │   ├── package.json
-│   └── .env                           ← ROSBRIDGE_URL, MQTT_BROKER
+│   └── .env
 ├── node-red/
-│   ├── flows.json                     ← 1 flow, 6 nodes, empty validator
+│   ├── flows.json            ← routing function, 5 typed output topics
 │   ├── settings.js
 │   └── package.json
 └── mosquitto/
-    └── mosquitto.conf                 ← minimal config
+    └── mosquitto.conf
 ```
 
 ---
 
 ## Environment Variables
 
-**FastAPI Service (`fastapi-service/.env`):**
+**`fastapi-service/.env`:**
 ```
 MQTT_BROKER=localhost
 MQTT_PORT=1883
 ```
 
-**ROS Bridge Service (`ros-bridge-service/.env`):**
+**`ros-bridge-service/.env`:**
 ```
 ROSBRIDGE_URL=ws://localhost:9090
 MQTT_BROKER=mqtt://localhost:1883
+NAV_GOAL_TOPIC=/move_base_simple/goal
+CANCEL_TOPIC=/move_base/cancel
 ```
 
 ---
 
-## Key Gaps to Address
+## Key Gaps Remaining
 
-1. **5 unimplemented REST endpoints** — move, waypoint, cancel, status, state
-2. **Node-RED validation logic** — function node needs to validate/sanitize commands before forwarding
-3. **PostgreSQL integration** — entire outbound data persistence pipeline missing
-4. **Error handling** — services crash or silently fail on bad input or connection drops
-5. **No tests** — zero test coverage across all services
-6. **No containerization** — all services run manually, no Docker setup
-7. **No auth** — REST API is open with no authentication
-
----
-
-## Notes for Planning
-
-- The core communication pipeline (teleop command end-to-end) is working.
-- The system assumes all services run on localhost — deployment to separate hosts will require env var updates.
-- ROS bridge uses roslib over WebSocket (rosbridge_server must be running on the robot at port 9090).
-- Node-RED is the natural place for validation, transformation, and DB logging — but currently it only passes messages through.
-- Schema files in `schema/` are the source of truth; `wiki/` files are the human-readable expanded versions.
+1. **Nav feedback loop** — roslib.js has no mechanism to detect goal success/failure yet; waypoint sequencing advances manually (retry/skip only), not automatically
+2. **Outbound topics** — pose, nav status/progress, health, OEE are not yet subscribed or published
+3. **PostgreSQL** — entire persistence layer missing; all GET endpoints return 503
+4. **Named locations** — hardcoded in FastAPI; should eventually come from DB

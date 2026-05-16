@@ -4,39 +4,46 @@
 ---
 
 ## Inbound — Commands TO the Robot
+
+```
 React / External caller
-↓ HTTP POST
+  ↓ HTTP POST
 FastAPI
-↓ MQTT publish → robot/cmd/raw
+  ↓ MQTT publish → amr/cmd/raw  (QoS 2)
 Mosquitto
-↓
-Node-RED
-↓ MQTT publish → robot/cmd
+  ↓
+Node-RED  (validates & routes by command type)
+  ↓ MQTT publish → amr/cmd/goal | amr/cmd/waypoints | amr/cmd/cancel  (QoS 1)
 Mosquitto
-↓
+  ↓
 roslib.js
-↓ WebSocket (rosbridge)
+  ↓ WebSocket (rosbridge)
 Robot
+```
 
 ## Outbound — Data FROM the Robot
-  Robot
-    ↓ WebSocket (rosbridge)
+
+```
+Robot
+  ↓ WebSocket (rosbridge)
 roslib.js
-    ↓ MQTT publish → robot/odom, robot/pose, etc.
+  ↓ MQTT publish → amr/state/odom | amr/state/pose | amr/health/* | amr/oee/cycle  (QoS 1)
 Mosquitto
-    ↓
+  ↓
 Node-RED
-    ↓
-PostgreSQL
+  ↓
+PostgreSQL  ← NOT YET IMPLEMENTED
+```
 
 ---
 
 ## Service Responsibilities
+
 | Service | Does |
 |---|---|
-| roslib.js | Persistent ROS connection, executes commands, publishes robot state to MQTT |
-| FastAPI | REST gateway, validates and forwards commands to MQTT |
-| Node-RED | Message routing, logging bridge between MQTT and database |
-| Mosquitto | MQTT broker, routes all messages between services |
-| PostgreSQL | Persistent storage of all operational and state data |
-| React | User interface, sends commands to FastAPI via REST |
+| **FastAPI** | REST gateway — validates requests, publishes to `amr/cmd/raw` |
+| **Node-RED** | Routes `amr/cmd/raw` to typed command topics; future DB logging |
+| **roslib.js** | Executes navigation commands via ROS; publishes robot state to MQTT |
+| **Mosquitto** | MQTT broker — routes all messages between services |
+| **PostgreSQL** | Persistent storage for state, health, OEE data (not yet integrated) |
+| **React** | User interface — sends commands to FastAPI via REST |

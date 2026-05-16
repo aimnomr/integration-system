@@ -2,7 +2,7 @@
     {
         "id": "2ef70c56a6974a0a",
         "type": "tab",
-        "label": "Flow 1",
+        "label": "AMR Command Router",
         "disabled": false,
         "info": "",
         "env": []
@@ -39,10 +39,32 @@
         "sessionExpiry": ""
     },
     {
+        "id": "3f0a62587fcd852c",
+        "type": "mqtt in",
+        "z": "2ef70c56a6974a0a",
+        "name": "amr/cmd/raw",
+        "topic": "amr/cmd/raw",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "0486b4c73a824be3",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 150,
+        "y": 160,
+        "wires": [
+            [
+                "c8296c4aefb9adf1",
+                "0fe904050aad2e3c"
+            ]
+        ]
+    },
+    {
         "id": "c8296c4aefb9adf1",
         "type": "debug",
         "z": "2ef70c56a6974a0a",
-        "name": "debug 1",
+        "name": "Raw input log",
         "active": true,
         "tosidebar": true,
         "console": false,
@@ -50,33 +72,112 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 420,
+        "x": 370,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "0fe904050aad2e3c",
+        "type": "function",
+        "z": "2ef70c56a6974a0a",
+        "name": "Route command",
+        "func": "const data = msg.payload;\n\nif (!data || !data.command) {\n    node.warn('[amr/cmd/raw] Missing command field: ' + JSON.stringify(data));\n    return null;\n}\n\nconst out = [null, null, null, null, null];\n\nswitch (data.command) {\n    case 'goal':\n        out[0] = { payload: JSON.stringify(data.payload) };\n        break;\n    case 'waypoints':\n        out[1] = { payload: JSON.stringify(data.payload) };\n        break;\n    case 'cancel':\n        out[2] = { payload: JSON.stringify({}) };\n        break;\n    case 'waypoints_retry':\n        out[3] = { payload: JSON.stringify({}) };\n        break;\n    case 'waypoints_skip':\n        out[4] = { payload: JSON.stringify({}) };\n        break;\n    default:\n        node.warn('[amr/cmd/raw] Unknown command: ' + data.command);\n        return null;\n}\n\nreturn out;",
+        "outputs": 5,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 370,
+        "y": 200,
+        "wires": [
+            [
+                "out_goal"
+            ],
+            [
+                "out_waypoints"
+            ],
+            [
+                "out_cancel"
+            ],
+            [
+                "out_retry"
+            ],
+            [
+                "out_skip"
+            ]
+        ]
+    },
+    {
+        "id": "out_goal",
+        "type": "mqtt out",
+        "z": "2ef70c56a6974a0a",
+        "name": "amr/cmd/goal",
+        "topic": "amr/cmd/goal",
+        "qos": "1",
+        "retain": "",
+        "broker": "0486b4c73a824be3",
+        "x": 600,
         "y": 120,
         "wires": []
     },
     {
-        "id": "eb6b9f9aaa5f3a81",
+        "id": "out_waypoints",
         "type": "mqtt out",
         "z": "2ef70c56a6974a0a",
-        "name": "",
-        "topic": "robot/cmd",
+        "name": "amr/cmd/waypoints",
+        "topic": "amr/cmd/waypoints",
         "qos": "1",
         "retain": "",
-        "respTopic": "",
-        "contentType": "",
-        "userProps": "",
-        "correl": "",
-        "expiry": "",
         "broker": "0486b4c73a824be3",
-        "x": 460,
+        "x": 610,
+        "y": 170,
+        "wires": []
+    },
+    {
+        "id": "out_cancel",
+        "type": "mqtt out",
+        "z": "2ef70c56a6974a0a",
+        "name": "amr/cmd/cancel",
+        "topic": "amr/cmd/cancel",
+        "qos": "1",
+        "retain": "",
+        "broker": "0486b4c73a824be3",
+        "x": 605,
         "y": 220,
+        "wires": []
+    },
+    {
+        "id": "out_retry",
+        "type": "mqtt out",
+        "z": "2ef70c56a6974a0a",
+        "name": "amr/cmd/waypoints/retry",
+        "topic": "amr/cmd/waypoints/retry",
+        "qos": "1",
+        "retain": "",
+        "broker": "0486b4c73a824be3",
+        "x": 625,
+        "y": 270,
+        "wires": []
+    },
+    {
+        "id": "out_skip",
+        "type": "mqtt out",
+        "z": "2ef70c56a6974a0a",
+        "name": "amr/cmd/waypoints/skip",
+        "topic": "amr/cmd/waypoints/skip",
+        "qos": "1",
+        "retain": "",
+        "broker": "0486b4c73a824be3",
+        "x": 620,
+        "y": 320,
         "wires": []
     },
     {
         "id": "d930377bb579677c",
         "type": "inject",
         "z": "2ef70c56a6974a0a",
-        "name": "",
+        "name": "Test: goal command",
         "props": [
             {
                 "p": "payload"
@@ -87,56 +188,13 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "payload": "{     \"linear_x\": 0.2,     \"angular_z\": 0.0 }",
+        "payload": "{\"command\":\"goal\",\"payload\":{\"x\":1,\"y\":0.5,\"angle\":{\"x\":0,\"y\":0,\"z\":0}}}",
         "payloadType": "json",
-        "x": 170,
-        "y": 240,
+        "x": 160,
+        "y": 300,
         "wires": [
             [
-                "eb6b9f9aaa5f3a81",
-                "c8296c4aefb9adf1"
-            ]
-        ]
-    },
-    {
-        "id": "3f0a62587fcd852c",
-        "type": "mqtt in",
-        "z": "2ef70c56a6974a0a",
-        "name": "",
-        "topic": "robot/cmd/raw",
-        "qos": "2",
-        "datatype": "auto-detect",
-        "broker": "0486b4c73a824be3",
-        "nl": false,
-        "rap": true,
-        "rh": 0,
-        "inputs": 0,
-        "x": 170,
-        "y": 140,
-        "wires": [
-            [
-                "c8296c4aefb9adf1",
                 "0fe904050aad2e3c"
-            ]
-        ]
-    },
-    {
-        "id": "0fe904050aad2e3c",
-        "type": "function",
-        "z": "2ef70c56a6974a0a",
-        "name": "function 1",
-        "func": "\nreturn msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 320,
-        "y": 160,
-        "wires": [
-            [
-                "eb6b9f9aaa5f3a81"
             ]
         ]
     }
