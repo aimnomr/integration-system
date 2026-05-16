@@ -90,6 +90,7 @@ npm install
 | `MQTT_BROKER` | ROS Bridge | `mqtt://localhost:1883` | MQTT broker URL |
 | `NAV_GOAL_TOPIC` | ROS Bridge | `/move_base_simple/goal` | ROS topic for navigation goals |
 | `CANCEL_TOPIC` | ROS Bridge | `/move_base/cancel` | ROS topic for goal cancellation |
+| `LOG_LEVEL` | ROS Bridge | `info` | Log verbosity — `debug` / `info` / `warn` / `error` (optional) |
 
 ---
 

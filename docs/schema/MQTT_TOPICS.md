@@ -18,7 +18,6 @@
 - [amr/state/nav/status](#amrstatenavstatus)
 - [amr/state/nav/progress](#amrstatenavprogress)
 - [amr/health/connection](#amrhealthconnection)
-- [amr/health/battery](#amrhealthbattery)
 - [amr/health/error](#amrhealtherror)
 - [amr/oee/cycle](#amroeecycle)
 
@@ -261,23 +260,6 @@
   "timestamp": <string>,
   "connected": <boolean>,
   "rosbridge_url": <string>
-}
-```
-
----
-
-### amr/health/battery
-
-**Direction:** roslib.js → Mosquitto → Node-RED  
-**QoS:** 1  
-**Purpose:** Carries the current battery level, published periodically from the robot's battery state topic.
-
-**Message Format:**
-```json
-{
-  "timestamp": <string>,
-  "level_pct": <float>,
-  "charging": <boolean>
 }
 ```
 

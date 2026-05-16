@@ -60,8 +60,11 @@ Same pattern for health topics.
 | MQTT in | Handler | Planned table |
 |---|---|---|
 | `amr/health/connection` | `handleConnection` | `health_connection` |
-| `amr/health/battery` | `handleBattery` | `health_battery` |
 | `amr/health/error` | `handleError` | `health_error` |
+
+> The flow still contains a `handleBattery` tab for `amr/health/battery`, but that
+> topic was **removed** (the robot has no battery ROS topic). The battery handler is
+> now orphaned and can be deleted from `flows.json` as cleanup.
 
 ## Tab 5 — OEE Handler
 

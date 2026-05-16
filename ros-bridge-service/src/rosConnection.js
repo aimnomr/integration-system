@@ -1,11 +1,13 @@
 import * as ROSLIB from 'roslib'
+import logger from './logger.js'
+import { publishConnection, reportError } from './health.js'
 
-let currentRos = null
+let currentRos     = null
 let shouldReconnect = true
-let rosbridgeUrl = process.env.ROSBRIDGE_URL
+let rosbridgeUrl   = process.env.ROSBRIDGE_URL
 
-// Stored so reconnection loop can re-invoke them without re-passing arguments
-let _onConnect = null
+// Stored so the reconnection loop can re-invoke them without re-passing arguments
+let _onConnect    = null
 let _onDisconnect = null
 
 export function getRos() {
@@ -20,22 +22,26 @@ export function createRosConnection({ onConnect, onDisconnect } = {}) {
     currentRos = ros
 
     ros.on('connection', () => {
-        console.log('[ROS] Connected to rosbridge')
+        logger.info('Connected to rosbridge', { url: rosbridgeUrl })
+        publishConnection(true, rosbridgeUrl)
         _onConnect?.(ros)
     })
 
     ros.on('error', (err) => {
-        console.error('[ROS] Error:', err)
+        const message = String(err?.message || err)
+        logger.error('rosbridge error', { error: message })
+        reportError('ROS_CONNECTION_ERROR', message, 'rosConnection')
     })
 
     ros.on('close', () => {
         currentRos = null
+        publishConnection(false, rosbridgeUrl)
         _onDisconnect?.()
         if (shouldReconnect) {
-            console.warn('[ROS] Connection closed — reconnecting in 3s...')
+            logger.warn('rosbridge connection closed — reconnecting in 3s')
             setTimeout(createRosConnection, 3000)
         } else {
-            console.log('[ROS] Disconnected intentionally')
+            logger.info('rosbridge disconnected intentionally')
         }
     })
 }

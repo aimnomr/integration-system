@@ -1,4 +1,5 @@
 import * as ROSLIB from 'roslib'
+import logger from './logger.js'
 
 const DIST_THRESHOLD = 0.05
 const HEAD_THRESHOLD = 5 * Math.PI / 180
@@ -74,7 +75,7 @@ function _publishOdom(msg, trigger, mqttClient) {
     }
 
     mqttClient.publish('amr/state/odom', JSON.stringify(payload), { qos: 1 }, (err) => {
-        if (err) console.error('[MQTT] Publish error:', err)
-        else console.log(`[ROS→MQTT] amr/state/odom (${trigger})`)
+        if (err) logger.error('Publish failed', { topic: 'amr/state/odom', error: err.message })
+        else logger.debug('Published odom', { trigger })
     })
 }

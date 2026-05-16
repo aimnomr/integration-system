@@ -37,7 +37,6 @@ Copy that block into a file named `schema.sql`, or paste it straight into `psql`
 | `nav_status` | `amr/state/nav/status` | append-only log |
 | `nav_progress` | `amr/state/nav/progress` | append-only log |
 | `health_connection` | `amr/health/connection` | append-only log |
-| `health_battery` | `amr/health/battery` | append-only log |
 | `health_error` | `amr/health/error` | append-only log |
 | `oee_cycle` | `amr/oee/cycle` | append-only log |
 
@@ -59,7 +58,6 @@ DROP TABLE IF EXISTS pose              CASCADE;
 DROP TABLE IF EXISTS nav_status        CASCADE;
 DROP TABLE IF EXISTS nav_progress      CASCADE;
 DROP TABLE IF EXISTS health_connection CASCADE;
-DROP TABLE IF EXISTS health_battery    CASCADE;
 DROP TABLE IF EXISTS health_error      CASCADE;
 DROP TABLE IF EXISTS oee_cycle         CASCADE;
 DROP TABLE IF EXISTS named_locations   CASCADE;
@@ -149,17 +147,6 @@ CREATE TABLE health_connection (
     rosbridge_url TEXT
 );
 CREATE INDEX idx_health_connection_ts ON health_connection (ts DESC);
-
--- ------------------------------------------------------------
--- amr/health/battery  — battery level
--- ------------------------------------------------------------
-CREATE TABLE health_battery (
-    id        BIGSERIAL PRIMARY KEY,
-    ts        TIMESTAMPTZ NOT NULL,
-    level_pct DOUBLE PRECISION NOT NULL,
-    charging  BOOLEAN NOT NULL
-);
-CREATE INDEX idx_health_battery_ts ON health_battery (ts DESC);
 
 -- ------------------------------------------------------------
 -- amr/health/error  — error events

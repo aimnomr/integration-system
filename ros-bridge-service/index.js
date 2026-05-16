@@ -1,12 +1,26 @@
 import 'dotenv/config'
 import mqttClient from './src/mqttClient.js'
+import logger from './src/logger.js'
 import { createRosConnection, reconnectRos, disconnectRos, getRos } from './src/rosConnection.js'
 import { setupOdomSubscription, teardownOdom } from './src/odomBridge.js'
-import { sendGoal, startWaypoints, cancelGoal, retryWaypoint, skipWaypoint, resetWaypoints } from './src/navigation.js'
+import { setupPoseSubscription, teardownPose } from './src/poseBridge.js'
+import { setupNavFeedback, teardownNavFeedback } from './src/navFeedback.js'
+import {
+    sendGoal, startWaypoints, cancelGoal, retryWaypoint, skipWaypoint,
+    resetWaypoints, handleGoalResult,
+} from './src/navigation.js'
 
 createRosConnection({
-    onConnect:    (ros) => setupOdomSubscription(ros, mqttClient),
-    onDisconnect: ()    => teardownOdom(),
+    onConnect: (ros) => {
+        setupOdomSubscription(ros, mqttClient)
+        setupPoseSubscription(ros, mqttClient)
+        setupNavFeedback(ros, mqttClient, (status) => handleGoalResult(ros, status))
+    },
+    onDisconnect: () => {
+        teardownOdom()
+        teardownPose()
+        teardownNavFeedback()
+    },
 })
 
 mqttClient.on('message', (topic, message) => {
@@ -18,7 +32,7 @@ mqttClient.on('message', (topic, message) => {
 
     const ros = getRos()
     if (!ros) {
-        console.warn(`[MQTT→ROS] ROS not connected, dropping: ${topic}`)
+        logger.warn('ROS not connected, dropping command', { topic })
         return
     }
 

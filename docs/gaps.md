@@ -10,9 +10,9 @@ Everything not yet addressed, consolidated for visibility. For what *is* working
 
 | # | Gap | Area | Severity |
 |---|---|---|---|
-| G1 | Waypoint sequence does not auto-advance | Navigation | High |
-| G2 | No navigation goal status/feedback at all | Navigation | High |
-| G3 | Bridge does not publish most outbound topics | Data pipeline | High |
+| G1 | Waypoint sequence does not auto-advance | Navigation | ✅ Resolved |
+| G2 | No navigation goal status/feedback at all | Navigation | ✅ Resolved |
+| G3 | Bridge does not publish most outbound topics | Data pipeline | ✅ Resolved |
 | G4 | PostgreSQL not integrated | Persistence | High |
 | G5 | Node-RED → PostgreSQL logging not wired | Persistence | Medium |
 | G6 | 6 GET endpoints stubbed (503) | API | Medium |
@@ -21,7 +21,7 @@ Everything not yet addressed, consolidated for visibility. For what *is* working
 | G9 | No env-var validation / no `.env.example` | Robustness | Low |
 | G10 | No authentication / authorization | Operational | Medium |
 | G11 | No rate limiting | Operational | Low |
-| G12 | No structured logging | Operational | Medium |
+| G12 | No structured logging | Operational | ✅ Resolved |
 | G13 | No tests (zero coverage) | Operational | Medium |
 | G14 | No Docker / docker-compose / CI | Operational | Low |
 
@@ -30,26 +30,27 @@ Everything not yet addressed, consolidated for visibility. For what *is* working
 ## Navigation
 
 ### G1 — Waypoint sequence does not auto-advance
-The ROS Bridge Service sends only the first waypoint; advancing to the next requires
-a manual `amr/cmd/waypoints/skip` command. `navigation.js` never subscribes to
-`/move_base/result`, so it cannot detect that a waypoint was reached.
-**Fix path:** subscribe to `/move_base/result`; on a `SUCCEEDED` result call
-`_sendNext()`. The VDA5050 plan (§4.2) closes this via the order state machine.
+> ✅ **Resolved (2026-05-17).** `src/navFeedback.js` subscribes to
+> `/move_base/result`; on a `SUCCEEDED` result, `navigation.js` `handleGoalResult()`
+> advances the queue, sends the next waypoint, and publishes `amr/state/nav/progress`.
+> On `ABORTED`/`PREEMPTED` the sequence pauses for manual retry/skip.
 
 ### G2 — No navigation goal status/feedback at all
-Goal sending is fire-and-forget — even a single goal has no success/failure tracking.
-The robot exposes `/move_base/result` and `/move_base/status`, but the bridge ignores
-them. Consequence: `amr/state/nav/status` cannot be produced, and the API cannot tell
-a caller whether a goal succeeded.
+> ✅ **Resolved (2026-05-17).** `src/navFeedback.js` subscribes to `/move_base/status`
+> and `/move_base/result`, maps actionlib status codes to the schema enum
+> (`IDLE`/`NAVIGATING`/`SUCCEEDED`/`ABORTED`/`PREEMPTED`), and publishes
+> `amr/state/nav/status` on each transition.
 
 ---
 
 ## Data pipeline & persistence
 
 ### G3 — Bridge does not publish most outbound topics
-Only `amr/state/odom` is published. `amr/state/pose`, `amr/state/nav/status`,
-`amr/state/nav/progress`, `amr/health/*`, and `amr/oee/cycle` are defined in the
-schema and have Node-RED handlers, but the bridge never publishes them.
+> ✅ **Resolved (2026-05-17).** The bridge now also publishes `amr/state/pose` (from
+> `/amcl_pose`, via `src/poseBridge.js`), `amr/state/nav/status`,
+> `amr/state/nav/progress`, `amr/health/connection`, and `amr/health/error`.
+> **Carve-outs:** `amr/health/battery` was **removed** project-wide — the robot
+> exposes no battery ROS topic; `amr/oee/cycle` remains deferred with OEE.
 
 ### G4 — PostgreSQL not integrated
 No service connects to a database. Schema is defined in
@@ -97,7 +98,10 @@ addressed before any networked deployment.
 No protection against request floods on the FastAPI gateway.
 
 ### G12 — No structured logging
-Services log ad-hoc to the console; there is no consistent, queryable log format.
+> ✅ **Resolved (2026-05-17).** The ROS Bridge Service (`src/logger.js`) and FastAPI
+> (`app/logging_config.py` + request middleware) emit JSON-line logs
+> (`{ts, level, service, msg, …}`). Node-RED continues to use its built-in console
+> logger (level configurable in `settings.js`).
 
 ### G13 — No tests
 Zero automated test coverage across all services.
@@ -111,6 +115,8 @@ continuous integration.
 ## Notes
 
 - **OEE** scope was deliberately deferred — the OEE endpoints remain under G6.
+- **Resolved 2026-05-17:** G1, G2, G3 (ros-bridge feedback loop + outbound topics)
+  and G12 (structured logging). `amr/health/battery` was dropped project-wide — the
+  robot has no battery topic.
 - The VDA5050 migration ([plans/vda5050-migration.md](plans/vda5050-migration.md))
-  addresses G1, G2, and G3 as part of its redesign; it does not by itself resolve
-  G4–G14.
+  builds on G1–G3; it does not by itself resolve the remaining gaps.
