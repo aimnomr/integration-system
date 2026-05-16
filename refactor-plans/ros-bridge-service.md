@@ -30,7 +30,7 @@ ros-bridge-service/
 
 ### `src/navigation.js`
 - Owns `waypointQueue`, `currentWaypointIdx` (private).
-- Exports: `sendGoal(ros, data)`, `startWaypoints(ros, data)`, `cancelGoal(ros)`, `retryWaypoint(ros)`, `skipWaypoint(ros)`.
+- Exports: `sendGoal(ros, data)`, `startWaypoints(ros, data)`, `cancelGoal(ros)`, `retryWaypoint(ros)`, `skipWaypoint(ros)`, `resetWaypoints()`.
 - Takes `ros` as a parameter on each call — no coupling to `rosConnection.js`.
 - Queue reset on disconnect handled via callback from `index.js`.
 

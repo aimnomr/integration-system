@@ -1,6 +1,6 @@
 # Project Status — Integration System
 
-**Date:** 2026-05-15
+**Date:** 2026-05-16
 **Project:** FYP — Robot Integration System
 **Directory:** `D:\FYP\integration-system`
 
@@ -36,7 +36,7 @@ Robot
   → ROS topics (/diff_controller/odom, AMCL pose, battery, etc.)
   → WebSocket (rosbridge_server)
   → roslib.js (ROS Bridge Service)
-  → MQTT publish: amr/state/odom | amr/state/pose | amr/health/* | amr/oee/cycle  (QoS 1)
+  → MQTT publish: amr/state/odom  (QoS 1)   ← only odom published today; see MQTT Topics table
   → Mosquitto Broker
   → Node-RED
   → PostgreSQL  ← NOT YET IMPLEMENTED
@@ -49,7 +49,7 @@ Robot
 | Service | Tech | Port / Address | Role |
 |---|---|---|---|
 | **FastAPI Service** | Python, FastAPI, paho-mqtt | HTTP 8000 | REST gateway |
-| **Node-RED** | Node-RED | localhost:1880 | Command router & future DB logger |
+| **Node-RED** | Node-RED | localhost:1880 | Command router + state/health/oee handler tabs; future DB logger |
 | **ROS Bridge Service** | Node.js, roslib, mqtt | — | Bidirectional ROS ↔ MQTT bridge |
 | **Mosquitto** | Mosquitto MQTT Broker | localhost:1883 | Central MQTT broker |
 | **PostgreSQL** | PostgreSQL | TBD | Persistent storage (not yet integrated) |
@@ -73,8 +73,10 @@ Robot
 
 **`amr/cmd/raw` payload:**
 ```json
-{ "command": "goal" | "waypoints" | "cancel" | "waypoints_retry" | "waypoints_skip", "payload": <object> }
+{ "command": "goal" | "waypoints" | "cancel", "payload": <object> }
 ```
+
+`waypoints/retry` and `waypoints/skip` are not sent through `amr/cmd/raw` — FastAPI publishes them directly to `amr/cmd/waypoints/retry` and `amr/cmd/waypoints/skip`.
 
 ### Outbound (Data from Robot)
 
@@ -139,14 +141,15 @@ Full list in `schema/ROS_TOPICS.md`.
   - Handles `amr/cmd/cancel` → `/move_base/cancel`
   - Handles `amr/cmd/waypoints/retry` and `amr/cmd/waypoints/skip`
   - Handles `amr/system/connect` and `amr/system/disconnect`
-- [x] Node-RED — routing function: `amr/cmd/raw` → 5 typed output topics
+- [x] Node-RED — validation + routing function: `amr/cmd/raw` → 3 typed output topics (`goal`, `waypoints`, `cancel`)
+  - State/health/oee handler tabs subscribe and validate inbound topics (debug output only — no DB writes yet)
 - [x] Mosquitto broker — configured on localhost:1883
 - [x] Schema documentation — MQTT topics, REST endpoints, ROS topics
 
 ### Not Started
-- [ ] Outbound MQTT topics — `amr/state/pose`, `amr/state/nav/status`, `amr/state/nav/progress`
-- [ ] Health topics — `amr/health/connection`, `amr/health/battery`, `amr/health/error`
-- [ ] OEE topic — `amr/oee/cycle`
+- [ ] Bridge publishing of outbound topics — `amr/state/pose`, `amr/state/nav/status`, `amr/state/nav/progress` (Node-RED handlers already exist; the bridge does not publish them yet)
+- [ ] Bridge publishing of health topics — `amr/health/connection`, `amr/health/battery`, `amr/health/error`
+- [ ] Bridge publishing of OEE topic — `amr/oee/cycle`
 - [ ] Nav status feedback — detecting when a goal is reached to advance waypoint sequence
 - [ ] PostgreSQL integration — no DB code anywhere yet
 - [ ] Node-RED → PostgreSQL logging — outbound pipeline stops at Node-RED
@@ -173,16 +176,32 @@ integration-system/
 │   ├── MQTT_TOPICS.md
 │   ├── REST_ENDPOINTS.md
 │   └── ROS_TOPICS.md
+├── refactor-plans/
+│   ├── fastapi-service.md
+│   └── ros-bridge-service.md
 ├── fastapi-service/
-│   ├── main.py               ← 16 endpoints, all REST commands implemented
+│   ├── main.py               ← ~12 lines: app creation + router registration
+│   ├── app/
+│   │   ├── mqtt.py           ← MQTT client singleton + publish_raw()
+│   │   ├── schemas.py        ← Pydantic request models
+│   │   ├── data.py           ← NAMED_LOCATIONS
+│   │   └── routers/
+│   │       ├── amr.py        ← /amr/* (7 nav endpoints + 3 GET stubs)
+│   │       ├── system.py     ← /system/* (connect, disconnect, status)
+│   │       └── oee.py        ← /oee/* (3 GET stubs)
 │   ├── .env
 │   └── venv/
 ├── ros-bridge-service/
-│   ├── index.js              ← bidirectional bridge, waypoint manager, dynamic connect
+│   ├── index.js              ← entry point: wires modules together
+│   ├── src/
+│   │   ├── mqttClient.js     ← MQTT singleton (connect, subscribe)
+│   │   ├── rosConnection.js  ← ROS lifecycle: connect / reconnect / disconnect
+│   │   ├── odomBridge.js     ← ROS → MQTT odometry (throttle + heartbeat)
+│   │   └── navigation.js     ← MQTT → ROS navigation (waypoint queue)
 │   ├── package.json
 │   └── .env
 ├── node-red/
-│   ├── flows.json            ← routing function, 5 typed output topics
+│   ├── flows.json            ← validation + routing (3 typed topics); state/health/oee handler tabs
 │   ├── settings.js
 │   └── package.json
 └── mosquitto/

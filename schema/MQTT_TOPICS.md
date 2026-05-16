@@ -7,24 +7,20 @@
 - [amr/cmd/goal](#amrcmdgoal)
 - [amr/cmd/waypoints](#amrcmdwaypoints)
 - [amr/cmd/cancel](#amrcmdcancel)
+- [amr/cmd/waypoints/retry](#amrcmdwaypointsretry)
+- [amr/cmd/waypoints/skip](#amrcmdwaypointsskip)
+- [amr/system/connect](#amrsystemconnect)
+- [amr/system/disconnect](#amrsystemdisconnect)
 
 **Outbound (Data from Robot)**
-- [MQTT Topics](#mqtt-topics)
-  - [Table of Contents](#table-of-contents)
-  - [Inbound (Commands to Robot)](#inbound-commands-to-robot)
-    - [amr/cmd/raw](#amrcmdraw)
-    - [amr/cmd/goal](#amrcmdgoal)
-    - [amr/cmd/waypoints](#amrcmdwaypoints)
-    - [amr/cmd/cancel](#amrcmdcancel)
-  - [Outbound (Data from Robot)](#outbound-data-from-robot)
-    - [amr/state/odom](#amrstateodom)
-    - [amr/state/pose](#amrstatepose)
-    - [amr/state/nav/status](#amrstatenavstatus)
-    - [amr/state/nav/progress](#amrstatenavprogress)
-    - [amr/health/connection](#amrhealthconnection)
-    - [amr/health/battery](#amrhealthbattery)
-    - [amr/health/error](#amrhealtherror)
-    - [amr/oee/cycle](#amroeecycle)
+- [amr/state/odom](#amrstateodom)
+- [amr/state/pose](#amrstatepose)
+- [amr/state/nav/status](#amrstatenavstatus)
+- [amr/state/nav/progress](#amrstatenavprogress)
+- [amr/health/connection](#amrhealthconnection)
+- [amr/health/battery](#amrhealthbattery)
+- [amr/health/error](#amrhealtherror)
+- [amr/oee/cycle](#amroeecycle)
 
 ---
 
@@ -99,6 +95,60 @@
 **Direction:** Node-RED → Mosquitto → roslib.js  
 **QoS:** 1  
 **Purpose:** Signals roslib.js to cancel all active navigation goals immediately after Node-RED routes it from `amr/cmd/raw`.
+
+**Message Format:**
+```json
+{}
+```
+
+---
+
+### amr/cmd/waypoints/retry
+
+**Direction:** FastAPI → Mosquitto → roslib.js  
+**QoS:** 1  
+**Purpose:** Signals roslib.js to resend the current waypoint goal after a navigation error; published directly by FastAPI, not routed through Node-RED.
+
+**Message Format:**
+```json
+{}
+```
+
+---
+
+### amr/cmd/waypoints/skip
+
+**Direction:** FastAPI → Mosquitto → roslib.js  
+**QoS:** 1  
+**Purpose:** Signals roslib.js to cancel the current waypoint goal and advance to the next in the sequence; published directly by FastAPI, not routed through Node-RED.
+
+**Message Format:**
+```json
+{}
+```
+
+---
+
+### amr/system/connect
+
+**Direction:** FastAPI → Mosquitto → roslib.js  
+**QoS:** 1  
+**Purpose:** Instructs roslib.js to open a WebSocket connection to the rosbridge server at the given URL; published directly by FastAPI, not routed through Node-RED.
+
+**Message Format:**
+```json
+{
+  "url": <string>
+}
+```
+
+---
+
+### amr/system/disconnect
+
+**Direction:** FastAPI → Mosquitto → roslib.js  
+**QoS:** 1  
+**Purpose:** Instructs roslib.js to close the active rosbridge WebSocket connection; published directly by FastAPI, not routed through Node-RED.
 
 **Message Format:**
 ```json

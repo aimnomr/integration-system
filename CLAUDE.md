@@ -60,7 +60,7 @@ Robot
 
 **Key design points:**
 - `amr/cmd/raw` is QoS 2 (exactly-once) — carries `{ "command": "...", "payload": {...} }`
-- Node-RED's function node routes `amr/cmd/raw` to 5 typed output topics based on `command` field
+- Node-RED's function node routes `amr/cmd/raw` to 3 typed output topics (`amr/cmd/goal`, `amr/cmd/waypoints`, `amr/cmd/cancel`) based on `command` field
 - `amr/state/odom` is published on distance (>0.05 m) or heading (>5°) change, plus a 5 s heartbeat
 - roslib.js manages waypoint sequencing in memory; retry/skip come in as `amr/cmd/waypoints/retry` and `amr/cmd/waypoints/skip`
 - `POST /system/connect` and `/system/disconnect` publish to `amr/system/connect` / `amr/system/disconnect`, which roslib.js handles directly (not via Node-RED)
@@ -68,26 +68,26 @@ Robot
 ## Source of Truth
 
 Contract definitions live in `schema/` — always update these when adding endpoints or topics:
-- `schema/REST_ENDPOINTS.md` — 17 planned REST endpoints (only 1 implemented)
-- `schema/MQTT_TOPICS.md` — 12 MQTT topics (4 inbound, 8 outbound)
-- `schema/ROS_TOPICS.md` — 137 ROS topics exposed by the robot
+- `schema/REST_ENDPOINTS.md` — 16 REST endpoints (9 implemented, 1 partial, 6 stubbed)
+- `schema/MQTT_TOPICS.md` — 16 MQTT topics (8 inbound, 8 outbound)
+- `schema/ROS_TOPICS.md` — 136 ROS topics exposed by the robot
 
 Documentation format standards are in `convention/`.
 
 ## Implementation Status
 
 **Working:**
-- `POST /robot/teleop` → publishes to `robot/cmd/raw`
-- Full ROS ↔ MQTT bridge (odometry out, cmd_vel in)
-- MQTT message routing through Node-RED skeleton
+- 9 POST endpoints — `/amr/goal`, `/amr/goal/named`, `/amr/waypoints/start`, `/amr/waypoints/stop`, `/amr/waypoints/retry`, `/amr/waypoints/skip`, `/amr/cancel`, `/system/connect`, `/system/disconnect`
+- `GET /system/status` — partial (reports MQTT connectivity only)
+- ROS ↔ MQTT bridge — publishes `amr/state/odom`; handles `goal` / `waypoints` / `cancel` / `waypoints/retry` / `waypoints/skip` and `system/connect` / `system/disconnect`; auto-reconnect to rosbridge
+- Node-RED — validation + routing (`amr/cmd/raw` → `goal` / `waypoints` / `cancel`), plus state/health/oee handler tabs (debug output only, no DB writes yet)
 
 **Not yet implemented:**
-- `POST /robot/move`, `POST /robot/waypoint`, `POST /robot/cancel` — navigation commands
-- `GET /system/status`, `GET /robot/state` — system/robot queries
-- Node-RED validation logic (function node is empty)
-- PostgreSQL integration for odometry storage
-- Authentication, rate limiting, health checks, logging
-- OEE metrics endpoints
+- Outbound bridge topics — `amr/state/pose`, `amr/state/nav/status`, `amr/state/nav/progress`, `amr/health/*`, `amr/oee/cycle` (Node-RED handlers exist, but the bridge does not publish them yet)
+- Nav feedback loop — automatic waypoint advance on goal success/failure
+- 6 stubbed GET endpoints — `/amr/state`, `/amr/health`, `/amr/nav/status`, `/oee/summary`, `/oee/cycles`, `/oee/availability` (return 503 pending DB)
+- PostgreSQL integration for state/health/OEE storage
+- Authentication, rate limiting, structured logging, tests, Docker
 
 ## Environment Configuration
 
@@ -101,4 +101,6 @@ MQTT_PORT=1883
 ```
 ROSBRIDGE_URL=ws://localhost:9090
 MQTT_BROKER=mqtt://localhost:1883
+NAV_GOAL_TOPIC=/move_base_simple/goal
+CANCEL_TOPIC=/move_base/cancel
 ```
