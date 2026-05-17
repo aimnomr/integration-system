@@ -1,112 +1,47 @@
 # REST Endpoints
 
+FastAPI is the **FMS gateway**: robot-scoped routes that publish VDA5050 `order` /
+`instantActions`, read PostgreSQL-backed state/OEE, and accept telemetry ingestion
+from Node-RED. The legacy flat `/amr/*` and `/system/connect|disconnect` routes have
+been **removed**.
+
 ## Table of Contents
 
 **POST**
-- [POST /amr/goal](#post-amrgoal)
-- [POST /amr/goal/named](#post-amrgoalnamed)
-- [POST /amr/waypoints/start](#post-amrwaypointsstart)
-- [POST /amr/waypoints/stop](#post-amrwaypointsstop)
-- [POST /amr/waypoints/retry](#post-amrwaypointsretry)
-- [POST /amr/waypoints/skip](#post-amrwaypointsskip)
-- [POST /amr/cancel](#post-amrcancel)
-- [POST /system/connect](#post-systemconnect)
-- [POST /system/disconnect](#post-systemdisconnect)
+- [POST /robots/{serial}/order](#post-robotsserialorder)
+- [POST /robots/{serial}/order/named](#post-robotsserialordernamed)
+- [POST /robots/{serial}/instant-actions](#post-robotsserialinstant-actions)
+- [POST /ingest/state](#post-ingeststate)
+- [POST /ingest/connection](#post-ingestconnection)
+- [POST /ingest/command](#post-ingestcommand)
+- [POST /ingest/oee-cycle](#post-ingestoee-cycle)
 
 **GET**
-- [GET /amr/state](#get-amrstate)
-- [GET /amr/health](#get-amrhealth)
-- [GET /amr/nav/status](#get-amrnavstatus)
-- [GET /oee/summary](#get-oeesummary)
-- [GET /oee/cycles](#get-oeecycles)
-- [GET /oee/availability](#get-oeeavailability)
+- [GET /robots](#get-robots)
+- [GET /robots/{serial}/state](#get-robotsserialstate)
+- [GET /robots/{serial}/oee/summary](#get-robotsserialoeesummary)
+- [GET /robots/{serial}/oee/cycles](#get-robotsserialoeecycles)
+- [GET /robots/{serial}/oee/availability](#get-robotsserialoeeavailability)
 - [GET /system/status](#get-systemstatus)
 
 ---
 
 ## POST
 
-### POST /amr/goal
+### POST /robots/{serial}/order
 
-**Purpose:** Sends a single navigation goal to the AMR, called by React when the user submits a manual goal coordinate.
+**Purpose:** Submit a navigation order (one node = a single goal, N nodes = a sequence) to a robot; the gateway builds a VDA5050 `order` and publishes it.
 
-**Request Body:**
-```json
-{
-  "x": <float>,
-  "y": <float>,
-  "angle": {
-    "x": <float>,
-    "y": <float>,
-    "z": <float>
-  }
-}
-```
-
-**Response Body:**
-```json
-{
-  "status": "ok",
-  "message": <string>
-}
-```
-
-**Status Codes:**
-| Code | Condition |
-|------|-----------|
-| 200 | Goal accepted and forwarded to MQTT |
-| 422 | Request body failed schema validation |
-
----
-
-### POST /amr/goal/named
-
-**Purpose:** Sends a navigation goal to a predefined named location, called by React when the user selects a location from the location list.
+**Path Parameters:**
+| Name | Type | Description |
+|------|------|-------------|
+| serial | string | Robot serial number (e.g. `amr001`) |
 
 **Request Body:**
 ```json
 {
-  "location_id": <integer>
-}
-```
-
-**Response Body:**
-```json
-{
-  "status": "ok",
-  "location": <string>,
-  "message": <string>
-}
-```
-
-**Status Codes:**
-| Code | Condition |
-|------|-----------|
-| 200 | Goal accepted and forwarded to MQTT |
-| 404 | Location ID not found in predefined locations |
-| 422 | Request body failed schema validation |
-
----
-
-### POST /amr/waypoints/start
-
-**Purpose:** Begins an ordered waypoint navigation sequence, called by React when the user initiates a waypoint run.
-
-**Request Body:**
-```json
-{
-  "waypoints": [
-    {
-      "id": <integer>,
-      "label": <string>,
-      "x": <float>,
-      "y": <float>,
-      "angle": {
-        "x": <float>,
-        "y": <float>,
-        "z": <float>
-      }
-    }
+  "nodes": [
+    { "x": <float>, "y": <float>, "theta": <float> }
   ]
 }
 ```
@@ -115,111 +50,33 @@
 ```json
 {
   "status": "ok",
-  "waypoint_count": <integer>,
-  "message": <string>
+  "orderId": <string>,
+  "nodeCount": <integer>
 }
 ```
 
 **Status Codes:**
 | Code | Condition |
 |------|-----------|
-| 200 | Waypoint sequence accepted and forwarded to MQTT |
-| 422 | Request body failed schema validation |
+| 200 | Order published |
+| 404 | Robot serial not registered |
+| 422 | Request body failed schema validation, or empty `nodes` |
 
 ---
 
-### POST /amr/waypoints/stop
+### POST /robots/{serial}/order/named
 
-**Purpose:** Cancels the active goal and resets the waypoint sequence to IDLE, called by React when the user stops a waypoint run.
+**Purpose:** Submit an order using predefined named-location IDs; each ID resolves to one node of the resulting VDA5050 `order`.
 
-**Request Body:** None
-
-**Response Body:**
-```json
-{
-  "status": "ok",
-  "message": <string>
-}
-```
-
-**Status Codes:**
-| Code | Condition |
-|------|-----------|
-| 200 | Cancel command forwarded to MQTT |
-
----
-
-### POST /amr/waypoints/retry
-
-**Purpose:** Resends the current failed waypoint goal, called by React when the user retries after a navigation error.
-
-**Request Body:** None
-
-**Response Body:**
-```json
-{
-  "status": "ok",
-  "message": <string>
-}
-```
-
-**Status Codes:**
-| Code | Condition |
-|------|-----------|
-| 200 | Retry command forwarded to MQTT |
-
----
-
-### POST /amr/waypoints/skip
-
-**Purpose:** Cancels the current waypoint goal and advances to the next in the sequence, called by React when the user skips a waypoint.
-
-**Request Body:** None
-
-**Response Body:**
-```json
-{
-  "status": "ok",
-  "message": <string>
-}
-```
-
-**Status Codes:**
-| Code | Condition |
-|------|-----------|
-| 200 | Skip command forwarded to MQTT |
-
----
-
-### POST /amr/cancel
-
-**Purpose:** Cancels all active navigation goals immediately, called by React when the user issues an emergency stop.
-
-**Request Body:** None
-
-**Response Body:**
-```json
-{
-  "status": "ok",
-  "message": <string>
-}
-```
-
-**Status Codes:**
-| Code | Condition |
-|------|-----------|
-| 200 | Cancel command forwarded to MQTT |
-
----
-
-### POST /system/connect
-
-**Purpose:** Instructs roslib.js to open a WebSocket connection to the rosbridge server at the given URL, called by React on the connection screen.
+**Path Parameters:**
+| Name | Type | Description |
+|------|------|-------------|
+| serial | string | Robot serial number |
 
 **Request Body:**
 ```json
 {
-  "url": <string>
+  "location_ids": [<integer>]
 }
 ```
 
@@ -227,191 +84,168 @@
 ```json
 {
   "status": "ok",
-  "url": <string>,
-  "message": <string>
+  "orderId": <string>,
+  "nodeCount": <integer>
 }
 ```
 
 **Status Codes:**
 | Code | Condition |
 |------|-----------|
-| 200 | Connection attempt initiated |
+| 200 | Order published |
+| 404 | Robot serial not registered, or a location ID not found |
+| 422 | Request body failed schema validation, or empty `location_ids` |
+
+---
+
+### POST /robots/{serial}/instant-actions
+
+**Purpose:** Send an immediate action (cancel / retry / skip) to a robot; the gateway builds a VDA5050 `instantActions` message.
+
+**Path Parameters:**
+| Name | Type | Description |
+|------|------|-------------|
+| serial | string | Robot serial number |
+
+**Request Body:**
+```json
+{
+  "action_type": "cancelOrder" | "retryNode" | "skipNode"
+}
+```
+
+**Response Body:**
+```json
+{
+  "status": "ok",
+  "actionType": <string>,
+  "actionId": <string>
+}
+```
+
+**Status Codes:**
+| Code | Condition |
+|------|-----------|
+| 200 | Instant action published |
+| 404 | Robot serial not registered |
 | 422 | Request body failed schema validation |
 
 ---
 
-### POST /system/disconnect
+### POST /ingest/state
 
-**Purpose:** Instructs roslib.js to close the active rosbridge WebSocket connection, called by React when the user disconnects from the robot.
+**Purpose:** Internal ingestion — Node-RED POSTs a VDA5050 `state` message here to be persisted to `state_snapshots`.
 
-**Request Body:** None
+**Request Body:**
+```json
+<VDA5050 state message>
+```
 
 **Response Body:**
 ```json
-{
-  "status": "ok",
-  "message": <string>
-}
+{ "status": "ok" }
 ```
 
 **Status Codes:**
 | Code | Condition |
 |------|-----------|
-| 200 | Disconnect command sent to roslib.js |
+| 200 | State persisted |
+| 422 | Request body is not a JSON object |
+| 503 | Database unavailable |
+
+---
+
+### POST /ingest/connection
+
+**Purpose:** Internal ingestion — Node-RED POSTs a VDA5050 `connection` message here to be persisted to `connection_log`.
+
+**Request Body:**
+```json
+<VDA5050 connection message>
+```
+
+**Response Body:**
+```json
+{ "status": "ok" }
+```
+
+**Status Codes:**
+| Code | Condition |
+|------|-----------|
+| 200 | Connection event persisted |
+| 422 | Request body is not a JSON object |
+| 503 | Database unavailable |
+
+---
+
+### POST /ingest/command
+
+**Purpose:** Internal ingestion — Node-RED's command-audit tap POSTs each `order` / `instantActions` message here to be persisted to `order_log`.
+
+**Request Body:**
+```json
+{
+  "kind": "order" | "instantActions",
+  "message": <object>
+}
+```
+
+**Response Body:**
+```json
+{ "status": "ok" }
+```
+
+**Status Codes:**
+| Code | Condition |
+|------|-----------|
+| 200 | Command persisted |
+| 422 | Request body failed schema validation |
+| 503 | Database unavailable |
+
+---
+
+### POST /ingest/oee-cycle
+
+**Purpose:** Internal ingestion — Node-RED POSTs a derived OEE trip cycle here to be persisted to `oee_cycles`.
+
+**Request Body:**
+```json
+{
+  "serialNumber": <string>,
+  "orderId": <string>,
+  "startTime": <string>,
+  "endTime": <string>,
+  "result": "SUCCEEDED" | "ABORTED"
+}
+```
+
+**Response Body:**
+```json
+{ "status": "ok" }
+```
+
+**Status Codes:**
+| Code | Condition |
+|------|-----------|
+| 200 | Cycle persisted |
+| 422 | Request body is not a JSON object |
+| 503 | Database unavailable |
 
 ---
 
 ## GET
 
-### GET /amr/state
+### GET /robots
 
-**Purpose:** Returns the latest recorded pose and odometry snapshot from the database, called by React to display the current robot position.
-
-**Request Body:** None
-
-**Response Body:**
-```json
-{
-  "timestamp": <string>,
-  "pose": {
-    "px": <float>,
-    "py": <float>,
-    "rz": <float>
-  },
-  "odom": {
-    "position": {
-      "x": <float>,
-      "y": <float>,
-      "z": <float>
-    },
-    "orientation": {
-      "x": <float>,
-      "y": <float>,
-      "z": <float>,
-      "w": <float>
-    },
-    "linear_velocity": <float>,
-    "angular_velocity": <float>
-  },
-  "moving": <boolean>
-}
-```
-
-**Status Codes:**
-| Code | Condition |
-|------|-----------|
-| 200 | Latest state returned successfully |
-| 404 | No state records found in the database |
-
----
-
-### GET /amr/health
-
-**Purpose:** Returns the latest connection status and battery level from the database, called by React to display the system health panel.
+**Purpose:** List every robot in the fleet registry.
 
 **Request Body:** None
 
 **Response Body:**
 ```json
 {
-  "timestamp": <string>,
-  "connected": <boolean>,
-  "rosbridge_url": <string>,
-  "battery": {
-    "level_pct": <float>,
-    "charging": <boolean>
-  }
-}
-```
-
-**Status Codes:**
-| Code | Condition |
-|------|-----------|
-| 200 | Latest health data returned successfully |
-| 404 | No health records found in the database |
-
----
-
-### GET /amr/nav/status
-
-**Purpose:** Returns the current navigation state and waypoint progress from the database, called by React to update the navigation status panel.
-
-**Request Body:** None
-
-**Response Body:**
-```json
-{
-  "timestamp": <string>,
-  "status": "IDLE" | "NAVIGATING" | "SUCCEEDED" | "ABORTED" | "PREEMPTED",
-  "goal_id": <string>,
-  "progress": {
-    "current_idx": <integer>,
-    "total": <integer>,
-    "progress_pct": <float>,
-    "current_label": <string>
-  }
-}
-```
-
-**Status Codes:**
-| Code | Condition |
-|------|-----------|
-| 200 | Navigation status returned successfully |
-| 404 | No navigation records found in the database |
-
----
-
-### GET /oee/summary
-
-**Purpose:** Returns aggregated OEE scores over a time window, called by React to populate the OEE dashboard.
-
-**Request Body:** None
-
-**Response Body:**
-```json
-{
-  "from": <string>,
-  "to": <string>,
-  "availability_pct": <float>,
-  "performance_pct": <float>,
-  "quality_pct": <float>,
-  "oee_pct": <float>,
-  "total_trips": <integer>,
-  "successful_trips": <integer>
-}
-```
-
-**Status Codes:**
-| Code | Condition |
-|------|-----------|
-| 200 | OEE summary returned successfully |
-| 422 | Query parameters failed validation |
-
----
-
-### GET /oee/cycles
-
-**Purpose:** Returns the paginated trip log with optional filters, called by React to display the trip history table.
-
-**Request Body:** None
-
-**Response Body:**
-```json
-{
-  "from": <string>,
-  "to": <string>,
-  "result_filter": "SUCCEEDED" | "ABORTED" | "PREEMPTED" | null,
-  "total": <integer>,
-  "cycles": [
-    {
-      "trip_id": <string>,
-      "origin": <string>,
-      "destination": <string>,
-      "start_time": <string>,
-      "end_time": <string>,
-      "duration_s": <float>,
-      "result": "SUCCEEDED" | "ABORTED" | "PREEMPTED"
-    }
+  "robots": [
+    { "serialNumber": <string>, "manufacturer": <string>, "mapId": <string>, "rosbridgeUrl": <string> }
   ]
 }
 ```
@@ -419,39 +253,126 @@
 **Status Codes:**
 | Code | Condition |
 |------|-----------|
-| 200 | Trip log returned successfully |
-| 422 | Query parameters failed validation |
+| 200 | Registry returned |
 
 ---
 
-### GET /oee/availability
+### GET /robots/{serial}/state
 
-**Purpose:** Returns an uptime breakdown over a time window, called by React to display the availability chart on the OEE dashboard.
+**Purpose:** Return the most recent VDA5050 `state` snapshot stored for a robot.
+
+**Path Parameters:**
+| Name | Type | Description |
+|------|------|-------------|
+| serial | string | Robot serial number |
+
+**Request Body:** None
+
+**Response Body:**
+```json
+<latest state_snapshots row>
+```
+
+**Status Codes:**
+| Code | Condition |
+|------|-----------|
+| 200 | Latest state returned |
+| 404 | Robot serial not registered, or no state recorded |
+| 503 | Database unavailable |
+
+---
+
+### GET /robots/{serial}/oee/summary
+
+**Purpose:** Return aggregate OEE figures for a robot — total/succeeded/failed cycles and average duration.
+
+**Path Parameters:**
+| Name | Type | Description |
+|------|------|-------------|
+| serial | string | Robot serial number |
 
 **Request Body:** None
 
 **Response Body:**
 ```json
 {
-  "from": <string>,
-  "to": <string>,
-  "total_time_s": <float>,
-  "operational_time_s": <float>,
-  "availability_pct": <float>
+  "total_cycles": <integer>,
+  "succeeded": <integer>,
+  "failed": <integer>,
+  "avg_duration_s": <float>
 }
 ```
 
 **Status Codes:**
 | Code | Condition |
 |------|-----------|
-| 200 | Availability breakdown returned successfully |
-| 422 | Query parameters failed validation |
+| 200 | Summary returned |
+| 404 | Robot serial not registered |
+| 503 | Database unavailable |
+
+---
+
+### GET /robots/{serial}/oee/cycles
+
+**Purpose:** Return recent OEE trip cycles for a robot.
+
+**Path Parameters:**
+| Name | Type | Description |
+|------|------|-------------|
+| serial | string | Robot serial number |
+
+**Request Body:** None
+
+**Response Body:**
+```json
+{
+  "cycles": [
+    { "id": <integer>, "serial_number": <string>, "order_id": <string>, "start_time": <string>, "end_time": <string>, "duration_s": <float>, "result": <string> }
+  ]
+}
+```
+
+**Status Codes:**
+| Code | Condition |
+|------|-----------|
+| 200 | Cycles returned |
+| 404 | Robot serial not registered |
+| 503 | Database unavailable |
+
+---
+
+### GET /robots/{serial}/oee/availability
+
+**Purpose:** Return a rough availability figure — the fraction of state snapshots in which the robot was driving.
+
+**Path Parameters:**
+| Name | Type | Description |
+|------|------|-------------|
+| serial | string | Robot serial number |
+
+**Request Body:** None
+
+**Response Body:**
+```json
+{
+  "driving_samples": <integer>,
+  "total_samples": <integer>,
+  "availability": <float>
+}
+```
+
+**Status Codes:**
+| Code | Condition |
+|------|-----------|
+| 200 | Availability returned |
+| 404 | Robot serial not registered |
+| 503 | Database unavailable |
 
 ---
 
 ### GET /system/status
 
-**Purpose:** Returns the current health state of all integration services, called by React to display the system status panel.
+**Purpose:** Report gateway health — MQTT broker and database connectivity.
 
 **Request Body:** None
 
@@ -459,23 +380,14 @@
 ```json
 {
   "timestamp": <string>,
-  "roslib": {
-    "status": "connected" | "disconnected" | "error",
-    "rosbridge_url": <string>
-  },
-  "mosquitto": {
-    "status": "connected" | "disconnected" | "error"
-  },
-  "node_red": {
-    "status": "connected" | "disconnected" | "error"
-  },
-  "database": {
-    "status": "connected" | "disconnected" | "error"
-  }
+  "mosquitto": { "status": "connected" | "disconnected" },
+  "database": { "status": "connected" | "unavailable" },
+  "roslib": { "status": "unknown" },
+  "node_red": { "status": "unknown" }
 }
 ```
 
 **Status Codes:**
 | Code | Condition |
 |------|-----------|
-| 200 | System status returned successfully |
+| 200 | Status returned |

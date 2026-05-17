@@ -8,58 +8,115 @@
 
 ## Recently completed (most recent first)
 
-1. **Node-RED Test Harness tab** added to `node-red/flows.json` — inject nodes that
-   publish to the MQTT command topics directly, plus debug nodes for the outbound
-   topics. Lets you exercise the whole pipeline without FastAPI.
-2. **G12 — structured logging** applied: JSON-line logs in the ROS Bridge Service
-   (`src/logger.js`) and FastAPI (`app/logging_config.py` + request middleware).
-3. **G1 / G2 / G3 — navigation feedback + outbound topics** implemented in
-   `ros-bridge-service`:
-   - New modules: `navFeedback.js`, `poseBridge.js`, `health.js`, `logger.js`.
-   - Waypoint sequences now auto-advance on a `SUCCEEDED` move_base result.
-   - Bridge now publishes `amr/state/pose`, `amr/state/nav/status`,
-     `amr/state/nav/progress`, `amr/health/connection`, `amr/health/error`.
-   - `amr/health/battery` was **dropped project-wide** (the robot has no battery
-     ROS topic).
-4. **`ROS_TOPICS.md`** now records both launch-mode topic sets (`mapping:=true`
-   SLAM vs `mapping:=false` localization — the latter exposes `/amcl_pose`).
-5. **Documentation overhaul** — all docs reorganised under `docs/`
-   (`overview`, `architecture`, `setup`, `status`, `gaps`, `decisions`, `glossary`,
-   `services/`, `schema/`, `convention/`, `plans/`); added `README.md`,
-   `DATABASE_SCHEMA.md`, and per-service docs; removed stale files.
-6. **VDA5050 migration plan** written → `docs/plans/vda5050-migration.md`.
+**The VDA5050 migration is fully implemented — Phases 0–7 done** (see
+[plans/vda5050-migration.md](plans/vda5050-migration.md)). The project has moved off
+the legacy `amr/*` scheme entirely; it now speaks VDA5050 end to end and is
+multi-robot capable.
+
+1. **Phase 0** — `docs/schema/VDA5050_MESSAGES.md`; `ros-bridge-service/robots.config.json`.
+2. **Phase 1** — `ros-bridge-service` refactored into `Robot` + `FleetManager` classes.
+3. **Phases 2 & 3** — `ros-bridge-service` rewritten for VDA5050: `vda5050.js`,
+   `orderStateMachine.js`, `stateBuilder.js`; `Robot` subscribes `order`/
+   `instantActions`, publishes `state`/`connection` (retained, `CONNECTIONBROKEN`
+   Last-Will). `navigation.js`/`navFeedback.js`/`health.js` deleted. Per-robot MQTT
+   client.
+4. **Phase 4** — `fastapi-service` is the FMS gateway: `app/robots.py`, `app/vda5050.py`,
+   robot-scoped routes; `routers/amr.py` deleted; `requirements.txt` added.
+5. **Phase 5** — `node-red/flows.json` rewritten: Telemetry Ingestion, Command Audit,
+   OEE, Test Harness tabs. Persists via HTTP POST to FastAPI `/ingest/*`.
+6. **Phase 6** — `docs/schema/DATABASE_SCHEMA.md` rewritten serial-keyed; FastAPI
+   `app/db.py` (lazy psycopg2) + `routers/ingest.py`.
+7. **Phase 7** — `robots.config.example.json`; all schema docs + `architecture.md`,
+   `status.md`, `gaps.md` updated.
+8. **Knowledge-base sync** — `README.md`, `overview.md`, `setup.md`, `decisions.md`,
+   `glossary.md`, all three `docs/services/*.md`, and the project memory updated to the
+   VDA5050 implementation.
 
 ## Current state
 
-- The ROS Bridge Service publishes the full outbound topic set and auto-advances
-  waypoints. Verified live: `amr/state/pose` works with the robot in `mapping:=false`.
-- All changed code is **syntax-checked only** — not yet integration-tested end to end
-  (beyond the pose check). Use the Test Harness tab to exercise it.
-- Resolved gaps: **G1, G2, G3, G12**. See `docs/gaps.md` for the rest.
+- **Code-complete and syntax-checked, NOT end-to-end runtime-tested.**
+  - ros-bridge-service: all files `node --check` + module-graph import OK.
+  - fastapi-service: all files `py_compile` OK; registry + VDA5050 builders run-tested.
+  - node-red/flows.json: valid JSON, node-graph integrity OK (36 nodes, 4 tabs).
+- Resolved gaps: G1–G6, G12. Open: G7–G11, G13, G14 ([gaps.md](gaps.md)).
 
-## Next steps
+---
 
-1. **Restart Node-RED** to load the new Test Harness tab, then run each inject and
-   confirm the pipeline behaves (esp. waypoint auto-advance: `nav/progress` 0→1→2).
-2. **Pending decisions** (proposals already given, awaiting a choice):
-   - G11 — rate limiting (`slowapi` proposed).
-   - G13 — tests (per-service `pytest` / `node:test` proposed).
-   - G9 — committed `.env.example` files.
-3. **Open gaps** (`docs/gaps.md`): G4–G11, G13, G14. The unblocker is **G4
-   (PostgreSQL)** — it gates G5 and G6.
-4. **VDA5050 migration** — plan is ready but not started; recommended entry point is
-   Phase 1 (the `Robot` class refactor). One open item: §9-B (`mapId` value).
+## ▶ NEXT SESSION: full database normalization (decided, not started)
+
+The Phase 6 schema is **not fully normalized** — `state_snapshots` and `order_log`
+store VDA5050 arrays as **JSONB**, which is a 1NF violation. **Decision (2026-05-17):
+rewrite it as a fully normalized, 1NF-strict, BCNF relational schema — 14 tables**,
+with real foreign keys (telemetry tables FK to `robots`).
+
+### Target — 14 tables
+
+| Group | Tables |
+|---|---|
+| Reference (3) | `maps`, `robots`, `named_locations` — already clean, keep |
+| Orders (3) | `orders` (header), `order_nodes` (FK→orders; `nodePosition` flattened in), `order_edges` (FK→orders) |
+| Instant actions (2) | `instant_action_messages` (header), `instant_actions` (FK→message) |
+| State (4) | `state_snapshots` (scalar fields only), `state_node_states`, `state_action_states`, `state_errors` (all FK→snapshot) |
+| Connection + OEE (2) | `connection_log`, `oee_cycles` — already scalar, keep |
+
+- `orders` + `order_nodes` + `order_edges` and `instant_action_messages` +
+  `instant_actions` **replace the JSONB `order_log` table**.
+- `state_node_states` / `state_action_states` / `state_errors` **replace the JSONB
+  columns** in `state_snapshots`.
+- `nodePosition` is a 1:1 sub-object → flatten into `order_nodes` columns
+  (`pos_x, pos_y, theta, map_id`), not its own table.
+- VDA5050 subset note: order/edge `actions[]`, state `edgeStates[]` and
+  `actionParameters[]` are empty in this project — no tables for them; document.
+- Accepted trade-off: each `state` message becomes a multi-row transaction
+  (1 snapshot + N node-states + …). `state_node_states` is the fastest-growing table.
+  Fine for the FYP; documented.
+
+### Files to change
+
+1. `docs/schema/DATABASE_SCHEMA.md` — rewrite for the 14-table schema (drop the JSONB
+   columns and `order_log`; add the child tables; keep FKs).
+2. `fastapi-service/app/db.py` — the write helpers become **multi-table transactions**:
+   - `insert_state()` → insert `state_snapshots` row, get its id, insert child rows for
+     `nodeStates`/`actionStates`/`errors` — all in one transaction.
+   - `insert_command()` → split: an `order` writes `orders` + `order_nodes` +
+     `order_edges`; an `instantActions` writes `instant_action_messages` +
+     `instant_actions`.
+   - `fetch_latest_state()` → join the child tables back into the response shape.
+   - `fetch_oee_*` — unchanged.
+3. `fastapi-service/app/routers/ingest.py` — no change expected (it just forwards the
+   VDA5050 messages; the DB layer absorbs the schema change).
+4. `node-red/flows.json` — **no change** (it POSTs VDA5050 messages; persistence shape
+   is FastAPI's concern).
+5. Update `docs/decisions.md` (add the normalization decision) and `gaps.md` if needed.
+
+### Other pending next steps (after normalization)
+
+- **Runtime-test the pipeline** — needs MQTT broker, rosbridge + a robot, PostgreSQL:
+  `pip install -r fastapi-service/requirements.txt`; create the DB + apply the schema;
+  start all services; `POST /robots/amr001/order`; verify auto-advance, instant
+  actions, and the retained `CONNECTIONBROKEN`.
+- Address open gaps G7–G11, G13, G14 ([gaps.md](gaps.md)).
 
 ## Watch out for
 
 - **Nothing has been committed** — the user pushes via GitHub Desktop.
-- Node-RED still contains an **orphaned `handleBattery` tab** — `amr/health/battery`
-  was dropped; the tab can be deleted as cleanup.
-- The Test Harness edits `flows.json` directly; Node-RED must be restarted (a running
-  instance would overwrite the file on its next deploy).
+- **Node-RED userDir** — Node-RED defaults to `C:\Users\aimno\.node-red\` (old April
+  flows). Start it with `node-red --userDir "d:\FYP\integration-system\node-red"`, and
+  fully stop any old instance first or it overwrites `flows.json` on deploy.
+- `ros-bridge-service/.env` still has `ROSBRIDGE_URL` — **unused**; the URL is now in
+  `robots.config.json`. `MQTT_BROKER`, `NAV_GOAL_TOPIC`, `CANCEL_TOPIC` still used.
+- FastAPI needs DB env vars when PostgreSQL is up: `DB_HOST`, `DB_PORT`, `DB_NAME`,
+  `DB_USER`, `DB_PASSWORD` (defaults: localhost / 5432 / amr_integration / postgres).
+- Node-RED's `/ingest/*` calls assume FastAPI at `http://localhost:8000`.
+- `mapId` is the placeholder `"default"` — set it to the real map name in
+  `robots.config.json` once one is established.
 
 ## Canonical docs
 
 [overview.md](overview.md) · [architecture.md](architecture.md) ·
 [status.md](status.md) · [gaps.md](gaps.md) ·
-[plans/vda5050-migration.md](plans/vda5050-migration.md)
+[plans/vda5050-migration.md](plans/vda5050-migration.md) ·
+[schema/VDA5050_MESSAGES.md](schema/VDA5050_MESSAGES.md) ·
+[schema/MQTT_TOPICS.md](schema/MQTT_TOPICS.md) ·
+[schema/REST_ENDPOINTS.md](schema/REST_ENDPOINTS.md) ·
+[schema/DATABASE_SCHEMA.md](schema/DATABASE_SCHEMA.md)

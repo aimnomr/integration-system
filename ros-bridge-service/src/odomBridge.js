@@ -1,81 +1,32 @@
 import * as ROSLIB from 'roslib'
 import logger from './logger.js'
 
-const DIST_THRESHOLD = 0.05
-const HEAD_THRESHOLD = 5 * Math.PI / 180
-const HEARTBEAT_MS   = 5000
-
-let lastOdomMsg     = null
-let lastPos         = null
-let lastYaw         = null
-let heartbeatHandle = null
-
-export function setupOdomSubscription(ros, mqttClient) {
-    const odom = new ROSLIB.Topic({
-        ros,
-        name: '/diff_controller/odom',
-        messageType: 'nav_msgs/Odometry',
-    })
-
-    heartbeatHandle = setInterval(() => {
-        if (lastOdomMsg) _publishOdom(lastOdomMsg, 'heartbeat', mqttClient)
-    }, HEARTBEAT_MS)
-
-    odom.subscribe((msg) => {
-        lastOdomMsg = msg
-
-        const pos = msg.pose.pose.position
-        const ori = msg.pose.pose.orientation
-        const yaw = Math.atan2(
-            2 * (ori.w * ori.z + ori.x * ori.y),
-            1 - 2 * (ori.y * ori.y + ori.z * ori.z)
-        )
-
-        let trigger = null
-        if (!lastPos) {
-            trigger = 'heartbeat'
-        } else {
-            const d  = Math.sqrt((pos.x - lastPos.x) ** 2 + (pos.y - lastPos.y) ** 2)
-            let   dh = Math.abs(yaw - lastYaw)
-            if (dh > Math.PI) dh = 2 * Math.PI - dh
-            if (d  > DIST_THRESHOLD) trigger = 'distance'
-            else if (dh > HEAD_THRESHOLD) trigger = 'heading'
-        }
-
-        if (trigger) {
-            _publishOdom(msg, trigger, mqttClient)
-            lastPos = { x: pos.x, y: pos.y, z: pos.z }
-            lastYaw = yaw
-        }
-    })
-}
-
-export function teardownOdom() {
-    clearInterval(heartbeatHandle)
-    heartbeatHandle = null
-    lastOdomMsg     = null
-    lastPos         = null
-    lastYaw         = null
-}
-
-function _publishOdom(msg, trigger, mqttClient) {
-    const pos = msg.pose.pose.position
-    const ori = msg.pose.pose.orientation
-    const lv  = msg.twist.twist.linear.x
-    const av  = msg.twist.twist.angular.z
-
-    const payload = {
-        timestamp:        new Date().toISOString(),
-        position:         { x: pos.x, y: pos.y, z: pos.z },
-        orientation:      { x: ori.x, y: ori.y, z: ori.z, w: ori.w },
-        linear_velocity:  lv,
-        angular_velocity: av,
-        moving:           Math.abs(lv) > 0.01 || Math.abs(av) > 0.01,
-        trigger,
+// Subscribes /diff_controller/odom and feeds velocity + driving into the robot's
+// StateBuilder. The VDA5050 `agvPosition` comes from /amcl_pose (PoseBridge); odom
+// here supplies only motion. One OdomBridge instance per Robot.
+export default class OdomBridge {
+    constructor(stateBuilder) {
+        this._state = stateBuilder
+        this._topic = null
     }
 
-    mqttClient.publish('amr/state/odom', JSON.stringify(payload), { qos: 1 }, (err) => {
-        if (err) logger.error('Publish failed', { topic: 'amr/state/odom', error: err.message })
-        else logger.debug('Published odom', { trigger })
-    })
+    setup(ros) {
+        this._topic = new ROSLIB.Topic({
+            ros,
+            name: '/diff_controller/odom',
+            messageType: 'nav_msgs/Odometry',
+        })
+        this._topic.subscribe((msg) => {
+            const lin = msg.twist.twist.linear
+            const ang = msg.twist.twist.angular
+            const driving = Math.abs(lin.x) > 0.01 || Math.abs(ang.z) > 0.01
+            this._state.setMotion({ vx: lin.x, vy: lin.y, omega: ang.z }, driving)
+        })
+        logger.info('Odom subscribed', { topic: '/diff_controller/odom' })
+    }
+
+    teardown() {
+        this._topic?.unsubscribe()
+        this._topic = null
+    }
 }

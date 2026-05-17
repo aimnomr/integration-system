@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --input-type=module -e \"import\\('./src/fleetManager.js'\\).then\\(m=>console.log\\('module graph resolves, default export:', typeof m.default\\)\\).catch\\(e=>{console.error\\('IMPORT FAIL:',e.message\\);process.exit\\(1\\)}\\)\")"
+    ]
+  }
+}

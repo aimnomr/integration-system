@@ -30,4 +30,9 @@ Domain terms used across this project.
 | **VDA5050** | Open standard defining the MQTT interface between a fleet manager and AGVs/AMRs. See [plans/vda5050-migration.md](plans/vda5050-migration.md). |
 | **FMS** | Fleet Management System — the central system that issues orders to and monitors a fleet of robots (VDA5050 term). |
 | **Order** | In VDA5050, a navigation job expressed as a graph of nodes and edges. |
+| **Node / Edge** | In a VDA5050 order, a node is a target position; an edge connects two consecutive nodes. Each carries a `sequenceId` (nodes even, edges odd). |
 | **instantActions** | In VDA5050, immediate commands not tied to an order (e.g. cancel). |
+| **state (message)** | The VDA5050 telemetry message — one consolidated snapshot of a robot's position, motion, order progress, errors and safety state. |
+| **connection (message)** | The VDA5050 liveness message — `ONLINE` / `OFFLINE` / `CONNECTIONBROKEN`; published retained, the broken state set as the MQTT Last-Will. |
+| **headerId** | A counter on every VDA5050 message, incrementing per topic per robot — lets a receiver detect dropped or reordered messages. |
+| **serialNumber** | The unique identifier of one robot; a segment of every VDA5050 topic (`amr/v2/moverobotic/{serialNumber}/...`). |

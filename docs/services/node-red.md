@@ -1,82 +1,70 @@
 # Service Reference: Node-RED
 
-Node-RED validates and routes inbound commands and processes outbound robot data. The
-flow lives in `node-red/flows.json` and is organised into **5 tabs**.
+Node-RED is the **telemetry sink**: it ingests the VDA5050 `state` / `connection`
+topics, audits commands, derives OEE, and persists everything to PostgreSQL via the
+FastAPI `/ingest/*` API. It is **no longer in the command path** — FastAPI publishes
+`order` / `instantActions` directly.
 
-Run it with `node-red --settings settings.js --userDir .` (UI at
-`http://localhost:1880`). All MQTT nodes use the shared `Local MQTT` broker config
-(`localhost:1883`).
+The flow lives in `node-red/flows.json`, organised into **4 tabs**. Run it with
+`node-red --settings settings.js --userDir .` (UI at `http://localhost:1880`). All
+MQTT nodes use the shared `Local MQTT` broker config (`localhost:1883`); all topic
+subscriptions use `+` wildcards so they capture every robot.
 
----
-
-## Tab 1 — Library Init
-
-Loads shared helper code once at startup.
-
-- **Startup** (inject, `once: true`) → **loadLibrary** (function).
-- `loadLibrary` populates `global.lib` with:
-  - `validators` — `rawCommand`, `goal`, `waypoints` (throw on invalid input).
-  - `transformers` — `goal`, `waypoints`, `cancel` (shape the outgoing payload).
-  - `errors.wrap` — wraps an exception into a structured error object.
-- Other tabs read `global.get('lib')`; this tab must run first.
-
-## Tab 2 — Command Router
-
-Routes inbound commands. **This is the only tab in the command path.**
-
-```
-amr/cmd/raw (mqtt in, QoS 2)
-  → validateRaw        (validates envelope; ok → out1, error → out2)
-      → Route by command (switch on msg.command)
-          → transformGoal    → amr/cmd/goal     (mqtt out, QoS 1)
-          → transformWaypoints → amr/cmd/waypoints (mqtt out, QoS 1)
-          → transformCancel  → amr/cmd/cancel   (mqtt out, QoS 1)
-      → Routing Errors (debug)
-```
-
-Validation/transform failures are caught and sent to the **Routing Errors** debug node.
-Only `goal`, `waypoints`, and `cancel` are routed here — `waypoints/retry`,
-`waypoints/skip`, and `system/*` bypass Node-RED entirely.
-
-## Tab 3 — State Handler
-
-Subscribes to robot state topics, validates them, and shows live status. Each handler
-has a `// TODO: INSERT INTO ...` placeholder — **persistence is not implemented yet.**
-
-| MQTT in | Handler | Planned table |
-|---|---|---|
-| `amr/state/odom` | `handleOdom` | `odom` |
-| `amr/state/pose` | `handlePose` | `pose` |
-| `amr/state/nav/status` | `handleNavStatus` | `nav_status` |
-| `amr/state/nav/progress` | `handleNavProgress` | `nav_progress` |
-
-> Only `amr/state/odom` actually receives data today — the bridge does not publish the
-> others yet (see [../status.md](../status.md)).
-
-## Tab 4 — Health Handler
-
-Same pattern for health topics.
-
-| MQTT in | Handler | Planned table |
-|---|---|---|
-| `amr/health/connection` | `handleConnection` | `health_connection` |
-| `amr/health/error` | `handleError` | `health_error` |
-
-> The flow still contains a `handleBattery` tab for `amr/health/battery`, but that
-> topic was **removed** (the robot has no battery ROS topic). The battery handler is
-> now orphaned and can be deleted from `flows.json` as cleanup.
-
-## Tab 5 — OEE Handler
-
-| MQTT in | Handler | Planned table |
-|---|---|---|
-| `amr/oee/cycle` | `handleCycle` | `oee_cycle` |
+> **Persistence design:** Node-RED writes by POSTing to FastAPI `/ingest/*` (core
+> `http request` node) rather than holding its own PostgreSQL connection. No
+> PostgreSQL Node-RED contrib node is installed; this keeps the SQL in one place
+> (`fastapi-service/app/db.py`). See migration plan §8a.
 
 ---
 
-## Known limitation
+## Tab 1 — Telemetry Ingestion
 
-The State/Health/OEE handlers currently only display node status and write to debug
-output. The `INSERT INTO ...` steps to PostgreSQL are not implemented — see
-[../schema/DATABASE_SCHEMA.md](../schema/DATABASE_SCHEMA.md) for the target
-schema.
+```
+amr/v2/+/+/state       → validateState      → POST /ingest/state       → debug
+amr/v2/+/+/connection  → validateConnection → POST /ingest/connection  → debug
+```
+
+Validates each VDA5050 `state` / `connection` message, shows live status, and POSTs
+it to FastAPI for persistence (`state_snapshots`, `connection_log`).
+
+## Tab 2 — Command Audit
+
+```
+amr/v2/+/+/order           → tagOrder          → POST /ingest/command → debug
+amr/v2/+/+/instantActions  → tagInstantActions → POST /ingest/command → debug
+```
+
+A **passive tap** on the command topics — it observes a copy of every `order` /
+`instantActions` message and logs it to `order_log`. Because MQTT is pub/sub, this
+sits *parallel* to the command path and cannot block or delay delivery to the robot.
+
+## Tab 3 — OEE
+
+```
+amr/v2/+/+/state → deriveCycle → POST /ingest/oee-cycle → debug
+```
+
+`deriveCycle` tracks per-robot order state in flow context. It emits one trip cycle
+when an active order's `nodeStates` empties (`SUCCEEDED`) or its `orderId` clears
+mid-order (`ABORTED`), and POSTs it to `oee_cycles`.
+
+## Tab 4 — Test Harness
+
+Manual VDA5050 injectors for `amr001`, plus outbound debug:
+
+- inject `order` (single goal) / `order` (2-node sequence) → `amr/v2/moverobotic/amr001/order`
+- inject `instantActions` (cancel / retry / skip) → `amr/v2/moverobotic/amr001/instantActions`
+- `amr/v2/+/+/state` and `amr/v2/+/+/connection` → debug
+
+Lets you exercise the robot directly, skipping FastAPI.
+
+---
+
+## Notes
+
+- The `/ingest/*` calls target `http://localhost:8000` — edit the `http request` node
+  URLs if FastAPI runs elsewhere.
+- If FastAPI or PostgreSQL is down the `http request` nodes error quietly
+  (`senderr: false`); telemetry is simply not persisted — nothing else is affected.
+- The legacy Command Router, State/Health/OEE handler tabs, the orphaned
+  `handleBattery` tab, and the Library Init tab have all been removed.

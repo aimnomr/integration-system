@@ -1,33 +1,24 @@
+from typing import Literal
+
 from pydantic import BaseModel
 
 
-class Angle(BaseModel):
+class Node(BaseModel):
+    """One position in an order. theta is the heading in radians, map frame."""
     x: float
     y: float
-    z: float
+    theta: float = 0.0
 
 
-class GoalRequest(BaseModel):
-    x: float
-    y: float
-    angle: Angle
+class OrderRequest(BaseModel):
+    """An order by explicit positions — one node is a single goal, N a sequence."""
+    nodes: list[Node]
 
 
-class NamedGoalRequest(BaseModel):
-    location_id: int
+class NamedOrderRequest(BaseModel):
+    """An order by named-location IDs (resolved against app/data.py)."""
+    location_ids: list[int]
 
 
-class Waypoint(BaseModel):
-    id: int
-    label: str
-    x: float
-    y: float
-    angle: Angle
-
-
-class WaypointsRequest(BaseModel):
-    waypoints: list[Waypoint]
-
-
-class ConnectRequest(BaseModel):
-    url: str
+class InstantActionRequest(BaseModel):
+    action_type: Literal["cancelOrder", "retryNode", "skipNode"]

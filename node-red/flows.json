@@ -1,42 +1,26 @@
 [
     {
-        "id": "tab-init",
+        "id": "tab-ingest",
         "type": "tab",
-        "label": "Library Init",
+        "label": "Telemetry Ingestion",
         "disabled": false,
-        "info": "",
+        "info": "Subscribes the VDA5050 `state` and `connection` topics (amr/v2/+/+/...) for every robot and persists each message by POSTing it to the FastAPI ingestion API, which writes to PostgreSQL.",
         "env": []
     },
     {
-        "id": "tab-cmd",
+        "id": "tab-audit",
         "type": "tab",
-        "label": "Command Router",
+        "label": "Command Audit",
         "disabled": false,
-        "info": "",
-        "env": []
-    },
-    {
-        "id": "tab-state",
-        "type": "tab",
-        "label": "State Handler",
-        "disabled": false,
-        "info": "",
-        "env": []
-    },
-    {
-        "id": "tab-health",
-        "type": "tab",
-        "label": "Health Handler",
-        "disabled": false,
-        "info": "",
+        "info": "Passive tap on the VDA5050 `order` and `instantActions` topics. Logs every command to PostgreSQL via the FastAPI ingestion API. Sits parallel to the command path — it cannot block or delay delivery to the robot.",
         "env": []
     },
     {
         "id": "tab-oee",
         "type": "tab",
-        "label": "OEE Handler",
+        "label": "OEE",
         "disabled": false,
-        "info": "",
+        "info": "Derives OEE trip cycles from order-completion transitions observed in the VDA5050 `state` stream. A cycle is emitted when an active order's nodeStates empties (SUCCEEDED) or its orderId clears mid-order (ABORTED).",
         "env": []
     },
     {
@@ -44,7 +28,7 @@
         "type": "tab",
         "label": "Test Harness",
         "disabled": false,
-        "info": "Manual MQTT command injectors. Click an inject to fire a command straight into the pipeline, skipping FastAPI. Outbound feedback topics are shown on the right."
+        "info": "Manual VDA5050 message injectors for amr001. Click an inject to publish an `order` or `instantActions` message straight to the robot's MQTT topic, skipping FastAPI. Outbound `state`/`connection` are shown on the right."
     },
     {
         "id": "broker-local",
@@ -78,320 +62,75 @@
         "sessionExpiry": ""
     },
     {
-        "id": "init-inject",
-        "type": "inject",
-        "z": "tab-init",
-        "name": "Startup",
-        "props": [
-            {
-                "p": "payload"
-            },
-            {
-                "p": "topic",
-                "vt": "str"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": true,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "",
-        "payloadType": "date",
-        "x": 120,
-        "y": 80,
-        "wires": [
-            [
-                "init-loadlib"
-            ]
-        ]
-    },
-    {
-        "id": "init-loadlib",
-        "type": "function",
-        "z": "tab-init",
-        "name": "loadLibrary",
-        "func": "const validators = {\n    rawCommand: function(payload) {\n        const VALID = ['goal', 'waypoints', 'cancel'];\n        if (!payload || typeof payload !== 'object') throw new Error('Payload must be an object');\n        if (!payload.command) throw new Error('Missing field: command');\n        if (!VALID.includes(payload.command)) throw new Error('Invalid command: ' + payload.command);\n        if (payload.command !== 'cancel' && !payload.payload) throw new Error('Missing field: payload');\n    },\n    goal: function(p) {\n        if (typeof p.x !== 'number') throw new Error('goal.x must be a number');\n        if (typeof p.y !== 'number') throw new Error('goal.y must be a number');\n        if (!p.angle || typeof p.angle !== 'object') throw new Error('goal.angle must be an object');\n        ['x', 'y', 'z'].forEach(function(k) {\n            if (typeof p.angle[k] !== 'number') throw new Error('goal.angle.' + k + ' must be a number');\n        });\n    },\n    waypoints: function(p) {\n        if (!Array.isArray(p.waypoints)) throw new Error('waypoints must be an array');\n        if (p.waypoints.length === 0) throw new Error('waypoints array must not be empty');\n        p.waypoints.forEach(function(wp, i) {\n            if (typeof wp.id !== 'number') throw new Error('waypoints[' + i + '].id must be a number');\n            if (typeof wp.label !== 'string') throw new Error('waypoints[' + i + '].label must be a string');\n            if (typeof wp.x !== 'number') throw new Error('waypoints[' + i + '].x must be a number');\n            if (typeof wp.y !== 'number') throw new Error('waypoints[' + i + '].y must be a number');\n            if (!wp.angle || typeof wp.angle !== 'object') throw new Error('waypoints[' + i + '].angle must be an object');\n        });\n    }\n};\n\nconst transformers = {\n    goal: function(p) {\n        return { x: p.x, y: p.y, angle: { x: p.angle.x, y: p.angle.y, z: p.angle.z } };\n    },\n    waypoints: function(p) {\n        return { waypoints: p.waypoints };\n    },\n    cancel: function() {\n        return {};\n    }\n};\n\nconst errors = {\n    wrap: function(err, source) {\n        return {\n            timestamp: new Date().toISOString(),\n            error_type: 'VALIDATION_ERROR',\n            message: err.message || String(err),\n            source: source || 'node-red'\n        };\n    }\n};\n\nglobal.set('lib', { validators: validators, transformers: transformers, errors: errors });\nnode.status({ fill: 'green', shape: 'dot', text: 'Library loaded' });\nreturn null;",
-        "outputs": 1,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 320,
-        "y": 80,
-        "wires": [
-            []
-        ]
-    },
-    {
-        "id": "cmd-in-raw",
+        "id": "ingest-in-state",
         "type": "mqtt in",
-        "z": "tab-cmd",
-        "name": "amr/cmd/raw",
-        "topic": "amr/cmd/raw",
-        "qos": "2",
+        "z": "tab-ingest",
+        "name": "amr/v2/+/+/state",
+        "topic": "amr/v2/+/+/state",
+        "qos": "0",
         "datatype": "json",
         "broker": "broker-local",
         "nl": false,
         "rap": true,
         "rh": 0,
         "inputs": 0,
-        "x": 120,
-        "y": 140,
+        "x": 150,
+        "y": 100,
         "wires": [
             [
-                "cmd-validate"
+                "ingest-fn-state"
             ]
         ]
     },
     {
-        "id": "cmd-validate",
+        "id": "ingest-fn-state",
         "type": "function",
-        "z": "tab-cmd",
-        "name": "validateRaw",
-        "func": "var lib = global.get('lib');\ntry {\n    lib.validators.rawCommand(msg.payload);\n    msg.command = msg.payload.command;\n    msg.cmdPayload = msg.payload.payload || {};\n    return [msg, null];\n} catch (e) {\n    var errMsg = { payload: lib.errors.wrap(e, 'validateRaw') };\n    node.error(e.message, msg);\n    return [null, errMsg];\n}",
-        "outputs": 2,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 320,
-        "y": 140,
-        "wires": [
-            [
-                "cmd-switch"
-            ],
-            [
-                "cmd-debug-err"
-            ]
-        ]
-    },
-    {
-        "id": "cmd-switch",
-        "type": "switch",
-        "z": "tab-cmd",
-        "name": "Route by command",
-        "property": "command",
-        "propertyType": "msg",
-        "rules": [
-            {
-                "t": "eq",
-                "v": "goal",
-                "vt": "str"
-            },
-            {
-                "t": "eq",
-                "v": "waypoints",
-                "vt": "str"
-            },
-            {
-                "t": "eq",
-                "v": "cancel",
-                "vt": "str"
-            }
-        ],
-        "checkall": "false",
-        "repair": false,
-        "outputs": 3,
-        "x": 530,
-        "y": 140,
-        "wires": [
-            [
-                "cmd-goal-tx"
-            ],
-            [
-                "cmd-wp-tx"
-            ],
-            [
-                "cmd-cancel-tx"
-            ]
-        ]
-    },
-    {
-        "id": "cmd-goal-tx",
-        "type": "function",
-        "z": "tab-cmd",
-        "name": "transformGoal",
-        "func": "var lib = global.get('lib');\ntry {\n    lib.validators.goal(msg.cmdPayload);\n    msg.payload = lib.transformers.goal(msg.cmdPayload);\n    msg.topic = 'amr/cmd/goal';\n    msg.qos = 1;\n    return [msg, null];\n} catch (e) {\n    var errMsg = { payload: lib.errors.wrap(e, 'transformGoal') };\n    node.error(e.message, msg);\n    return [null, errMsg];\n}",
-        "outputs": 2,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 750,
-        "y": 80,
-        "wires": [
-            [
-                "cmd-out-goal"
-            ],
-            [
-                "cmd-debug-err"
-            ]
-        ]
-    },
-    {
-        "id": "cmd-wp-tx",
-        "type": "function",
-        "z": "tab-cmd",
-        "name": "transformWaypoints",
-        "func": "var lib = global.get('lib');\ntry {\n    lib.validators.waypoints(msg.cmdPayload);\n    msg.payload = lib.transformers.waypoints(msg.cmdPayload);\n    msg.topic = 'amr/cmd/waypoints';\n    msg.qos = 1;\n    return [msg, null];\n} catch (e) {\n    var errMsg = { payload: lib.errors.wrap(e, 'transformWaypoints') };\n    node.error(e.message, msg);\n    return [null, errMsg];\n}",
-        "outputs": 2,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 750,
-        "y": 140,
-        "wires": [
-            [
-                "cmd-out-wp"
-            ],
-            [
-                "cmd-debug-err"
-            ]
-        ]
-    },
-    {
-        "id": "cmd-cancel-tx",
-        "type": "function",
-        "z": "tab-cmd",
-        "name": "transformCancel",
-        "func": "var lib = global.get('lib');\nmsg.payload = lib.transformers.cancel();\nmsg.topic = 'amr/cmd/cancel';\nmsg.qos = 1;\nreturn msg;",
+        "z": "tab-ingest",
+        "name": "validateState",
+        "func": "var s = msg.payload;\nif (!s || typeof s.serialNumber !== 'string' || !s.timestamp) {\n    node.error('Invalid VDA5050 state message', msg);\n    return null;\n}\nvar pos = s.agvPosition || {};\nnode.status({ fill: 'green', shape: 'dot', text: s.serialNumber + ' x:' + (pos.x || 0).toFixed(2) + ' y:' + (pos.y || 0).toFixed(2) });\nmsg.headers = { 'content-type': 'application/json' };\nmsg.payload = s;\nreturn msg;",
         "outputs": 1,
         "timeout": "",
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 750,
-        "y": 200,
+        "x": 380,
+        "y": 100,
         "wires": [
             [
-                "cmd-out-cancel"
+                "ingest-http-state"
             ]
         ]
     },
     {
-        "id": "cmd-out-goal",
-        "type": "mqtt out",
-        "z": "tab-cmd",
-        "name": "amr/cmd/goal",
-        "topic": "amr/cmd/goal",
-        "qos": "1",
-        "retain": "",
-        "respTopic": "",
-        "contentType": "",
-        "userProps": "",
-        "correl": "",
-        "expiry": "",
-        "broker": "broker-local",
-        "x": 960,
-        "y": 80,
-        "wires": []
+        "id": "ingest-http-state",
+        "type": "http request",
+        "z": "tab-ingest",
+        "name": "POST /ingest/state",
+        "method": "POST",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/ingest/state",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 620,
+        "y": 100,
+        "wires": [
+            [
+                "ingest-dbg-state"
+            ]
+        ]
     },
     {
-        "id": "cmd-out-wp",
-        "type": "mqtt out",
-        "z": "tab-cmd",
-        "name": "amr/cmd/waypoints",
-        "topic": "amr/cmd/waypoints",
-        "qos": "1",
-        "retain": "",
-        "respTopic": "",
-        "contentType": "",
-        "userProps": "",
-        "correl": "",
-        "expiry": "",
-        "broker": "broker-local",
-        "x": 960,
-        "y": 140,
-        "wires": []
-    },
-    {
-        "id": "cmd-out-cancel",
-        "type": "mqtt out",
-        "z": "tab-cmd",
-        "name": "amr/cmd/cancel",
-        "topic": "amr/cmd/cancel",
-        "qos": "1",
-        "retain": "",
-        "respTopic": "",
-        "contentType": "",
-        "userProps": "",
-        "correl": "",
-        "expiry": "",
-        "broker": "broker-local",
-        "x": 960,
-        "y": 200,
-        "wires": []
-    },
-    {
-        "id": "cmd-debug-err",
+        "id": "ingest-dbg-state",
         "type": "debug",
-        "z": "tab-cmd",
-        "name": "Routing Errors",
-        "active": true,
-        "tosidebar": true,
-        "console": true,
-        "tostatus": false,
-        "complete": "payload",
-        "targetType": "msg",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 760,
-        "y": 300,
-        "wires": []
-    },
-    {
-        "id": "state-in-odom",
-        "type": "mqtt in",
-        "z": "tab-state",
-        "name": "amr/state/odom",
-        "topic": "amr/state/odom",
-        "qos": "1",
-        "datatype": "json",
-        "broker": "broker-local",
-        "nl": false,
-        "rap": true,
-        "rh": 0,
-        "inputs": 0,
-        "x": 120,
-        "y": 80,
-        "wires": [
-            [
-                "state-fn-odom"
-            ]
-        ]
-    },
-    {
-        "id": "state-fn-odom",
-        "type": "function",
-        "z": "tab-state",
-        "name": "handleOdom",
-        "func": "var p = msg.payload;\nif (!p || !p.position || !p.timestamp) {\n    node.error('Invalid odom payload', msg);\n    return null;\n}\nnode.status({ fill: 'green', shape: 'dot', text: 'x:' + p.position.x.toFixed(2) + ' y:' + p.position.y.toFixed(2) + ' [' + p.trigger + ']' });\n// TODO: INSERT INTO odom\nreturn msg;",
-        "outputs": 1,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 320,
-        "y": 80,
-        "wires": [
-            [
-                "state-dbg-odom"
-            ]
-        ]
-    },
-    {
-        "id": "state-dbg-odom",
-        "type": "debug",
-        "z": "tab-state",
-        "name": "odom",
+        "z": "tab-ingest",
+        "name": "state persisted",
         "active": false,
         "tosidebar": true,
         "console": false,
@@ -400,16 +139,16 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 500,
-        "y": 80,
+        "x": 850,
+        "y": 100,
         "wires": []
     },
     {
-        "id": "state-in-pose",
+        "id": "ingest-in-conn",
         "type": "mqtt in",
-        "z": "tab-state",
-        "name": "amr/state/pose",
-        "topic": "amr/state/pose",
+        "z": "tab-ingest",
+        "name": "amr/v2/+/+/connection",
+        "topic": "amr/v2/+/+/connection",
         "qos": "1",
         "datatype": "json",
         "broker": "broker-local",
@@ -417,40 +156,64 @@
         "rap": true,
         "rh": 0,
         "inputs": 0,
-        "x": 120,
-        "y": 160,
+        "x": 160,
+        "y": 200,
         "wires": [
             [
-                "state-fn-pose"
+                "ingest-fn-conn"
             ]
         ]
     },
     {
-        "id": "state-fn-pose",
+        "id": "ingest-fn-conn",
         "type": "function",
-        "z": "tab-state",
-        "name": "handlePose",
-        "func": "var p = msg.payload;\nif (!p || !p.timestamp) {\n    node.error('Invalid pose payload', msg);\n    return null;\n}\nnode.status({ fill: 'green', shape: 'dot', text: 'px:' + p.px.toFixed(2) + ' py:' + p.py.toFixed(2) + ' rz:' + p.rz.toFixed(2) });\n// TODO: INSERT INTO pose\nreturn msg;",
+        "z": "tab-ingest",
+        "name": "validateConnection",
+        "func": "var c = msg.payload;\nvar VALID = ['ONLINE', 'OFFLINE', 'CONNECTIONBROKEN'];\nif (!c || typeof c.serialNumber !== 'string' || VALID.indexOf(c.connectionState) === -1) {\n    node.error('Invalid VDA5050 connection message', msg);\n    return null;\n}\nvar fill = c.connectionState === 'ONLINE' ? 'green' : c.connectionState === 'OFFLINE' ? 'grey' : 'red';\nnode.status({ fill: fill, shape: 'dot', text: c.serialNumber + ': ' + c.connectionState });\nmsg.headers = { 'content-type': 'application/json' };\nmsg.payload = c;\nreturn msg;",
         "outputs": 1,
         "timeout": "",
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 320,
-        "y": 160,
+        "x": 390,
+        "y": 200,
         "wires": [
             [
-                "state-dbg-pose"
+                "ingest-http-conn"
             ]
         ]
     },
     {
-        "id": "state-dbg-pose",
+        "id": "ingest-http-conn",
+        "type": "http request",
+        "z": "tab-ingest",
+        "name": "POST /ingest/connection",
+        "method": "POST",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/ingest/connection",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 630,
+        "y": 200,
+        "wires": [
+            [
+                "ingest-dbg-conn"
+            ]
+        ]
+    },
+    {
+        "id": "ingest-dbg-conn",
         "type": "debug",
-        "z": "tab-state",
-        "name": "pose",
-        "active": true,
+        "z": "tab-ingest",
+        "name": "connection persisted",
+        "active": false,
         "tosidebar": true,
         "console": false,
         "tostatus": false,
@@ -458,74 +221,16 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 500,
-        "y": 160,
+        "x": 860,
+        "y": 200,
         "wires": []
     },
     {
-        "id": "state-in-navstatus",
+        "id": "audit-in-order",
         "type": "mqtt in",
-        "z": "tab-state",
-        "name": "amr/state/nav/status",
-        "topic": "amr/state/nav/status",
-        "qos": "1",
-        "datatype": "json",
-        "broker": "broker-local",
-        "nl": false,
-        "rap": true,
-        "rh": 0,
-        "inputs": 0,
-        "x": 120,
-        "y": 240,
-        "wires": [
-            [
-                "state-fn-navstatus"
-            ]
-        ]
-    },
-    {
-        "id": "state-fn-navstatus",
-        "type": "function",
-        "z": "tab-state",
-        "name": "handleNavStatus",
-        "func": "var p = msg.payload;\nif (!p || !p.status) {\n    node.error('Invalid nav status payload', msg);\n    return null;\n}\nvar fillMap = { NAVIGATING: 'blue', SUCCEEDED: 'green', ABORTED: 'red', PREEMPTED: 'yellow', IDLE: 'grey' };\nnode.status({ fill: fillMap[p.status] || 'grey', shape: 'dot', text: p.status });\n// TODO: INSERT INTO nav_status\nreturn msg;",
-        "outputs": 1,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 330,
-        "y": 240,
-        "wires": [
-            [
-                "state-dbg-navstatus"
-            ]
-        ]
-    },
-    {
-        "id": "state-dbg-navstatus",
-        "type": "debug",
-        "z": "tab-state",
-        "name": "nav/status",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "payload",
-        "targetType": "msg",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 520,
-        "y": 240,
-        "wires": []
-    },
-    {
-        "id": "state-in-navprogress",
-        "type": "mqtt in",
-        "z": "tab-state",
-        "name": "amr/state/nav/progress",
-        "topic": "amr/state/nav/progress",
+        "z": "tab-audit",
+        "name": "amr/v2/+/+/order",
+        "topic": "amr/v2/+/+/order",
         "qos": "0",
         "datatype": "json",
         "broker": "broker-local",
@@ -533,40 +238,64 @@
         "rap": true,
         "rh": 0,
         "inputs": 0,
-        "x": 120,
-        "y": 320,
+        "x": 150,
+        "y": 100,
         "wires": [
             [
-                "state-fn-navprogress"
+                "audit-fn-order"
             ]
         ]
     },
     {
-        "id": "state-fn-navprogress",
+        "id": "audit-fn-order",
         "type": "function",
-        "z": "tab-state",
-        "name": "handleNavProgress",
-        "func": "var p = msg.payload;\nif (!p || typeof p.current_idx !== 'number') {\n    node.error('Invalid nav progress payload', msg);\n    return null;\n}\nnode.status({ fill: 'blue', shape: 'dot', text: (p.current_idx + 1) + '/' + p.total + ' (' + p.progress_pct.toFixed(0) + '%)' });\n// TODO: INSERT INTO nav_progress\nreturn msg;",
+        "z": "tab-audit",
+        "name": "tagOrder",
+        "func": "var m = msg.payload;\nif (!m || typeof m.serialNumber !== 'string' || typeof m.orderId !== 'string') {\n    node.error('Invalid order message', msg);\n    return null;\n}\nnode.status({ fill: 'blue', shape: 'dot', text: m.serialNumber + ' ' + m.orderId });\nmsg.headers = { 'content-type': 'application/json' };\nmsg.payload = { kind: 'order', message: m };\nreturn msg;",
         "outputs": 1,
         "timeout": "",
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 340,
-        "y": 320,
+        "x": 370,
+        "y": 100,
         "wires": [
             [
-                "state-dbg-navprogress"
+                "audit-http-order"
             ]
         ]
     },
     {
-        "id": "state-dbg-navprogress",
+        "id": "audit-http-order",
+        "type": "http request",
+        "z": "tab-audit",
+        "name": "POST /ingest/command",
+        "method": "POST",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/ingest/command",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 610,
+        "y": 100,
+        "wires": [
+            [
+                "audit-dbg-order"
+            ]
+        ]
+    },
+    {
+        "id": "audit-dbg-order",
         "type": "debug",
-        "z": "tab-state",
-        "name": "nav/progress",
-        "active": true,
+        "z": "tab-audit",
+        "name": "order logged",
+        "active": false,
         "tosidebar": true,
         "console": false,
         "tostatus": false,
@@ -574,57 +303,81 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 530,
-        "y": 320,
+        "x": 840,
+        "y": 100,
         "wires": []
     },
     {
-        "id": "health-in-conn",
+        "id": "audit-in-ia",
         "type": "mqtt in",
-        "z": "tab-health",
-        "name": "amr/health/connection",
-        "topic": "amr/health/connection",
-        "qos": "1",
+        "z": "tab-audit",
+        "name": "amr/v2/+/+/instantActions",
+        "topic": "amr/v2/+/+/instantActions",
+        "qos": "0",
         "datatype": "json",
         "broker": "broker-local",
         "nl": false,
         "rap": true,
         "rh": 0,
         "inputs": 0,
-        "x": 120,
-        "y": 80,
+        "x": 170,
+        "y": 200,
         "wires": [
             [
-                "health-fn-conn"
+                "audit-fn-ia"
             ]
         ]
     },
     {
-        "id": "health-fn-conn",
+        "id": "audit-fn-ia",
         "type": "function",
-        "z": "tab-health",
-        "name": "handleConnection",
-        "func": "var p = msg.payload;\nif (!p || typeof p.connected !== 'boolean') {\n    node.error('Invalid connection payload', msg);\n    return null;\n}\nnode.status({ fill: p.connected ? 'green' : 'red', shape: 'dot', text: p.connected ? 'connected' : 'disconnected' });\n// TODO: UPSERT INTO health_connection\nreturn msg;",
+        "z": "tab-audit",
+        "name": "tagInstantActions",
+        "func": "var m = msg.payload;\nif (!m || typeof m.serialNumber !== 'string' || !Array.isArray(m.actions)) {\n    node.error('Invalid instantActions message', msg);\n    return null;\n}\nvar types = m.actions.map(function (a) { return a.actionType; }).join(',');\nnode.status({ fill: 'blue', shape: 'dot', text: m.serialNumber + ' ' + types });\nmsg.headers = { 'content-type': 'application/json' };\nmsg.payload = { kind: 'instantActions', message: m };\nreturn msg;",
         "outputs": 1,
         "timeout": "",
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 340,
-        "y": 80,
+        "x": 400,
+        "y": 200,
         "wires": [
             [
-                "health-dbg-conn"
+                "audit-http-ia"
             ]
         ]
     },
     {
-        "id": "health-dbg-conn",
+        "id": "audit-http-ia",
+        "type": "http request",
+        "z": "tab-audit",
+        "name": "POST /ingest/command",
+        "method": "POST",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/ingest/command",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 630,
+        "y": 200,
+        "wires": [
+            [
+                "audit-dbg-ia"
+            ]
+        ]
+    },
+    {
+        "id": "audit-dbg-ia",
         "type": "debug",
-        "z": "tab-health",
-        "name": "connection",
-        "active": true,
+        "z": "tab-audit",
+        "name": "instantActions logged",
+        "active": false,
         "tosidebar": true,
         "console": false,
         "tostatus": false,
@@ -632,141 +385,25 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 530,
-        "y": 80,
+        "x": 860,
+        "y": 200,
         "wires": []
     },
     {
-        "id": "health-in-batt",
-        "type": "mqtt in",
-        "z": "tab-health",
-        "name": "amr/health/battery",
-        "topic": "amr/health/battery",
-        "qos": "1",
-        "datatype": "json",
-        "broker": "broker-local",
-        "nl": false,
-        "rap": true,
-        "rh": 0,
-        "inputs": 0,
-        "x": 120,
-        "y": 160,
-        "wires": [
-            [
-                "health-fn-batt"
-            ]
-        ]
-    },
-    {
-        "id": "health-fn-batt",
-        "type": "function",
-        "z": "tab-health",
-        "name": "handleBattery",
-        "func": "var p = msg.payload;\nif (!p || typeof p.level_pct !== 'number') {\n    node.error('Invalid battery payload', msg);\n    return null;\n}\nvar fill = p.level_pct > 50 ? 'green' : p.level_pct > 20 ? 'yellow' : 'red';\nnode.status({ fill: fill, shape: 'dot', text: p.level_pct.toFixed(0) + '% ' + (p.charging ? '[charging]' : '') });\n// TODO: INSERT INTO health_battery\nreturn msg;",
-        "outputs": 1,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 330,
-        "y": 160,
-        "wires": [
-            [
-                "health-dbg-batt"
-            ]
-        ]
-    },
-    {
-        "id": "health-dbg-batt",
-        "type": "debug",
-        "z": "tab-health",
-        "name": "battery",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "payload",
-        "targetType": "msg",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 520,
-        "y": 160,
-        "wires": []
-    },
-    {
-        "id": "health-in-err",
-        "type": "mqtt in",
-        "z": "tab-health",
-        "name": "amr/health/error",
-        "topic": "amr/health/error",
-        "qos": "2",
-        "datatype": "json",
-        "broker": "broker-local",
-        "nl": false,
-        "rap": true,
-        "rh": 0,
-        "inputs": 0,
-        "x": 120,
-        "y": 240,
-        "wires": [
-            [
-                "health-fn-err"
-            ]
-        ]
-    },
-    {
-        "id": "health-fn-err",
-        "type": "function",
-        "z": "tab-health",
-        "name": "handleError",
-        "func": "var p = msg.payload;\nif (!p || !p.error_type) {\n    node.error('Invalid error payload', msg);\n    return null;\n}\nnode.status({ fill: 'red', shape: 'ring', text: p.error_type + ': ' + p.message });\nnode.error('[' + p.source + '] ' + p.error_type + ': ' + p.message, msg);\n// TODO: INSERT INTO health_error\nreturn msg;",
-        "outputs": 1,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 320,
-        "y": 240,
-        "wires": [
-            [
-                "health-dbg-err"
-            ]
-        ]
-    },
-    {
-        "id": "health-dbg-err",
-        "type": "debug",
-        "z": "tab-health",
-        "name": "error",
-        "active": true,
-        "tosidebar": true,
-        "console": true,
-        "tostatus": false,
-        "complete": "payload",
-        "targetType": "msg",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 510,
-        "y": 240,
-        "wires": []
-    },
-    {
-        "id": "oee-in-cycle",
+        "id": "oee-in-state",
         "type": "mqtt in",
         "z": "tab-oee",
-        "name": "amr/oee/cycle",
-        "topic": "amr/oee/cycle",
-        "qos": "1",
+        "name": "amr/v2/+/+/state",
+        "topic": "amr/v2/+/+/state",
+        "qos": "0",
         "datatype": "json",
         "broker": "broker-local",
         "nl": false,
         "rap": true,
         "rh": 0,
         "inputs": 0,
-        "x": 120,
-        "y": 80,
+        "x": 150,
+        "y": 120,
         "wires": [
             [
                 "oee-fn-cycle"
@@ -777,16 +414,40 @@
         "id": "oee-fn-cycle",
         "type": "function",
         "z": "tab-oee",
-        "name": "handleCycle",
-        "func": "var p = msg.payload;\nif (!p || !p.trip_id || !p.result) {\n    node.error('Invalid OEE cycle payload', msg);\n    return null;\n}\nvar fill = p.result === 'SUCCEEDED' ? 'green' : 'red';\nnode.status({ fill: fill, shape: 'dot', text: p.trip_id + ': ' + p.result + ' (' + p.duration_s.toFixed(1) + 's)' });\n// TODO: INSERT INTO oee_cycle\nreturn msg;",
+        "name": "deriveCycle",
+        "func": "var s = msg.payload;\nif (!s || typeof s.serialNumber !== 'string') { return null; }\nvar serial = s.serialNumber;\nvar key = 'oee_' + serial;\nvar ctx = flow.get(key) || { orderId: '', startTime: null, active: false };\nvar cur = s.orderId || '';\nvar remaining = (s.nodeStates || []).length;\nvar cycle = null;\n\nif (cur && cur !== ctx.orderId) {\n    // a new order has started\n    ctx = { orderId: cur, startTime: s.timestamp, active: true };\n} else if (cur && cur === ctx.orderId && ctx.active && remaining === 0) {\n    // the active order has finished all of its nodes\n    cycle = { serialNumber: serial, orderId: cur, startTime: ctx.startTime, endTime: s.timestamp, result: 'SUCCEEDED' };\n    ctx.active = false;\n} else if (!cur && ctx.active) {\n    // the order was cleared (cancelled) while still active\n    cycle = { serialNumber: serial, orderId: ctx.orderId, startTime: ctx.startTime, endTime: s.timestamp, result: 'ABORTED' };\n    ctx = { orderId: '', startTime: null, active: false };\n}\n\nflow.set(key, ctx);\nif (!cycle) { return null; }\n\nvar dur = (new Date(cycle.endTime) - new Date(cycle.startTime)) / 1000;\ncycle.durationS = Math.max(0, Math.round(dur * 10) / 10);\nnode.status({ fill: cycle.result === 'SUCCEEDED' ? 'green' : 'red', shape: 'dot', text: cycle.orderId + ' ' + cycle.result + ' (' + cycle.durationS + 's)' });\nmsg.headers = { 'content-type': 'application/json' };\nmsg.payload = cycle;\nreturn msg;",
         "outputs": 1,
         "timeout": "",
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 320,
-        "y": 80,
+        "x": 370,
+        "y": 120,
+        "wires": [
+            [
+                "oee-http-cycle"
+            ]
+        ]
+    },
+    {
+        "id": "oee-http-cycle",
+        "type": "http request",
+        "z": "tab-oee",
+        "name": "POST /ingest/oee-cycle",
+        "method": "POST",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/ingest/oee-cycle",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 610,
+        "y": 120,
         "wires": [
             [
                 "oee-dbg-cycle"
@@ -797,7 +458,7 @@
         "id": "oee-dbg-cycle",
         "type": "debug",
         "z": "tab-oee",
-        "name": "oee/cycle",
+        "name": "cycle persisted",
         "active": true,
         "tosidebar": true,
         "console": false,
@@ -806,15 +467,40 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 510,
+        "x": 840,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "test-inj-order-goal",
+        "type": "inject",
+        "z": "tab-test",
+        "name": "order: single goal",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "{\"headerId\":0,\"timestamp\":\"2026-01-01T00:00:00.000Z\",\"version\":\"2.0.0\",\"manufacturer\":\"moverobotic\",\"serialNumber\":\"amr001\",\"orderId\":\"test-order-goal\",\"orderUpdateId\":0,\"nodes\":[{\"nodeId\":\"n0\",\"sequenceId\":0,\"released\":true,\"nodePosition\":{\"x\":1.0,\"y\":0.5,\"theta\":0.0,\"mapId\":\"default\"},\"actions\":[]}],\"edges\":[]}",
+        "payloadType": "json",
+        "x": 200,
         "y": 80,
-        "wires": []
+        "wires": [
+            [
+                "test-out-order"
+            ]
+        ]
     },
     {
-        "id": "test-inj-goal",
+        "id": "test-inj-order-seq",
         "type": "inject",
         "z": "tab-test",
-        "name": "POST /amr/goal",
+        "name": "order: 2-node sequence",
         "props": [
             {
                 "p": "payload"
@@ -825,21 +511,21 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "payload": "{\"command\":\"goal\",\"payload\":{\"x\":1,\"y\":0.5,\"angle\":{\"x\":0,\"y\":0,\"z\":0}}}",
+        "payload": "{\"headerId\":0,\"timestamp\":\"2026-01-01T00:00:00.000Z\",\"version\":\"2.0.0\",\"manufacturer\":\"moverobotic\",\"serialNumber\":\"amr001\",\"orderId\":\"test-order-seq\",\"orderUpdateId\":0,\"nodes\":[{\"nodeId\":\"n0\",\"sequenceId\":0,\"released\":true,\"nodePosition\":{\"x\":1.0,\"y\":0.0,\"theta\":0.0,\"mapId\":\"default\"},\"actions\":[]},{\"nodeId\":\"n1\",\"sequenceId\":2,\"released\":true,\"nodePosition\":{\"x\":2.0,\"y\":1.0,\"theta\":1.57,\"mapId\":\"default\"},\"actions\":[]}],\"edges\":[{\"edgeId\":\"e0\",\"sequenceId\":1,\"released\":true,\"startNodeId\":\"n0\",\"endNodeId\":\"n1\",\"actions\":[]}]}",
         "payloadType": "json",
         "x": 200,
-        "y": 60,
+        "y": 140,
         "wires": [
             [
-                "test-out-raw"
+                "test-out-order"
             ]
         ]
     },
     {
-        "id": "test-inj-waypoints",
+        "id": "test-inj-ia-cancel",
         "type": "inject",
         "z": "tab-test",
-        "name": "POST /amr/waypoints/start",
+        "name": "instantAction: cancelOrder",
         "props": [
             {
                 "p": "payload"
@@ -850,21 +536,21 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "payload": "{\"command\":\"waypoints\",\"payload\":{\"waypoints\":[{\"id\":1,\"label\":\"WP1\",\"x\":1,\"y\":0,\"angle\":{\"x\":0,\"y\":0,\"z\":0}},{\"id\":2,\"label\":\"WP2\",\"x\":2,\"y\":1,\"angle\":{\"x\":0,\"y\":0,\"z\":1.57}}]}}",
+        "payload": "{\"headerId\":0,\"timestamp\":\"2026-01-01T00:00:00.000Z\",\"version\":\"2.0.0\",\"manufacturer\":\"moverobotic\",\"serialNumber\":\"amr001\",\"actions\":[{\"actionId\":\"test-cancel\",\"actionType\":\"cancelOrder\",\"blockingType\":\"HARD\",\"actionParameters\":[]}]}",
         "payloadType": "json",
-        "x": 200,
-        "y": 120,
+        "x": 210,
+        "y": 220,
         "wires": [
             [
-                "test-out-raw"
+                "test-out-ia"
             ]
         ]
     },
     {
-        "id": "test-inj-cancel",
+        "id": "test-inj-ia-retry",
         "type": "inject",
         "z": "tab-test",
-        "name": "POST /amr/cancel",
+        "name": "instantAction: retryNode",
         "props": [
             {
                 "p": "payload"
@@ -875,21 +561,21 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "payload": "{\"command\":\"cancel\",\"payload\":{}}",
+        "payload": "{\"headerId\":0,\"timestamp\":\"2026-01-01T00:00:00.000Z\",\"version\":\"2.0.0\",\"manufacturer\":\"moverobotic\",\"serialNumber\":\"amr001\",\"actions\":[{\"actionId\":\"test-retry\",\"actionType\":\"retryNode\",\"blockingType\":\"NONE\",\"actionParameters\":[]}]}",
         "payloadType": "json",
-        "x": 200,
-        "y": 180,
+        "x": 205,
+        "y": 280,
         "wires": [
             [
-                "test-out-raw"
+                "test-out-ia"
             ]
         ]
     },
     {
-        "id": "test-inj-retry",
+        "id": "test-inj-ia-skip",
         "type": "inject",
         "z": "tab-test",
-        "name": "POST /amr/waypoints/retry",
+        "name": "instantAction: skipNode",
         "props": [
             {
                 "p": "payload"
@@ -900,98 +586,23 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "payload": "{}",
+        "payload": "{\"headerId\":0,\"timestamp\":\"2026-01-01T00:00:00.000Z\",\"version\":\"2.0.0\",\"manufacturer\":\"moverobotic\",\"serialNumber\":\"amr001\",\"actions\":[{\"actionId\":\"test-skip\",\"actionType\":\"skipNode\",\"blockingType\":\"NONE\",\"actionParameters\":[]}]}",
         "payloadType": "json",
-        "x": 200,
-        "y": 240,
+        "x": 205,
+        "y": 340,
         "wires": [
             [
-                "test-out-retry"
+                "test-out-ia"
             ]
         ]
     },
     {
-        "id": "test-inj-skip",
-        "type": "inject",
-        "z": "tab-test",
-        "name": "POST /amr/waypoints/skip",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "{}",
-        "payloadType": "json",
-        "x": 200,
-        "y": 300,
-        "wires": [
-            [
-                "test-out-skip"
-            ]
-        ]
-    },
-    {
-        "id": "test-inj-connect",
-        "type": "inject",
-        "z": "tab-test",
-        "name": "POST /system/connect",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "{\"url\":\"ws://localhost:9090\"}",
-        "payloadType": "json",
-        "x": 200,
-        "y": 360,
-        "wires": [
-            [
-                "test-out-connect"
-            ]
-        ]
-    },
-    {
-        "id": "test-inj-disconnect",
-        "type": "inject",
-        "z": "tab-test",
-        "name": "POST /system/disconnect",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "{}",
-        "payloadType": "json",
-        "x": 200,
-        "y": 420,
-        "wires": [
-            [
-                "test-out-disconnect"
-            ]
-        ]
-    },
-    {
-        "id": "test-out-raw",
+        "id": "test-out-order",
         "type": "mqtt out",
         "z": "tab-test",
-        "name": "amr/cmd/raw",
-        "topic": "amr/cmd/raw",
-        "qos": "2",
+        "name": "amr/v2/moverobotic/amr001/order",
+        "topic": "amr/v2/moverobotic/amr001/order",
+        "qos": "0",
         "retain": "",
         "respTopic": "",
         "contentType": "",
@@ -999,17 +610,17 @@
         "correl": "",
         "expiry": "",
         "broker": "broker-local",
-        "x": 520,
-        "y": 120,
+        "x": 580,
+        "y": 110,
         "wires": []
     },
     {
-        "id": "test-out-retry",
+        "id": "test-out-ia",
         "type": "mqtt out",
         "z": "tab-test",
-        "name": "amr/cmd/waypoints/retry",
-        "topic": "amr/cmd/waypoints/retry",
-        "qos": "1",
+        "name": "amr/v2/moverobotic/amr001/instantActions",
+        "topic": "amr/v2/moverobotic/amr001/instantActions",
+        "qos": "0",
         "retain": "",
         "respTopic": "",
         "contentType": "",
@@ -1017,108 +628,16 @@
         "correl": "",
         "expiry": "",
         "broker": "broker-local",
-        "x": 550,
-        "y": 240,
+        "x": 600,
+        "y": 280,
         "wires": []
     },
     {
-        "id": "test-out-skip",
-        "type": "mqtt out",
-        "z": "tab-test",
-        "name": "amr/cmd/waypoints/skip",
-        "topic": "amr/cmd/waypoints/skip",
-        "qos": "1",
-        "retain": "",
-        "respTopic": "",
-        "contentType": "",
-        "userProps": "",
-        "correl": "",
-        "expiry": "",
-        "broker": "broker-local",
-        "x": 550,
-        "y": 300,
-        "wires": []
-    },
-    {
-        "id": "test-out-connect",
-        "type": "mqtt out",
-        "z": "tab-test",
-        "name": "amr/system/connect",
-        "topic": "amr/system/connect",
-        "qos": "1",
-        "retain": "",
-        "respTopic": "",
-        "contentType": "",
-        "userProps": "",
-        "correl": "",
-        "expiry": "",
-        "broker": "broker-local",
-        "x": 540,
-        "y": 360,
-        "wires": []
-    },
-    {
-        "id": "test-out-disconnect",
-        "type": "mqtt out",
-        "z": "tab-test",
-        "name": "amr/system/disconnect",
-        "topic": "amr/system/disconnect",
-        "qos": "1",
-        "retain": "",
-        "respTopic": "",
-        "contentType": "",
-        "userProps": "",
-        "correl": "",
-        "expiry": "",
-        "broker": "broker-local",
-        "x": 540,
-        "y": 420,
-        "wires": []
-    },
-    {
-        "id": "test-in-navstatus",
+        "id": "test-in-state",
         "type": "mqtt in",
         "z": "tab-test",
-        "name": "amr/state/nav/status",
-        "topic": "amr/state/nav/status",
-        "qos": "1",
-        "datatype": "json",
-        "broker": "broker-local",
-        "nl": false,
-        "rap": true,
-        "rh": 0,
-        "inputs": 0,
-        "x": 200,
-        "y": 540,
-        "wires": [
-            [
-                "test-dbg-navstatus"
-            ]
-        ]
-    },
-    {
-        "id": "test-dbg-navstatus",
-        "type": "debug",
-        "z": "tab-test",
-        "name": "nav/status",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": true,
-        "complete": "payload",
-        "targetType": "msg",
-        "statusVal": "payload.status",
-        "statusType": "msg",
-        "x": 520,
-        "y": 540,
-        "wires": []
-    },
-    {
-        "id": "test-in-navprogress",
-        "type": "mqtt in",
-        "z": "tab-test",
-        "name": "amr/state/nav/progress",
-        "topic": "amr/state/nav/progress",
+        "name": "amr/v2/+/+/state",
+        "topic": "amr/v2/+/+/state",
         "qos": "0",
         "datatype": "json",
         "broker": "broker-local",
@@ -1127,18 +646,18 @@
         "rh": 0,
         "inputs": 0,
         "x": 200,
-        "y": 600,
+        "y": 460,
         "wires": [
             [
-                "test-dbg-navprogress"
+                "test-dbg-state"
             ]
         ]
     },
     {
-        "id": "test-dbg-navprogress",
+        "id": "test-dbg-state",
         "type": "debug",
         "z": "tab-test",
-        "name": "nav/progress",
+        "name": "state",
         "active": true,
         "tosidebar": true,
         "console": false,
@@ -1147,92 +666,16 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 520,
-        "y": 600,
-        "wires": []
-    },
-    {
-        "id": "test-in-pose",
-        "type": "mqtt in",
-        "z": "tab-test",
-        "name": "amr/state/pose",
-        "topic": "amr/state/pose",
-        "qos": "1",
-        "datatype": "json",
-        "broker": "broker-local",
-        "nl": false,
-        "rap": true,
-        "rh": 0,
-        "inputs": 0,
-        "x": 200,
-        "y": 660,
-        "wires": [
-            [
-                "test-dbg-pose"
-            ]
-        ]
-    },
-    {
-        "id": "test-dbg-pose",
-        "type": "debug",
-        "z": "tab-test",
-        "name": "pose",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "payload",
-        "targetType": "msg",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 520,
-        "y": 660,
-        "wires": []
-    },
-    {
-        "id": "test-in-odom",
-        "type": "mqtt in",
-        "z": "tab-test",
-        "name": "amr/state/odom",
-        "topic": "amr/state/odom",
-        "qos": "1",
-        "datatype": "json",
-        "broker": "broker-local",
-        "nl": false,
-        "rap": true,
-        "rh": 0,
-        "inputs": 0,
-        "x": 200,
-        "y": 720,
-        "wires": [
-            [
-                "test-dbg-odom"
-            ]
-        ]
-    },
-    {
-        "id": "test-dbg-odom",
-        "type": "debug",
-        "z": "tab-test",
-        "name": "odom",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "payload",
-        "targetType": "msg",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 520,
-        "y": 720,
+        "x": 530,
+        "y": 460,
         "wires": []
     },
     {
         "id": "test-in-conn",
         "type": "mqtt in",
         "z": "tab-test",
-        "name": "amr/health/connection",
-        "topic": "amr/health/connection",
+        "name": "amr/v2/+/+/connection",
+        "topic": "amr/v2/+/+/connection",
         "qos": "1",
         "datatype": "json",
         "broker": "broker-local",
@@ -1240,8 +683,8 @@
         "rap": true,
         "rh": 0,
         "inputs": 0,
-        "x": 200,
-        "y": 780,
+        "x": 210,
+        "y": 520,
         "wires": [
             [
                 "test-dbg-conn"
@@ -1252,55 +695,17 @@
         "id": "test-dbg-conn",
         "type": "debug",
         "z": "tab-test",
-        "name": "health/connection",
+        "name": "connection",
         "active": true,
         "tosidebar": true,
         "console": false,
-        "tostatus": false,
+        "tostatus": true,
         "complete": "payload",
         "targetType": "msg",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 530,
-        "y": 780,
-        "wires": []
-    },
-    {
-        "id": "test-in-err",
-        "type": "mqtt in",
-        "z": "tab-test",
-        "name": "amr/health/error",
-        "topic": "amr/health/error",
-        "qos": "2",
-        "datatype": "json",
-        "broker": "broker-local",
-        "nl": false,
-        "rap": true,
-        "rh": 0,
-        "inputs": 0,
-        "x": 200,
-        "y": 840,
-        "wires": [
-            [
-                "test-dbg-err"
-            ]
-        ]
-    },
-    {
-        "id": "test-dbg-err",
-        "type": "debug",
-        "z": "tab-test",
-        "name": "health/error",
-        "active": true,
-        "tosidebar": true,
-        "console": true,
-        "tostatus": false,
-        "complete": "payload",
-        "targetType": "msg",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 520,
-        "y": 840,
+        "statusVal": "payload.connectionState",
+        "statusType": "msg",
+        "x": 540,
+        "y": 520,
         "wires": []
     }
 ]

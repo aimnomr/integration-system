@@ -1,11 +1,13 @@
 # AMR Integration System
 
 Middleware that bridges a ROS-based Autonomous Mobile Robot to external REST clients,
-using MQTT as the central messaging backbone across four services.
+using **VDA5050** over MQTT as the central messaging backbone across four services.
+Fleet-capable — one robot or many, by configuration alone.
 
 ```
-React / client ──HTTP──> FastAPI ──MQTT──> Node-RED ──MQTT──> ROS Bridge ──> Robot
-                                              (Mosquitto broker throughout)
+Commands:   React / client ──HTTP──> FastAPI ──VDA5050/MQTT──> ROS Bridge ──> Robot
+Telemetry:  Robot ──VDA5050/MQTT──> Node-RED ──HTTP──> FastAPI ──> PostgreSQL
+            (Mosquitto broker throughout)
 ```
 
 ## Getting started
@@ -39,9 +41,10 @@ All documentation lives under `docs/`.
 
 | Service | Tech | Address |
 |---|---|---|
-| FastAPI Service | Python 3.14, FastAPI | `:8000` |
+| FastAPI Service | Python, FastAPI | `:8000` |
 | Mosquitto | MQTT broker | `:1883` |
 | Node-RED | Node-RED | `:1880` |
 | ROS Bridge Service | Node.js, roslib | — |
+| PostgreSQL | PostgreSQL | `:5432` |
 
 `CLAUDE.md` holds guidance for the Claude Code agent.

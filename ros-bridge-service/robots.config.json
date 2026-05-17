@@ -1,0 +1,13 @@
+{
+  "interfaceName": "amr",
+  "majorVersion": "v2",
+  "version": "2.0.0",
+  "manufacturer": "moverobotic",
+  "robots": [
+    {
+      "serialNumber": "amr001",
+      "rosbridgeUrl": "ws://localhost:9090",
+      "mapId": "default"
+    }
+  ]
+}

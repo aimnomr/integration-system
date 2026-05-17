@@ -1,0 +1,19 @@
+{
+  "_comment": "Example two-robot fleet. Adding a robot is config-only — append an entry to `robots` and the FleetManager instantiates an isolated Robot for it (own MQTT client, own rosbridge connection, own VDA5050 topics amr/v2/moverobotic/{serial}/...). Copy to robots.config.json to use.",
+  "interfaceName": "amr",
+  "majorVersion": "v2",
+  "version": "2.0.0",
+  "manufacturer": "moverobotic",
+  "robots": [
+    {
+      "serialNumber": "amr001",
+      "rosbridgeUrl": "ws://localhost:9090",
+      "mapId": "default"
+    },
+    {
+      "serialNumber": "amr002",
+      "rosbridgeUrl": "ws://192.168.1.50:9090",
+      "mapId": "default"
+    }
+  ]
+}

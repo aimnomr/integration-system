@@ -1,81 +1,81 @@
 # Service Reference: ros-bridge-service
 
-> As-built reference for the current implementation.
+> As-built reference for the current implementation (VDA5050).
+
+The bridge translates between VDA5050 MQTT messages and ROS. It is **fleet-capable**:
+a `FleetManager` runs one isolated `Robot` per entry in `robots.config.json`.
 
 ## Structure
 
 ```
 ros-bridge-service/
-├── index.js              # entry point — wires everything together
+├── index.js                  # entry — load robots.config.json, start FleetManager
+├── robots.config.json        # fleet registry (interface/version/manufacturer + robots[])
+├── robots.config.example.json# 2-robot example
 └── src/
-    ├── logger.js         # structured JSON logger (no dependency)
-    ├── mqttClient.js     # MQTT singleton (connect, subscribe)
-    ├── rosConnection.js  # ROS lifecycle: connect / reconnect / disconnect
-    ├── health.js         # publishes amr/health/connection and amr/health/error
-    ├── odomBridge.js     # /diff_controller/odom → amr/state/odom
-    ├── poseBridge.js     # /amcl_pose → amr/state/pose
-    ├── navFeedback.js    # /move_base status+result → amr/state/nav/status
-    └── navigation.js     # MQTT → ROS navigation (waypoint queue + auto-advance)
+    ├── logger.js             # structured JSON logger (no dependency)
+    ├── vda5050.js            # topic helpers, HeaderFactory, message validators
+    ├── mqttClient.js         # createMqttClient({ will }) factory
+    ├── fleetManager.js       # FleetManager — Map<serial, Robot>
+    ├── robot.js              # Robot — one robot's full lifecycle
+    ├── rosConnection.js      # RosConnection — rosbridge WebSocket + auto-reconnect
+    ├── orderStateMachine.js  # OrderStateMachine — drives move_base from VDA5050 orders
+    ├── stateBuilder.js       # StateBuilder — assembles + publishes the `state` message
+    ├── odomBridge.js         # OdomBridge — /diff_controller/odom → motion
+    └── poseBridge.js         # PoseBridge — /amcl_pose → agvPosition
 ```
 
 ## Module Responsibilities
 
-### `src/logger.js`
-- Structured logger — emits one JSON object per line (`{ts, level, service, msg, …}`).
-- Level filtered by the `LOG_LEVEL` env var (`debug`/`info`/`warn`/`error`).
+### `index.js`
+Loads `robots.config.json` and starts a `FleetManager`. Slim.
+
+### `src/fleetManager.js` — `FleetManager`
+Reads the config, instantiates one `Robot` per `robots[]` entry into a
+`Map<serialNumber, Robot>`, and starts each. Registers SIGINT/SIGTERM → graceful
+`stop()` of every robot.
+
+### `src/robot.js` — `Robot`
+One robot's whole world. Owns its **own MQTT client** (with a per-robot
+`CONNECTIONBROKEN` Last-Will), a `HeaderFactory`, the 4 VDA5050 topic names, a
+`RosConnection`, `OrderStateMachine`, `StateBuilder`, `OdomBridge`, `PoseBridge`.
+Subscribes `order` + `instantActions`; publishes `connection` (`ONLINE`/`OFFLINE`).
+
+### `src/rosConnection.js` — `RosConnection`
+Manages one rosbridge WebSocket with 3 s auto-reconnect. Surfaces connect/disconnect
+/error via callbacks (no direct dependency on health/state modules).
+
+### `src/orderStateMachine.js` — `OrderStateMachine`
+Accepts a VDA5050 `order`, drives `/move_base_simple/goal` node-by-node (waits for each
+`/move_base/result` before the next — the auto-advance loop), and applies
+`instantActions` (`cancelOrder`/`retryNode`/`skipNode`). `snapshot()` exposes the
+order-related fields of the `state` message. Replaces the former `navigation.js` +
+`navFeedback.js`.
+
+### `src/stateBuilder.js` — `StateBuilder`
+Assembles and publishes the consolidated VDA5050 `state` message. Inputs are pushed in
+by the bridges and the order state machine; publishes on significant position/order/
+error change plus a 5 s heartbeat.
+
+### `src/odomBridge.js` / `src/poseBridge.js`
+`OdomBridge` feeds `velocity`/`driving` from `/diff_controller/odom`. `PoseBridge` feeds
+`agvPosition` from `/amcl_pose` (map-frame, `mapping:=false` mode); its distance/heading
+throttle is the main `state` publish trigger.
+
+### `src/vda5050.js`
+`buildTopic()`, `parseTopic()`, `HeaderFactory` (per-robot, per-topic `headerId`
+counter + shared-header builder), `isValidOrder()`, `isValidInstantActions()`.
 
 ### `src/mqttClient.js`
-- Creates and exports the `mqtt.connect()` singleton; subscribes to command topics.
-
-### `src/rosConnection.js`
-- Owns `currentRos`, `rosbridgeUrl`, `shouldReconnect` state.
-- Exports: `createRosConnection({onConnect, onDisconnect})`, `reconnectRos(url)`, `disconnectRos()`, `getRos()`.
-- Publishes `amr/health/connection` (via `health.js`) on connect/close.
-
-### `src/health.js`
-- Exports `publishConnection(connected, url)` and `reportError(type, message, source)`.
-- Publishes `amr/health/connection` and `amr/health/error`.
-
-### `src/odomBridge.js`
-- Subscribes `/diff_controller/odom`; publishes `amr/state/odom` (distance/heading throttle + 5 s heartbeat).
-- Exports: `setupOdomSubscription(ros, mqttClient)`, `teardownOdom()`.
-
-### `src/poseBridge.js`
-- Subscribes `/amcl_pose` (available in `mapping:=false` mode); publishes `amr/state/pose` with the same throttle pattern as odomBridge.
-- Exports: `setupPoseSubscription(ros, mqttClient)`, `teardownPose()`.
-
-### `src/navFeedback.js`
-- Subscribes `/move_base/status` and `/move_base/result`; maps actionlib status codes to the schema enum; publishes `amr/state/nav/status`.
-- Invokes an `onResult(status)` callback so `navigation.js` can advance a waypoint sequence.
-- Exports: `setupNavFeedback(ros, mqttClient, onResult)`, `teardownNavFeedback()`.
-
-### `src/navigation.js`
-- Owns `waypointQueue`, `currentWaypointIdx`, `sequenceActive` (private).
-- Exports: `sendGoal(ros, data)`, `startWaypoints(ros, data)`, `cancelGoal(ros)`, `retryWaypoint(ros)`, `skipWaypoint(ros)`, `resetWaypoints()`, `handleGoalResult(ros, status)`.
-- `handleGoalResult` auto-advances the sequence on a `SUCCEEDED` result and publishes `amr/state/nav/progress`.
-
-### `index.js`
-Purely wiring:
-1. Import `mqttClient` → subscribe to command topics.
-2. `createRosConnection` with an `onConnect` that sets up odom, pose, and nav-feedback subscriptions.
-3. MQTT `message` handler: dispatch to `navigation.*` or `rosConnection.*` by topic.
-
-## Dependency Graph (no cycles)
-
-```
-index.js
-  ├── logger.js          (no deps)
-  ├── mqttClient.js      ←── logger
-  ├── rosConnection.js   ←── logger, health
-  ├── health.js          ←── mqttClient, logger
-  ├── odomBridge.js      ←── logger        (mqttClient injected per call)
-  ├── poseBridge.js      ←── logger        (mqttClient injected per call)
-  ├── navFeedback.js     ←── logger        (mqttClient injected per call)
-  └── navigation.js      ←── mqttClient, logger   (ros injected per call)
-```
+`createMqttClient({ will })` — connects an MQTT client, optionally with a Last-Will.
+One client per robot (MQTT permits only one Will per connection).
 
 ## Key Design Decisions
 
-- `navigation.js` and the bridge modules take `ros` as a per-call argument — explicit dependency, testable.
-- `navFeedback.js` is decoupled from `navigation.js`: it invokes an injected `onResult` callback rather than importing the navigation module.
-- The waypoint sequence auto-advances on a `SUCCEEDED` move_base result; `ABORTED`/`PREEMPTED` pauses it for manual retry/skip.
+- **One `Robot` instance per robot** — the scalability primitive. Adding a robot is an
+  edit to `robots.config.json`, no code change.
+- **Per-robot MQTT client** — needed for a per-robot retained `CONNECTIONBROKEN`
+  Last-Will (deviation from migration plan §5.1).
+- The `OrderStateMachine` sends one node goal at a time and waits for the move_base
+  result — `SUCCEEDED` advances, `ABORTED`/`PREEMPTED` pauses for retry/skip.
+- All collaborators take `ros` / dependencies explicitly — no module singletons.

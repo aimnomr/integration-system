@@ -1,87 +1,59 @@
 # MQTT Topics
 
+VDA5050 topic hierarchy. Every topic follows
+`{interfaceName}/{majorVersion}/{manufacturer}/{serialNumber}/{topic}` — for this
+project `amr/v2/moverobotic/{serialNumber}/{topic}`.
+
+Full message schemas: [VDA5050_MESSAGES.md](VDA5050_MESSAGES.md). The legacy `amr/cmd/*`,
+`amr/state/*`, `amr/health/*` and `amr/system/*` topics have been **removed**.
+
 ## Table of Contents
 
 **Inbound (Commands to Robot)**
-- [amr/cmd/raw](#amrcmdraw)
-- [amr/cmd/goal](#amrcmdgoal)
-- [amr/cmd/waypoints](#amrcmdwaypoints)
-- [amr/cmd/cancel](#amrcmdcancel)
-- [amr/cmd/waypoints/retry](#amrcmdwaypointsretry)
-- [amr/cmd/waypoints/skip](#amrcmdwaypointsskip)
-- [amr/system/connect](#amrsystemconnect)
-- [amr/system/disconnect](#amrsystemdisconnect)
+- [amr/v2/moverobotic/{serialNumber}/order](#amrv2moveroboticserialnumberorder)
+- [amr/v2/moverobotic/{serialNumber}/instantActions](#amrv2moveroboticserialnumberinstantactions)
 
 **Outbound (Data from Robot)**
-- [amr/state/odom](#amrstateodom)
-- [amr/state/pose](#amrstatepose)
-- [amr/state/nav/status](#amrstatenavstatus)
-- [amr/state/nav/progress](#amrstatenavprogress)
-- [amr/health/connection](#amrhealthconnection)
-- [amr/health/error](#amrhealtherror)
-- [amr/oee/cycle](#amroeecycle)
+- [amr/v2/moverobotic/{serialNumber}/state](#amrv2moveroboticserialnumberstate)
+- [amr/v2/moverobotic/{serialNumber}/connection](#amrv2moveroboticserialnumberconnection)
 
 ---
 
 ## Inbound (Commands to Robot)
 
-### amr/cmd/raw
+### amr/v2/moverobotic/{serialNumber}/order
 
-**Direction:** FastAPI → Mosquitto → Node-RED  
-**QoS:** 2  
-**Purpose:** Carries the raw forwarded REST request body from the API gateway, triggering Node-RED to validate and route it to the correct typed command topic.
-
-**Message Format:**
-```json
-{
-  "command": "goal" | "waypoints" | "cancel",
-  "payload": <object>
-}
-```
-
----
-
-### amr/cmd/goal
-
-**Direction:** Node-RED → Mosquitto → roslib.js  
-**QoS:** 1  
-**Purpose:** Carries a single validated navigation goal after Node-RED routes it from `amr/cmd/raw`.
+**Direction:** FastAPI → Mosquitto → ROS Bridge Service  
+**QoS:** 0  
+**Purpose:** Carries a navigation order — a graph of nodes the robot visits in `sequenceId` order; published when a client submits an order via the FMS gateway.
 
 **Message Format:**
 ```json
 {
-  "x": <float>,
-  "y": <float>,
-  "angle": {
-    "x": <float>,
-    "y": <float>,
-    "z": <float>
-  }
-}
-```
-
----
-
-### amr/cmd/waypoints
-
-**Direction:** Node-RED → Mosquitto → roslib.js  
-**QoS:** 1  
-**Purpose:** Carries a validated ordered waypoint sequence after Node-RED routes it from `amr/cmd/raw`.
-
-**Message Format:**
-```json
-{
-  "waypoints": [
+  "headerId": <integer>,
+  "timestamp": <string>,
+  "version": "2.0.0",
+  "manufacturer": <string>,
+  "serialNumber": <string>,
+  "orderId": <string>,
+  "orderUpdateId": <integer>,
+  "nodes": [
     {
-      "id": <integer>,
-      "label": <string>,
-      "x": <float>,
-      "y": <float>,
-      "angle": {
-        "x": <float>,
-        "y": <float>,
-        "z": <float>
-      }
+      "nodeId": <string>,
+      "sequenceId": <integer>,
+      "released": <boolean>,
+      "nodePosition": { "x": <float>, "y": <float>, "theta": <float>, "mapId": <string> },
+      "actions": <array>
+    }
+  ],
+  "edges": [
+    {
+      "edgeId": <string>,
+      "sequenceId": <integer>,
+      "released": <boolean>,
+      "startNodeId": <string>,
+      "endNodeId": <string>,
+      "actions": <array>
     }
   ]
 }
@@ -89,216 +61,81 @@
 
 ---
 
-### amr/cmd/cancel
+### amr/v2/moverobotic/{serialNumber}/instantActions
 
-**Direction:** Node-RED → Mosquitto → roslib.js  
-**QoS:** 1  
-**Purpose:** Signals roslib.js to cancel all active navigation goals immediately after Node-RED routes it from `amr/cmd/raw`.
-
-**Message Format:**
-```json
-{}
-```
-
----
-
-### amr/cmd/waypoints/retry
-
-**Direction:** FastAPI → Mosquitto → roslib.js  
-**QoS:** 1  
-**Purpose:** Signals roslib.js to resend the current waypoint goal after a navigation error; published directly by FastAPI, not routed through Node-RED.
-
-**Message Format:**
-```json
-{}
-```
-
----
-
-### amr/cmd/waypoints/skip
-
-**Direction:** FastAPI → Mosquitto → roslib.js  
-**QoS:** 1  
-**Purpose:** Signals roslib.js to cancel the current waypoint goal and advance to the next in the sequence; published directly by FastAPI, not routed through Node-RED.
-
-**Message Format:**
-```json
-{}
-```
-
----
-
-### amr/system/connect
-
-**Direction:** FastAPI → Mosquitto → roslib.js  
-**QoS:** 1  
-**Purpose:** Instructs roslib.js to open a WebSocket connection to the rosbridge server at the given URL; published directly by FastAPI, not routed through Node-RED.
+**Direction:** FastAPI → Mosquitto → ROS Bridge Service  
+**QoS:** 0  
+**Purpose:** Carries actions that take effect immediately, independent of the current order; published when a client requests cancel, retry, or skip.
 
 **Message Format:**
 ```json
 {
-  "url": <string>
+  "headerId": <integer>,
+  "timestamp": <string>,
+  "version": "2.0.0",
+  "manufacturer": <string>,
+  "serialNumber": <string>,
+  "actions": [
+    {
+      "actionId": <string>,
+      "actionType": "cancelOrder" | "retryNode" | "skipNode",
+      "blockingType": "NONE" | "SOFT" | "HARD",
+      "actionParameters": <array>
+    }
+  ]
 }
-```
-
----
-
-### amr/system/disconnect
-
-**Direction:** FastAPI → Mosquitto → roslib.js  
-**QoS:** 1  
-**Purpose:** Instructs roslib.js to close the active rosbridge WebSocket connection; published directly by FastAPI, not routed through Node-RED.
-
-**Message Format:**
-```json
-{}
 ```
 
 ---
 
 ## Outbound (Data from Robot)
 
-### amr/state/odom
+### amr/v2/moverobotic/{serialNumber}/state
 
-**Direction:** roslib.js → Mosquitto → Node-RED  
-**QoS:** 1  
-**Purpose:** Carries robot odometry data, published when movement exceeds a distance or heading threshold, or every 5 seconds as a heartbeat when stationary.
-
-**Message Format:**
-```json
-{
-  "timestamp": <string>,
-  "position": {
-    "x": <float>,
-    "y": <float>,
-    "z": <float>
-  },
-  "orientation": {
-    "x": <float>,
-    "y": <float>,
-    "z": <float>,
-    "w": <float>
-  },
-  "linear_velocity": <float>,
-  "angular_velocity": <float>,
-  "moving": <boolean>,
-  "trigger": "distance" | "heading" | "heartbeat"
-}
-```
-
----
-
-### amr/state/pose
-
-**Direction:** roslib.js → Mosquitto → Node-RED  
-**QoS:** 1  
-**Purpose:** Carries the AMCL map-localised pose, published when movement exceeds a distance or heading threshold, or every 5 seconds as a heartbeat when stationary.
-
-**Message Format:**
-```json
-{
-  "timestamp": <string>,
-  "px": <float>,
-  "py": <float>,
-  "qz": <float>,
-  "qw": <float>,
-  "rz": <float>,
-  "moving": <boolean>,
-  "trigger": "distance" | "heading" | "heartbeat"
-}
-```
-
----
-
-### amr/state/nav/status
-
-**Direction:** roslib.js → Mosquitto → Node-RED  
-**QoS:** 1  
-**Purpose:** Carries the current navigation goal status, published once per goal state transition.
-
-**Message Format:**
-```json
-{
-  "timestamp": <string>,
-  "status": "IDLE" | "NAVIGATING" | "SUCCEEDED" | "ABORTED" | "PREEMPTED",
-  "goal_id": <string>,
-  "status_code": <integer>,
-  "text": <string>
-}
-```
-
----
-
-### amr/state/nav/progress
-
-**Direction:** roslib.js → Mosquitto → Node-RED  
+**Direction:** ROS Bridge Service → Mosquitto → Node-RED  
 **QoS:** 0  
-**Purpose:** Carries waypoint sequence progress, published after each waypoint in a sequence is completed or skipped.
+**Purpose:** The consolidated robot state snapshot; published on a significant position/order/error change plus a 5 s heartbeat.
 
 **Message Format:**
 ```json
 {
+  "headerId": <integer>,
   "timestamp": <string>,
-  "current_idx": <integer>,
-  "total": <integer>,
-  "progress_pct": <float>,
-  "current_label": <string>
+  "version": "2.0.0",
+  "manufacturer": <string>,
+  "serialNumber": <string>,
+  "orderId": <string>,
+  "orderUpdateId": <integer>,
+  "lastNodeId": <string>,
+  "lastNodeSequenceId": <integer>,
+  "nodeStates": <array>,
+  "edgeStates": <array>,
+  "actionStates": <array>,
+  "agvPosition": { "x": <float>, "y": <float>, "theta": <float>, "mapId": <string>, "positionInitialized": <boolean> },
+  "velocity": { "vx": <float>, "vy": <float>, "omega": <float> },
+  "driving": <boolean>,
+  "operatingMode": "AUTOMATIC",
+  "errors": <array>,
+  "safetyState": { "eStop": "NONE" | "AUTOACK" | "MANUAL", "fieldViolation": <boolean> }
 }
 ```
 
 ---
 
-### amr/health/connection
+### amr/v2/moverobotic/{serialNumber}/connection
 
-**Direction:** roslib.js → Mosquitto → Node-RED  
+**Direction:** ROS Bridge Service → Mosquitto → Node-RED  
 **QoS:** 1  
-**Purpose:** Carries the rosbridge connection state, published whenever the connection to rosbridge is established or lost.
+**Purpose:** Reports robot liveness; published **retained** — `ONLINE` on rosbridge connect, `OFFLINE` on graceful shutdown, `CONNECTIONBROKEN` emitted by the broker as the Last-Will if the bridge process dies.
 
 **Message Format:**
 ```json
 {
+  "headerId": <integer>,
   "timestamp": <string>,
-  "connected": <boolean>,
-  "rosbridge_url": <string>
-}
-```
-
----
-
-### amr/health/error
-
-**Direction:** roslib.js → Mosquitto → Node-RED  
-**QoS:** 2  
-**Purpose:** Carries error event details, published whenever roslib.js detects a fault in the ROS connection, command execution, or message handling.
-
-**Message Format:**
-```json
-{
-  "timestamp": <string>,
-  "error_type": <string>,
-  "message": <string>,
-  "source": <string>
-}
-```
-
----
-
-### amr/oee/cycle
-
-**Direction:** roslib.js → Mosquitto → Node-RED  
-**QoS:** 1  
-**Purpose:** Carries a completed trip record, published once per navigation goal when the goal reaches a terminal state (SUCCEEDED, ABORTED, or PREEMPTED).
-
-**Message Format:**
-```json
-{
-  "timestamp": <string>,
-  "trip_id": <string>,
-  "origin": <string>,
-  "destination": <string>,
-  "start_time": <string>,
-  "end_time": <string>,
-  "duration_s": <float>,
-  "result": "SUCCEEDED" | "ABORTED" | "PREEMPTED"
+  "version": "2.0.0",
+  "manufacturer": <string>,
+  "serialNumber": <string>,
+  "connectionState": "ONLINE" | "OFFLINE" | "CONNECTIONBROKEN"
 }
 ```

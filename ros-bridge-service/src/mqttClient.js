@@ -1,26 +1,24 @@
 import mqtt from 'mqtt'
 import logger from './logger.js'
 
-const client = mqtt.connect(process.env.MQTT_BROKER)
+// Creates an MQTT client. Each Robot owns its own client so it can register a
+// per-robot Last-Will — the retained CONNECTIONBROKEN message on its `connection`
+// topic. MQTT permits only one Will per connection, hence one client per robot.
+export function createMqttClient({ will } = {}) {
+    const options = {}
+    if (will) {
+        options.will = {
+            topic:   will.topic,
+            payload: will.payload,
+            qos:     1,
+            retain:  true,
+        }
+    }
 
-client.on('connect', () => {
-    logger.info('Connected to MQTT broker')
-    client.subscribe([
-        'amr/cmd/goal',
-        'amr/cmd/waypoints',
-        'amr/cmd/cancel',
-        'amr/cmd/waypoints/retry',
-        'amr/cmd/waypoints/skip',
-        'amr/system/connect',
-        'amr/system/disconnect',
-    ], (err) => {
-        if (err) logger.error('MQTT subscribe failed', { error: err.message })
-        else logger.info('Subscribed to command topics')
-    })
-})
+    const client = mqtt.connect(process.env.MQTT_BROKER, options)
 
-client.on('error', (err) => {
-    logger.error('MQTT error', { error: err.message })
-})
+    client.on('connect', () => logger.info('Connected to MQTT broker'))
+    client.on('error',   (err) => logger.error('MQTT error', { error: err.message }))
 
-export default client
+    return client
+}

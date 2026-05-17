@@ -7,19 +7,25 @@ ROS-based mobile robot to external REST clients. It uses MQTT as the central mes
 backbone across four services, so each service is decoupled and independently
 runnable.
 
+The system speaks the **VDA5050** standard — the open MQTT interface between a fleet
+management system (FMS) and AGVs/AMRs — and is fleet-capable (one robot → many).
+
 An external client (e.g. a React frontend) sends HTTP commands to a FastAPI service,
-which routes them through MQTT → Node-RED → MQTT → a Node.js ROS bridge that
-translates them into ROS actions/topics. Robot state flows back the other way, to be
-stored in PostgreSQL.
+which acts as the FMS gateway: it builds VDA5050 `order` / `instantActions` messages
+and publishes them over MQTT to a Node.js ROS bridge that translates them into ROS
+actions. Robot state flows back as VDA5050 `state` / `connection` messages, which
+Node-RED ingests and persists to PostgreSQL.
 
 ## The four services
 
-- **FastAPI Service** — REST gateway; turns HTTP requests into MQTT command messages.
+- **FastAPI Service** — FMS gateway; builds & publishes VDA5050 messages, serves
+  state/OEE, ingests telemetry.
 - **Mosquitto** — MQTT broker; the central message bus.
-- **Node-RED** — validates and routes command messages; handles state/health/oee.
-- **ROS Bridge Service** — Node.js bridge translating MQTT ↔ ROS over rosbridge.
+- **Node-RED** — telemetry sink; ingests `state`/`connection`, audits commands,
+  derives OEE, persists to PostgreSQL.
+- **ROS Bridge Service** — per-robot VDA5050 ↔ ROS bridge over rosbridge.
 
-(PostgreSQL is planned for persistence but not yet integrated.)
+PostgreSQL provides persistent storage (state, connection, command audit, OEE).
 
 ## Knowledge base map
 

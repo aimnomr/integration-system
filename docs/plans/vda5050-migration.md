@@ -1,7 +1,8 @@
 # Refactor Plan: VDA5050 Migration
 
-> Status: **Proposed** — for review. Nothing here is implemented yet.
-> This document is a planning artifact; discuss discrepancies before execution.
+> Status: **Implemented** — all phases (0–7) completed 2026-05-17. Code-complete and
+> syntax-checked; end-to-end runtime testing pending (needs MQTT, rosbridge, a robot,
+> and PostgreSQL). This document is a planning artifact kept for the design record.
 
 ---
 
@@ -333,14 +334,14 @@ where practical.
 
 | Phase | Scope | Outcome |
 |---|---|---|
-| **0. Foundations** | Define the 4 message schemas, `robots.config.json` format, topic naming. Write `schema/VDA5050_MESSAGES.md`. | Agreed contract. |
-| **1. Robot abstraction** | Refactor ros-bridge-service singletons into `Robot` + `FleetManager`. Behaviour unchanged, still one robot. | Per-robot code structure. |
-| **2. Inbound VDA5050** | `order` + `instantActions` parsing, `OrderStateMachine` driving move_base node-by-node with result feedback. Remove `amr/cmd/*`. | Robot navigates from VDA5050 orders; auto waypoint advance works. |
-| **3. Outbound VDA5050** | `stateBuilder` + `connection` (with Last-Will). Remove `amr/state/*`, `amr/health/*`. | Full state telemetry on VDA5050 topics. |
-| **4. FMS gateway** | FastAPI robot-scoped routes, VDA5050 builders, robot registry. | REST → VDA5050 end to end. |
-| **5. Node-RED rework** | Drop Command Router; add `state`/`connection` ingestion. | Telemetry processing aligned. |
-| **6. Persistence** | PostgreSQL tables keyed by serial; Node-RED writes; FastAPI GET reads. | State/OEE queryable. |
-| **7. Multi-robot proof** | Add a 2nd robot via config only; verify isolation and fleet-wide views. | Scalability demonstrated. |
+| ✅ **0. Foundations** | Define the 4 message schemas, `robots.config.json` format, topic naming. Write `schema/VDA5050_MESSAGES.md`. | Agreed contract. **Done 2026-05-17.** |
+| ✅ **1. Robot abstraction** | Refactor ros-bridge-service singletons into `Robot` + `FleetManager`. Behaviour unchanged, still one robot. | Per-robot code structure. **Done 2026-05-17.** |
+| ✅ **2. Inbound VDA5050** | `order` + `instantActions` parsing, `OrderStateMachine` driving move_base node-by-node with result feedback. Remove `amr/cmd/*`. | Robot navigates from VDA5050 orders; auto waypoint advance works. **Done 2026-05-17.** |
+| ✅ **3. Outbound VDA5050** | `stateBuilder` + `connection` (with Last-Will). Remove `amr/state/*`, `amr/health/*`. | Full state telemetry on VDA5050 topics. **Done 2026-05-17.** |
+| ✅ **4. FMS gateway** | FastAPI robot-scoped routes, VDA5050 builders, robot registry. | REST → VDA5050 end to end. **Done 2026-05-17.** |
+| ✅ **5. Node-RED rework** | Drop Command Router; add `state`/`connection` ingestion. | Telemetry processing aligned. **Done 2026-05-17.** |
+| ✅ **6. Persistence** | PostgreSQL tables keyed by serial; Node-RED writes; FastAPI GET reads. | State/OEE queryable. **Done 2026-05-17.** |
+| ✅ **7. Multi-robot proof** | Add a 2nd robot via config only; verify isolation and fleet-wide views. | Scalability demonstrated. **Done 2026-05-17.** |
 
 Recommended starting point: **Phase 1** (the `Robot` refactor) — it unblocks
 everything else and carries no behaviour risk.
@@ -367,6 +368,23 @@ everything else and carries no behaviour risk.
 - **`convention/` files are immutable** — the documentation rewrite in §5.6 may need a
   new convention rather than editing the existing ones.
 
+## 8a. Deviations made during implementation
+
+- **Per-robot MQTT client (deviation from §5.1).** §5.1 proposed a single shared MQTT
+  client. MQTT permits only one Last-Will per connection, and the `connection` topic
+  needs a per-robot retained `CONNECTIONBROKEN` Will — so each `Robot` owns its own MQTT
+  client and subscribes its own `order`/`instantActions` topics. This is also cleaner
+  per-robot isolation than a shared client + wildcard demux.
+- **Node-RED persists via the FastAPI `/ingest/*` API (refinement of §5.3).** §5.3
+  proposed Node-RED writing to PostgreSQL directly. No PostgreSQL Node-RED contrib node
+  is installed; rather than depend on an uninstalled node, Node-RED POSTs each message
+  to FastAPI `/ingest/*`, which owns the SQL (`app/db.py`). Node-RED remains the
+  ingestion and OEE-derivation layer — only the final INSERT moved one hop, into the
+  service that already owns the database connection.
+- **`amr/system/connect|disconnect` dropped.** The rosbridge URL is now fixed
+  configuration (`robots.config.json`); the bridge auto-connects and auto-reconnects,
+  so manual connect/disconnect commands no longer apply.
+
 ---
 
 ## 9. Open Questions
@@ -392,8 +410,13 @@ subscribes to `/amcl_pose` for `state.agvPosition`. Note: `/amcl_pose` is **not*
 available in `mapping:=true` (SLAM) mode; the integration assumes the robot runs in
 `mapping:=false` mode. See [../schema/ROS_TOPICS.md](../schema/ROS_TOPICS.md).
 
+**§9-B — `mapId` (resolved).**
+VDA5050 positions require a map identifier — a configured string in
+`robots.config.json`. The robot currently loads an auto-generated, non-stable map name
+(e.g. `cropped_12p5`), so no meaningful value can be fixed yet. `mapId` is set to the
+placeholder `"default"`; set it to the real map name once one is established (single
+config value, no code impact).
+
 ### Still open
 
-**§9-B — `mapId`.**
-VDA5050 positions require a map identifier. This can be a simple configured string
-(the map / building name) in `robots.config.json` — a value still needs to be chosen.
+_None._

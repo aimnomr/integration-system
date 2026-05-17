@@ -7,7 +7,7 @@ import time
 from fastapi import FastAPI, Request
 
 from app.logging_config import configure_logging
-from app.routers import amr, system, oee
+from app.routers import ingest, oee, robots, system
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -32,6 +32,7 @@ async def log_requests(request: Request, call_next):
     return response
 
 
-app.include_router(amr.router)
+app.include_router(robots.router)
 app.include_router(system.router)
 app.include_router(oee.router)
+app.include_router(ingest.router)
