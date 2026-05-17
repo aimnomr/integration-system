@@ -3,15 +3,15 @@
 > As-built reference for the current implementation (VDA5050).
 
 The bridge translates between VDA5050 MQTT messages and ROS. It is **fleet-capable**:
-a `FleetManager` runs one isolated `Robot` per entry in `robots.config.json`.
+a `FleetManager` runs one isolated `Robot` per robot in the fleet definition, which it
+fetches from FastAPI's `GET /fleet` at startup (the database is the single source of
+truth).
 
 ## Structure
 
 ```
 ros-bridge-service/
-├── index.js                  # entry — load robots.config.json, start FleetManager
-├── robots.config.json        # fleet registry (interface/version/manufacturer + robots[])
-├── robots.config.example.json# 2-robot example
+├── index.js                  # entry — fetch GET /fleet, start FleetManager
 └── src/
     ├── logger.js             # structured JSON logger (no dependency)
     ├── vda5050.js            # topic helpers, HeaderFactory, message validators
@@ -28,10 +28,13 @@ ros-bridge-service/
 ## Module Responsibilities
 
 ### `index.js`
-Loads `robots.config.json` and starts a `FleetManager`. Slim.
+Validates `MQTT_BROKER`, fetches the fleet definition from `FLEET_API_URL`
+(FastAPI's `GET /fleet`, default `http://localhost:8000/fleet`), and starts a
+`FleetManager` with it. Exits with a clear error if the fetch fails — so FastAPI must
+be running first.
 
 ### `src/fleetManager.js` — `FleetManager`
-Reads the config, instantiates one `Robot` per `robots[]` entry into a
+Takes the fleet config object, instantiates one `Robot` per `robots[]` entry into a
 `Map<serialNumber, Robot>`, and starts each. Registers SIGINT/SIGTERM → graceful
 `stop()` of every robot.
 
@@ -72,8 +75,8 @@ One client per robot (MQTT permits only one Will per connection).
 
 ## Key Design Decisions
 
-- **One `Robot` instance per robot** — the scalability primitive. Adding a robot is an
-  edit to `robots.config.json`, no code change.
+- **One `Robot` instance per robot** — the scalability primitive. Adding a robot is a
+  database edit (a `robots` row), no code change.
 - **Per-robot MQTT client** — needed for a per-robot retained `CONNECTIONBROKEN`
   Last-Will (deviation from migration plan §5.1).
 - The `OrderStateMachine` sends one node goal at a time and waits for the move_base

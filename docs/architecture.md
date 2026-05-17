@@ -78,8 +78,9 @@ passive audit log — parallel to the command path, it cannot block delivery.
 
 ## Key Design Points
 
-- Topics are per-robot (`amr/v2/moverobotic/{serial}/...`); adding a robot is an edit
-  to `ros-bridge-service/robots.config.json` — no code change.
+- Topics are per-robot (`amr/v2/moverobotic/{serial}/...`); adding a robot is a
+  database edit (a `robots` row) — no code change. The fleet definition lives in the
+  database; FastAPI loads it and the ROS Bridge fetches it via `GET /fleet`.
 - Each `Robot` owns its **own MQTT client** so it can register a per-robot Last-Will
   (retained `CONNECTIONBROKEN` on its `connection` topic).
 - `order` / `instantActions` are QoS 0; `connection` is QoS 1 and retained.

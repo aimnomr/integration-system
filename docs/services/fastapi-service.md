@@ -15,16 +15,17 @@ fastapi-service/
 │                             #   pydantic, psycopg2-binary
 └── app/
     ├── __init__.py
-    ├── robots.py             # RobotRegistry — loads robots.config.json + counters
+    ├── robots.py             # RobotRegistry — loads the fleet from the DB + counters
     ├── vda5050.py            # build_order(), build_instant_actions(), topic_for()
     ├── mqtt.py               # MQTT client + publish_order / publish_instant_actions
     ├── db.py                 # PostgreSQL access (lazy psycopg2) — reads + writes
-    ├── data.py               # NAMED_LOCATIONS
+    ├── config.py             # startup env-var validation (validate_env)
     ├── schemas.py            # Pydantic request models
     ├── logging_config.py     # JSON-line logging
     └── routers/
         ├── __init__.py
         ├── robots.py         # /robots/* — FMS gateway routes
+        ├── fleet.py          # /fleet — fleet definition (read by the ROS Bridge)
         ├── system.py         # /system/status
         ├── oee.py            # /robots/{serial}/oee/*
         └── ingest.py         # /ingest/* — telemetry ingestion from Node-RED
@@ -33,13 +34,14 @@ fastapi-service/
 ## Module Responsibilities
 
 ### `main.py`
-`load_dotenv()` first (before `app.mqtt` imports, which read env vars at module
-level), then creates the app and mounts the four routers.
+`load_dotenv()` first, then `validate_env()`, then creates the app and mounts the five
+routers.
 
 ### `app/robots.py` — `RobotRegistry`
-Loads `ros-bridge-service/robots.config.json` (path overridable via `ROBOTS_CONFIG`).
-Exposes the fleet list and holds the per-robot monotonic counters — `headerId` (per
-topic) and `orderId`.
+Loads the fleet from the **database** (`fleet_config` + `robots` tables) at startup —
+the DB is the single source of truth. If the DB is unavailable the service cannot
+start. Exposes the fleet list, a `fleet()` view for `GET /fleet`, and the per-robot
+monotonic counters — `headerId` (per topic) and `orderId`.
 
 ### `app/vda5050.py`
 `build_order()` (positions → a VDA5050 order with auto-generated edges),
@@ -50,16 +52,22 @@ The MQTT client (`loop_start`) plus `publish_order(serial, order)` and
 `publish_instant_actions(serial, message)` → `amr/v2/moverobotic/{serial}/...`.
 
 ### `app/db.py`
-PostgreSQL access. `psycopg2` is imported **lazily** — the service boots without the
-driver or a live DB; queries then raise `DatabaseUnavailable` → HTTP 503. Provides
-write helpers (`insert_state`/`insert_connection`/`insert_command`/`insert_oee_cycle`)
-and read helpers (`fetch_latest_state`, `fetch_oee_*`, `ping`).
+PostgreSQL access. `psycopg2` is imported **lazily**; queries raise
+`DatabaseUnavailable` → HTTP 503 when the DB is down. Provides write helpers
+(`insert_state`/`insert_connection`/`insert_command`/`insert_oee_cycle`) and read
+helpers (`fetch_fleet_config`, `fetch_robots`, `fetch_named_locations`,
+`fetch_latest_state`, `fetch_oee_*`, `ping`). Note: `RobotRegistry` reads the fleet
+through this module at startup, so a live DB is required for the service to boot.
 
 ### `app/schemas.py`
 `Node`, `OrderRequest`, `NamedOrderRequest`, `InstantActionRequest`.
 
 ### `app/routers/robots.py`
 `/robots`, `/robots/{serial}/order`, `/order/named`, `/instant-actions`, `/state`.
+
+### `app/routers/fleet.py`
+`GET /fleet` — the full fleet definition (`interfaceName`, `majorVersion`, `version`,
+`manufacturer`, `robots[]`). The ROS Bridge Service fetches it at startup.
 
 ### `app/routers/system.py`
 `/system/status` — MQTT + database connectivity. (The legacy `/system/connect|
@@ -77,16 +85,18 @@ the router delegates to `app/db.py`.
 ```
 main.py
   └── app/routers/
-        ├── robots.py  ← robots, vda5050, mqtt, db, schemas, data
+        ├── robots.py  ← robots, vda5050, mqtt, db, schemas
+        ├── fleet.py   ← robots
         ├── system.py  ← mqtt, db
         ├── oee.py     ← db, robots
         └── ingest.py  ← db
-  (vda5050 ← robots ; mqtt ← vda5050)
+  (vda5050 ← robots ; mqtt ← vda5050, robots ; robots ← db)
 ```
 
 ## Notes
 
-- `app/data.py` still holds `NAMED_LOCATIONS` hardcoded — sourcing it from the
-  `named_locations` table is open gap **G8**.
-- Named-location headings are stored in degrees; `/order/named` converts them to
-  radians (`math.radians`) for the VDA5050 `theta`.
+- `/order/named` resolves location IDs from the `named_locations` table via
+  `db.fetch_named_locations()`. The table stores `theta` in radians (map frame), so it
+  is used directly — no conversion.
+- `app/config.py` runs `validate_env()` from `main.py` at startup, failing fast if a
+  required env var (`MQTT_BROKER`, `MQTT_PORT`) is missing or invalid.

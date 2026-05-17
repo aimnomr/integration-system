@@ -18,6 +18,7 @@ been **removed**.
 
 **GET**
 - [GET /robots](#get-robots)
+- [GET /fleet](#get-fleet)
 - [GET /robots/{serial}/state](#get-robotsserialstate)
 - [GET /robots/{serial}/oee/summary](#get-robotsserialoeesummary)
 - [GET /robots/{serial}/oee/cycles](#get-robotsserialoeecycles)
@@ -257,6 +258,34 @@ been **removed**.
 
 ---
 
+### GET /fleet
+
+**Purpose:** Return the full fleet definition. The ROS Bridge Service fetches this at
+startup to learn its fleet roster — the database is the single source of truth, and
+this endpoint is its gateway.
+
+**Request Body:** None
+
+**Response Body:**
+```json
+{
+  "interfaceName": <string>,
+  "majorVersion": <string>,
+  "version": <string>,
+  "manufacturer": <string>,
+  "robots": [
+    { "serialNumber": <string>, "rosbridgeUrl": <string>, "mapId": <string> }
+  ]
+}
+```
+
+**Status Codes:**
+| Code | Condition |
+|------|-----------|
+| 200 | Fleet definition returned |
+
+---
+
 ### GET /robots/{serial}/state
 
 **Purpose:** Return the most recent VDA5050 `state` snapshot stored for a robot.
@@ -372,7 +401,8 @@ been **removed**.
 
 ### GET /system/status
 
-**Purpose:** Report gateway health — MQTT broker and database connectivity.
+**Purpose:** Report gateway health — MQTT broker, database, rosbridge, and Node-RED
+connectivity.
 
 **Request Body:** None
 
@@ -382,10 +412,16 @@ been **removed**.
   "timestamp": <string>,
   "mosquitto": { "status": "connected" | "disconnected" },
   "database": { "status": "connected" | "unavailable" },
-  "roslib": { "status": "unknown" },
-  "node_red": { "status": "unknown" }
+  "roslib": { "status": "connected" | "disconnected" | "unknown" },
+  "node_red": { "status": "connected" | "disconnected" }
 }
 ```
+
+- `roslib` — inferred from the robots' retained VDA5050 `connection` topics:
+  `connected` if any robot reports `ONLINE`, `disconnected` if states are known but
+  none are online, `unknown` until the first `connection` message is seen.
+- `node_red` — a best-effort HTTP probe of `NODE_RED_URL` (default
+  `http://localhost:1880`); `connected` if the port responds at all.
 
 **Status Codes:**
 | Code | Condition |

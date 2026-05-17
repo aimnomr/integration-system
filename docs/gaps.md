@@ -11,35 +11,10 @@ Open items not yet addressed, consolidated for visibility. For what *is* working
 
 | # | Gap | Area | Severity |
 |---|---|---|---|
-| G7 | `GET /system/status` roslib / Node-RED status still `unknown` | API | Low |
-| G8 | Named locations hardcoded in FastAPI | Config/data | Low |
-| G9 | No env-var validation / no `.env.example` | Robustness | Low |
 | G10 | No authentication / authorization | Operational | Medium |
 | G11 | No rate limiting | Operational | Low |
 | G13 | No tests (zero coverage) | Operational | Medium |
 | G14 | No Docker / docker-compose / CI | Operational | Low |
-
----
-
-## API
-
-### G7 — `GET /system/status` roslib / Node-RED status unknown
-`/system/status` now reports MQTT **and** database connectivity, but `roslib` and
-`node_red` are still returned as `unknown` — the gateway cannot directly observe them.
-roslib liveness could be inferred from the retained VDA5050 `connection` topic.
-
----
-
-## Configuration & robustness
-
-### G8 — Named locations hardcoded
-`NAMED_LOCATIONS` lives in `fastapi-service/app/data.py`. A `named_locations` table now
-exists in the database schema, but FastAPI still reads the hardcoded dict; it should be
-sourced from the database.
-
-### G9 — No env-var validation / no `.env.example`
-Services read env vars at startup with no validation — a missing `MQTT_BROKER` fails
-unclearly. There are also no committed `.env.example` templates for onboarding.
 
 ---
 
@@ -76,16 +51,33 @@ continuous integration.
 | G4 | PostgreSQL not integrated | 2026-05-17 |
 | G5 | Node-RED → PostgreSQL logging not wired | 2026-05-17 |
 | G6 | 6 GET endpoints stubbed (503) | 2026-05-17 |
+| G7 | `GET /system/status` roslib / Node-RED status unknown | 2026-05-17 |
+| G8 | Named locations hardcoded in FastAPI | 2026-05-17 |
+| G9 | No env-var validation / no `.env.example` | 2026-05-17 |
 | G12 | No structured logging | 2026-05-17 |
 
 G1–G3 — the ROS Bridge Service consumes `/move_base` feedback and the VDA5050
 `OrderStateMachine` auto-advances orders node-by-node. G12 — JSON-line logging in the
 ROS Bridge and FastAPI.
 
+**G7** — `/system/status` now reports `roslib` (inferred from the robots' retained
+VDA5050 `connection` topics — FastAPI's MQTT client subscribes them) and `node_red`
+(a best-effort HTTP probe of `NODE_RED_URL`). Neither is `unknown` in normal operation.
+
+**G8** — `POST /robots/{serial}/order/named` now sources named locations from the
+`named_locations` table via `db.fetch_named_locations()`; the hardcoded `app/data.py`
+dict is deleted. `theta` is read directly (the table stores radians), so the old
+degrees→radians conversion is gone.
+
+**G9** — required env vars are validated at startup: FastAPI via `app/config.py`
+(`validate_env()` in `main.py`), the ROS Bridge via a check in `index.js`. Both fail
+fast with a clear message. `.env.example` templates are committed for both services.
+
 **G4 / G5 / G6** were resolved by the VDA5050 migration
 ([plans/vda5050-migration.md](plans/vda5050-migration.md)):
-- **G4** — the database schema is VDA5050-aligned, serial-keyed and BCNF
-  ([schema/DATABASE_SCHEMA.md](schema/DATABASE_SCHEMA.md)); FastAPI `app/db.py`
+- **G4** — the database schema is VDA5050-aligned, serial-keyed and fully normalized
+  (1NF-strict, BCNF — 14 tables, VDA5050 arrays in child tables, not JSONB; see
+  [schema/DATABASE_SCHEMA.md](schema/DATABASE_SCHEMA.md)); FastAPI `app/db.py`
   implements the read and write paths.
 - **G5** — Node-RED ingests the VDA5050 `state` / `connection` / `order` topics and
   persists them via the FastAPI `/ingest/*` API (a documented refinement of the

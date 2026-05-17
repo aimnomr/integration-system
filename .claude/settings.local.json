@@ -1,6 +1,7 @@
 {
   "permissions": {
     "allow": [
+      "Read(//d/d/FYP/integration-system/**)"
     ]
   }
 }

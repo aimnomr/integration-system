@@ -8,6 +8,58 @@ author) don't have to re-derive them. Newest decisions first.
 
 ---
 
+## Database is the single source of truth for the fleet definition
+
+- **Date:** 2026-05-17
+- **Decision:** The fleet definition (fleet-wide VDA5050 identity + the robot roster)
+  lives **only in the database** — the `fleet_config` and `robots` tables. The
+  `robots.config.json` file is deleted. FastAPI's `RobotRegistry` loads the fleet from
+  the DB at startup; the ROS Bridge Service fetches it from FastAPI's new `GET /fleet`
+  endpoint at startup. A new `fleet_config` single-row table holds `interfaceName`,
+  `majorVersion`, `version`, `manufacturer`; `robots.manufacturer` was dropped (it is
+  fleet-level, not per-robot).
+- **Why:** Previously the fleet was defined in `robots.config.json` *and* duplicated as
+  a hand-copied seed in the DB `robots` table. Two sources drift apart and cause data
+  discrepancies. Consolidating on the database gives one authoritative source that
+  every service refers to.
+- **Why via FastAPI for the ROS Bridge:** the ROS Bridge is a Node service with no
+  database dependency. Rather than add a Postgres driver to it, it fetches the fleet
+  over HTTP from FastAPI (which already owns DB access) — consistent with how Node-RED
+  already talks to FastAPI for `/ingest/*`.
+- **Trade-off:** start order is now constrained — PostgreSQL must be up before FastAPI
+  (FastAPI loads the fleet at boot and will not start without it), and FastAPI before
+  the ROS Bridge (it fetches `GET /fleet`). These are startup dependencies, not
+  retried. Documented in [setup.md](setup.md).
+- **Status:** Implemented — `schema.sql`/`DATABASE_SCHEMA.md`, `app/robots.py`,
+  `app/db.py`, `app/routers/fleet.py`, ROS Bridge `index.js`/`fleetManager.js`.
+  `robots.config.json` + `robots.config.example.json` deleted. Not yet runtime-tested.
+
+---
+
+## Fully normalized relational database schema
+
+- **Date:** 2026-05-17
+- **Decision:** Rewrite the database schema as a fully normalized, 1NF-strict, BCNF
+  relational design — 14 tables. VDA5050's variable-length arrays (`nodes`, `edges`,
+  `actions`, `nodeStates`, `actionStates`, `errors`) become child tables with foreign
+  keys instead of JSONB columns. The JSONB `order_log` table is replaced by `orders` +
+  `order_nodes` + `order_edges` and `instant_action_messages` + `instant_actions`; the
+  JSONB columns on `state_snapshots` are replaced by `state_node_states`,
+  `state_action_states`, and `state_errors`. Every log table's `serial_number` is now a
+  real foreign key to `robots`.
+- **Why:** Storing VDA5050 arrays as JSONB packs repeating groups into one column,
+  which violates 1NF. A normalized schema is correct relational design and makes the
+  data queryable per node / action / error without JSON operators — appropriate for an
+  FYP that is partly graded on database modelling.
+- **Trade-off:** Persisting one `state` message becomes a multi-row transaction (one
+  snapshot + N child rows); `state_node_states` is the fastest-growing table. Accepted
+  for the FYP scope and documented in [schema/DATABASE_SCHEMA.md](schema/DATABASE_SCHEMA.md).
+- **Status:** Implemented — `docs/schema/DATABASE_SCHEMA.md` and
+  `fastapi-service/app/db.py` rewritten; `routers/ingest.py` and `node-red/flows.json`
+  unchanged (the DB layer absorbs the schema change). Not yet runtime-tested.
+
+---
+
 ## Node-RED persists via the FastAPI `/ingest/*` API
 
 - **Date:** 2026-05-17

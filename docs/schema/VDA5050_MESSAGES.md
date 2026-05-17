@@ -23,7 +23,7 @@ for where this project knowingly departs from the standard.
 - [instantActions](#instantactions) — FMS → AGV
 - [state](#state) — AGV → FMS
 - [connection](#connection) — AGV → FMS
-- [Robot Registry — robots.config.json](#robot-registry--robotsconfigjson)
+- [Robot Registry — database](#robot-registry--database)
 - [Deviations from VDA5050](#deviations-from-vda5050)
 
 ---
@@ -46,8 +46,8 @@ For this project the leading segments are fixed:
 | `serialNumber` | `amr001`, `amr002`, … | Assigned incrementally per robot. |
 
 So a concrete topic is `amr/v2/moverobotic/amr001/order`. Adding a second robot
-(`amr002`) is **configuration, not code** — see
-[robots.config.json](#robot-registry--robotsconfigjson).
+(`amr002`) is **a database edit, not code** — see
+[Robot Registry](#robot-registry--database).
 
 | Topic | Direction | QoS | Retained | Purpose |
 |---|---|---|---|---|
@@ -136,8 +136,8 @@ single goal is an order with one node; a waypoint sequence is an order with N no
   connect consecutive nodes. `actions` arrays are left empty (`[]`) initially.
 - `theta` is the heading in **radians, map frame** — it replaces the legacy Euler
   `angle.z` (degrees).
-- `mapId` identifies the map the coordinates belong to; sourced from
-  [robots.config.json](#robot-registry--robotsconfigjson).
+- `mapId` identifies the map the coordinates belong to; sourced from the
+  [Robot Registry](#robot-registry--database).
 
 **ROS translation:** each released node, in `sequenceId` order, becomes one
 `/move_base_simple/goal` (`geometry_msgs/PoseStamped`). The order state machine waits
@@ -272,11 +272,17 @@ heartbeat — the same distance/heading throttle the legacy `odom` bridge uses.
 
 ---
 
-## Robot Registry — robots.config.json
+## Robot Registry — database
 
-The fleet is defined by `ros-bridge-service/robots.config.json`. Adding a robot is an
-edit to this file — no code change. The ros-bridge-service `FleetManager` reads it at
-startup and instantiates one `Robot` per entry.
+The fleet is defined in the **database** — the single source of truth — across two
+tables: `fleet_config` (one row of fleet-wide identity) and `robots` (one row per
+robot). See [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md).
+
+- **FastAPI** loads the fleet from the DB at startup (`RobotRegistry`).
+- **The ROS Bridge Service** fetches it from FastAPI's `GET /fleet` at startup and
+  instantiates one `Robot` per entry.
+
+`GET /fleet` returns the fleet definition in this shape:
 
 ```json
 {
@@ -294,20 +300,23 @@ startup and instantiates one `Robot` per entry.
 }
 ```
 
-| Field | Scope | Notes |
-|---|---|---|
-| `interfaceName` | fleet | Leading topic segment — `amr`. |
-| `majorVersion` | fleet | Topic segment — `v2`. |
-| `version` | fleet | VDA5050 `version` header value — `2.0.0`. |
-| `manufacturer` | fleet | Topic segment + header field — `moverobotic`. |
-| `robots[].serialNumber` | robot | Topic segment + header field; unique per robot. |
-| `robots[].rosbridgeUrl` | robot | The robot's rosbridge WebSocket URL. |
-| `robots[].mapId` | robot | Map identifier for positions on `order` / `state`. |
+| Field | Scope | DB source | Notes |
+|---|---|---|---|
+| `interfaceName` | fleet | `fleet_config.interface_name` | Leading topic segment — `amr`. |
+| `majorVersion` | fleet | `fleet_config.major_version` | Topic segment — `v2`. |
+| `version` | fleet | `fleet_config.version` | VDA5050 `version` header value — `2.0.0`. |
+| `manufacturer` | fleet | `fleet_config.manufacturer` | Topic segment + header field — `moverobotic`. |
+| `robots[].serialNumber` | robot | `robots.serial_number` | Topic segment + header field; unique per robot. |
+| `robots[].rosbridgeUrl` | robot | `robots.rosbridge_url` | The robot's rosbridge WebSocket URL. |
+| `robots[].mapId` | robot | `robots.map_id` | Map identifier for positions on `order` / `state`. |
+
+Adding a robot is a database edit (a new `robots` row) — no code change. Both services
+pick it up on their next start.
 
 > **`mapId` is a placeholder (`"default"`).** The robot currently loads an
 > auto-generated map name (e.g. `cropped_12p5`) that is not stable, so a meaningful
-> value cannot be fixed yet. Set this to the real map name once one is established —
-> it is a single config value with no code impact. (Migration plan open question §9-B.)
+> value cannot be fixed yet. Set this to the real map name in the `robots` /`maps`
+> tables once one is established. (Migration plan open question §9-B.)
 
 ---
 

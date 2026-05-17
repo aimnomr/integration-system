@@ -1,13 +1,13 @@
-import { readFileSync } from 'node:fs'
 import Robot from './robot.js'
 import logger from './logger.js'
 
-// Owns the fleet: builds one Robot per robots.config.json entry. Each Robot owns its
-// own MQTT client and rosbridge connection, so the fleet is fully isolated per robot
-// — adding a robot is an edit to the config file, no code change.
+// Owns the fleet: builds one Robot per entry in the fleet config. Each Robot owns its
+// own MQTT client and rosbridge connection, so the fleet is fully isolated per robot.
+// The fleet config is fetched from FastAPI's GET /fleet (the database is the single
+// source of truth) — adding a robot is a database edit, no code change.
 export default class FleetManager {
-    constructor(configPath) {
-        this._config = JSON.parse(readFileSync(configPath, 'utf-8'))
+    constructor(config) {
+        this._config = config      // { interfaceName, majorVersion, version, manufacturer, robots }
         this._robots = new Map()   // serialNumber -> Robot
     }
 

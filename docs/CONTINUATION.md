@@ -31,6 +31,10 @@ multi-robot capable.
 8. **Knowledge-base sync** — `README.md`, `overview.md`, `setup.md`, `decisions.md`,
    `glossary.md`, all three `docs/services/*.md`, and the project memory updated to the
    VDA5050 implementation.
+9. **Full database normalization (2026-05-17)** — the schema is now fully normalized
+   (1NF-strict, BCNF — 14 tables). `DATABASE_SCHEMA.md` rewritten; `app/db.py` write
+   helpers are multi-table transactions; `routers/ingest.py` and `node-red/flows.json`
+   unchanged; `decisions.md` + `gaps.md` updated. See § below.
 
 ## Current state
 
@@ -38,78 +42,157 @@ multi-robot capable.
   - ros-bridge-service: all files `node --check` + module-graph import OK.
   - fastapi-service: all files `py_compile` OK; registry + VDA5050 builders run-tested.
   - node-red/flows.json: valid JSON, node-graph integrity OK (36 nodes, 4 tabs).
-- Resolved gaps: G1–G6, G12. Open: G7–G11, G13, G14 ([gaps.md](gaps.md)).
+- Resolved gaps: G1–G9, G12. Open: G10, G11, G13, G14 ([gaps.md](gaps.md)).
 
 ---
 
-## ▶ NEXT SESSION: full database normalization (decided, not started)
+## ✅ DONE: full database normalization (2026-05-17)
 
-The Phase 6 schema is **not fully normalized** — `state_snapshots` and `order_log`
-store VDA5050 arrays as **JSONB**, which is a 1NF violation. **Decision (2026-05-17):
-rewrite it as a fully normalized, 1NF-strict, BCNF relational schema — 14 tables**,
-with real foreign keys (telemetry tables FK to `robots`).
+The Phase 6 schema stored VDA5050 arrays as **JSONB** (a 1NF violation). It has been
+rewritten as a fully normalized, 1NF-strict, BCNF relational schema — **14 tables**,
+with real foreign keys (every log table FKs `serial_number` → `robots`).
 
-### Target — 14 tables
+### Schema — 14 tables
 
 | Group | Tables |
 |---|---|
-| Reference (3) | `maps`, `robots`, `named_locations` — already clean, keep |
-| Orders (3) | `orders` (header), `order_nodes` (FK→orders; `nodePosition` flattened in), `order_edges` (FK→orders) |
-| Instant actions (2) | `instant_action_messages` (header), `instant_actions` (FK→message) |
-| State (4) | `state_snapshots` (scalar fields only), `state_node_states`, `state_action_states`, `state_errors` (all FK→snapshot) |
-| Connection + OEE (2) | `connection_log`, `oee_cycles` — already scalar, keep |
+| Reference (3) | `maps`, `robots`, `named_locations` |
+| Orders (3) | `orders` (header), `order_nodes` (`nodePosition` flattened in), `order_edges` |
+| Instant actions (2) | `instant_action_messages` (header), `instant_actions` |
+| State (4) | `state_snapshots` (scalar only), `state_node_states`, `state_action_states`, `state_errors` |
+| Connection + OEE (2) | `connection_log`, `oee_cycles` |
 
-- `orders` + `order_nodes` + `order_edges` and `instant_action_messages` +
-  `instant_actions` **replace the JSONB `order_log` table**.
-- `state_node_states` / `state_action_states` / `state_errors` **replace the JSONB
-  columns** in `state_snapshots`.
-- `nodePosition` is a 1:1 sub-object → flatten into `order_nodes` columns
-  (`pos_x, pos_y, theta, map_id`), not its own table.
-- VDA5050 subset note: order/edge `actions[]`, state `edgeStates[]` and
-  `actionParameters[]` are empty in this project — no tables for them; document.
-- Accepted trade-off: each `state` message becomes a multi-row transaction
-  (1 snapshot + N node-states + …). `state_node_states` is the fastest-growing table.
-  Fine for the FYP; documented.
+- The JSONB `order_log` table is gone; the JSONB columns on `state_snapshots` are gone.
+- VDA5050 subset: order/edge `actions[]`, state `edgeStates[]`, `actionParameters[]`
+  are always empty — no tables for them (documented in `DATABASE_SCHEMA.md`).
+- Trade-off: each `state` message is now a multi-row transaction; `state_node_states`
+  is the fastest-growing table. Fine for the FYP; documented.
+
+### What changed
+
+- `docs/schema/DATABASE_SCHEMA.md` — rewritten for the 14-table schema + Normalization §.
+- `fastapi-service/app/db.py` — `insert_state()` / `_insert_order()` /
+  `_insert_instant_actions()` are multi-table transactions via a new `_transaction()`
+  context manager; `fetch_latest_state()` joins child tables back. `py_compile` OK.
+- `fastapi-service/app/routers/ingest.py` — **unchanged** (`insert_command(kind, msg)`
+  signature kept; dispatch is internal to `db.py`).
+- `node-red/flows.json` — **unchanged**.
+- `docs/decisions.md` + `gaps.md` — updated.
+- `docs/schema/schema.sql` — added as the runnable copy of the schema (also drops the
+  legacy `order_log` table).
+
+## ✅ DONE: G7 + G8 + G9 (2026-05-17)
+
+- **G7 — `/system/status` roslib + Node-RED.** FastAPI's MQTT client (`app/mqtt.py`)
+  now subscribes the retained `connection` topics; `roslib_status()` infers rosbridge
+  liveness from them. `node_red` is a best-effort HTTP probe of `NODE_RED_URL` (default
+  `http://localhost:1880`). Neither field is `unknown` in normal operation.
+- **G8 — named locations from the DB.** `POST /robots/{serial}/order/named` now reads
+  the `named_locations` table via `db.fetch_named_locations()`; `app/data.py` deleted.
+  `theta` is read straight from the table (radians) — the old degrees→radians
+  conversion is gone.
+- **G9 — env-var validation + `.env.example`.** FastAPI validates required vars at
+  startup via `app/config.py` (`validate_env()` in `main.py`); the ROS Bridge checks
+  in `index.js`. Both fail fast with a clear message. `.env.example` committed for both
+  services.
+
+## ✅ DONE: database as single source of truth (2026-05-17)
+
+The fleet definition was duplicated — `robots.config.json` *and* a hand-copied DB seed.
+It now lives **only in the database**:
+
+- New `fleet_config` single-row table (interfaceName/majorVersion/version/manufacturer);
+  `robots.manufacturer` column dropped. Schema is now **15 tables**.
+- FastAPI `RobotRegistry` (`app/robots.py`) loads the fleet from the DB at startup via
+  `db.fetch_fleet_config()` + `db.fetch_robots()`.
+- New `GET /fleet` endpoint (`app/routers/fleet.py`).
+- ROS Bridge `index.js` fetches `GET /fleet` from `FLEET_API_URL` at startup;
+  `FleetManager` takes the config object instead of reading a file.
+- `robots.config.json` + `robots.config.example.json` **deleted**; `ROBOTS_CONFIG`
+  env var gone; ROS Bridge gains `FLEET_API_URL`.
+- **Start order now matters:** PostgreSQL → FastAPI → ROS Bridge (startup deps, not
+  retried).
+
+### NEXT: runtime-test the pipeline
+
+- **Runtime-test the pipeline** — needs MQTT broker, rosbridge + a robot, PostgreSQL:
+  `pip install -r fastapi-service/requirements.txt`; create the DB + apply
+  `docs/schema/schema.sql`; start services **in order** (Postgres → FastAPI → ROS
+  Bridge → Node-RED); `POST /robots/amr001/order`; verify auto-advance, instant
+  actions, and the retained `CONNECTIONBROKEN`.
+- Address open gaps G10, G11, G13, G14 ([gaps.md](gaps.md)).
+
+---
+
+## ▶ PLANNED: CRUD API for reference data (decided, not started)
+
+**Problem.** There is **no CRUD API** for the reference tables (`fleet_config`, `maps`,
+`robots`, `named_locations`). They are only seed data — editing them means re-applying
+`schema.sql`, which **drops and recreates every table and wipes all telemetry**. The
+existing endpoints are command / telemetry-ingest / read-only only. Now that the DB is
+the single source of truth, per-row CRUD is the natural next step. (Suggested gap ID
+**G15** — add to [gaps.md](gaps.md) when this is picked up.)
+
+### Endpoints to add
+
+| Resource | Routes | Router file |
+|---|---|---|
+| Maps | `GET /maps`, `GET /maps/{map_id}`, `POST /maps`, `PUT /maps/{map_id}`, `DELETE /maps/{map_id}` | new `routers/maps.py` |
+| Named locations | `GET /locations`, `GET /locations/{id}`, `POST /locations`, `PUT /locations/{id}`, `DELETE /locations/{id}` | new `routers/locations.py` |
+| Robots | add `GET /robots/{serial}`, `POST /robots`, `PUT /robots/{serial}`, `DELETE /robots/{serial}` (`GET /robots` exists) | extend `routers/robots.py` |
+| Fleet config | add `PUT /fleet` to update the single `fleet_config` row (`GET /fleet` exists) | extend `routers/fleet.py` |
 
 ### Files to change
 
-1. `docs/schema/DATABASE_SCHEMA.md` — rewrite for the 14-table schema (drop the JSONB
-   columns and `order_log`; add the child tables; keep FKs).
-2. `fastapi-service/app/db.py` — the write helpers become **multi-table transactions**:
-   - `insert_state()` → insert `state_snapshots` row, get its id, insert child rows for
-     `nodeStates`/`actionStates`/`errors` — all in one transaction.
-   - `insert_command()` → split: an `order` writes `orders` + `order_nodes` +
-     `order_edges`; an `instantActions` writes `instant_action_messages` +
-     `instant_actions`.
-   - `fetch_latest_state()` → join the child tables back into the response shape.
-   - `fetch_oee_*` — unchanged.
-3. `fastapi-service/app/routers/ingest.py` — no change expected (it just forwards the
-   VDA5050 messages; the DB layer absorbs the schema change).
-4. `node-red/flows.json` — **no change** (it POSTs VDA5050 messages; persistence shape
-   is FastAPI's concern).
-5. Update `docs/decisions.md` (add the normalization decision) and `gaps.md` if needed.
+1. `fastapi-service/app/db.py` — add write helpers: `insert_map`/`update_map`/
+   `delete_map`, `insert_robot`/`update_robot`/`delete_robot`,
+   `insert_named_location`/`update_named_location`/`delete_named_location`,
+   `update_fleet_config`. Single-row read helpers (`fetch_map`, `fetch_robot`, …) as
+   needed. Reads `fetch_robots`/`fetch_named_locations`/`fetch_fleet_config` exist.
+2. `fastapi-service/app/schemas.py` — Pydantic create/update models
+   (`MapIn`, `RobotIn`, `NamedLocationIn`, `FleetConfigIn`).
+3. `fastapi-service/app/routers/maps.py`, `locations.py` — new; register in `main.py`.
+4. `fastapi-service/app/routers/robots.py`, `fleet.py` — add the robot / fleet routes.
+5. `docs/schema/REST_ENDPOINTS.md`, `DATABASE_SCHEMA.md` — document the new endpoints.
 
-### Other pending next steps (after normalization)
+### Cross-cutting concerns (must handle)
 
-- **Runtime-test the pipeline** — needs MQTT broker, rosbridge + a robot, PostgreSQL:
-  `pip install -r fastapi-service/requirements.txt`; create the DB + apply the schema;
-  start all services; `POST /robots/amr001/order`; verify auto-advance, instant
-  actions, and the retained `CONNECTIONBROKEN`.
-- Address open gaps G7–G11, G13, G14 ([gaps.md](gaps.md)).
+- **FK conflicts → HTTP 409.** Deleting a `map` that `robots` or `named_locations`
+  still reference, or a `robot` that already has telemetry rows, raises a Postgres FK
+  violation. Catch it and return **409 Conflict** with a clear message — do **not**
+  cascade-delete (that would wipe telemetry history).
+- **Registry refresh.** FastAPI's `RobotRegistry` loads the fleet **once at startup**.
+  After any `robots` / `fleet_config` write, call a new `registry.reload()` (re-runs
+  `fetch_fleet_config()` + `fetch_robots()`; keeps the in-memory `headerId`/`orderId`
+  counters). Otherwise the new robot is invisible until a restart.
+- **ROS Bridge still needs a restart for a new robot.** It instantiates one `Robot`
+  per `GET /fleet` entry **at boot**. CRUD makes the DB live-editable, but a newly
+  added robot only starts running after the ROS Bridge restarts. Document this; a
+  later improvement could have the ROS Bridge re-poll `/fleet`.
+- **Validation.** Enforce existing constraints at the API layer too — e.g. a robot's
+  `mapId` must reference an existing map; reject before hitting the DB for a clearer
+  error.
+
+### Suggested sequencing
+
+`maps` + `named_locations` first (simplest — no registry refresh, only delete needs
+the 409 guard), then `robots` (FK + `registry.reload()`), then `fleet_config` (just a
+`PUT`). Best done **after** the runtime test, so CRUD is built on a verified pipeline.
 
 ## Watch out for
 
 - **Nothing has been committed** — the user pushes via GitHub Desktop.
+- **Start order** — PostgreSQL must be up before FastAPI (it loads the fleet from the
+  DB at boot, no DB = no start); FastAPI before the ROS Bridge (it fetches `GET /fleet`).
 - **Node-RED userDir** — Node-RED defaults to `C:\Users\aimno\.node-red\` (old April
   flows). Start it with `node-red --userDir "d:\FYP\integration-system\node-red"`, and
   fully stop any old instance first or it overwrites `flows.json` on deploy.
-- `ros-bridge-service/.env` still has `ROSBRIDGE_URL` — **unused**; the URL is now in
-  `robots.config.json`. `MQTT_BROKER`, `NAV_GOAL_TOPIC`, `CANCEL_TOPIC` still used.
-- FastAPI needs DB env vars when PostgreSQL is up: `DB_HOST`, `DB_PORT`, `DB_NAME`,
-  `DB_USER`, `DB_PASSWORD` (defaults: localhost / 5432 / amr_integration / postgres).
-- Node-RED's `/ingest/*` calls assume FastAPI at `http://localhost:8000`.
-- `mapId` is the placeholder `"default"` — set it to the real map name in
-  `robots.config.json` once one is established.
+- FastAPI DB env vars (defaults): `DB_HOST` localhost, `DB_PORT` 5432, `DB_NAME`
+  amr_integration, `DB_USER` postgres, `DB_PASSWORD` admin.
+- Node-RED's `/ingest/*` calls assume FastAPI at `http://localhost:8000`; the ROS
+  Bridge's `FLEET_API_URL` defaults to `http://localhost:8000/fleet`.
+- `mapId` is the placeholder `"default"` — set it to the real map name in the `maps`
+  and `robots` tables once one is established.
 
 ## Canonical docs
 

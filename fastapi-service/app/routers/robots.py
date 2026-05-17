@@ -3,14 +3,12 @@
 Replaces the former flat /amr/* routes. FastAPI publishes VDA5050 `order` and
 `instantActions` directly to the per-robot MQTT topics.
 """
-import math
 import uuid
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
-from ..data import NAMED_LOCATIONS
-from ..db import DatabaseUnavailable, fetch_latest_state
+from ..db import DatabaseUnavailable, fetch_latest_state, fetch_named_locations
 from ..mqtt import publish_instant_actions, publish_order
 from ..robots import registry
 from ..schemas import InstantActionRequest, NamedOrderRequest, OrderRequest
@@ -49,16 +47,23 @@ def submit_named_order(serial: str, req: NamedOrderRequest):
     robot = _require_robot(serial)
     if not req.location_ids:
         raise HTTPException(status_code=422, detail="Order must have at least one location")
+    try:
+        locations = fetch_named_locations()
+    except DatabaseUnavailable as exc:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "message": f"Database unavailable: {exc}"},
+        )
     nodes = []
     for location_id in req.location_ids:
-        location = NAMED_LOCATIONS.get(location_id)
+        location = locations.get(location_id)
         if location is None:
             raise HTTPException(status_code=404, detail=f"Location ID {location_id} not found")
-        # Named-location angle.z is stored in degrees; VDA5050 theta is radians.
+        # named_locations.theta is already radians (map frame).
         nodes.append({
             "x": location["x"],
             "y": location["y"],
-            "theta": math.radians(location["angle"]["z"]),
+            "theta": location["theta"],
         })
     order = build_order(serial, nodes, robot["mapId"])
     publish_order(serial, order)

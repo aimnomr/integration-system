@@ -1,32 +1,33 @@
-"""Robot registry — loaded from the shared robots.config.json.
+"""Robot registry — loaded from the database (the single source of truth).
 
-This is the same file the ROS Bridge Service uses. The path is configurable via the
-ROBOTS_CONFIG env var; it defaults to ../ros-bridge-service/robots.config.json
-relative to the project root.
+The fleet definition lives in the `fleet_config` and `robots` tables. This registry
+loads them once at startup; if the database is unavailable the service cannot start
+(by design — the DB is authoritative for the fleet).
 
 The registry also holds the per-robot monotonic counters the FMS gateway needs:
 VDA5050 headerId (per topic) and orderId.
 """
-import json
-import os
-from pathlib import Path
 from threading import Lock
 
-_DEFAULT_CONFIG = (
-    Path(__file__).resolve().parents[2] / "ros-bridge-service" / "robots.config.json"
-)
+from . import db
 
 
 class RobotRegistry:
     def __init__(self) -> None:
-        config_path = Path(os.getenv("ROBOTS_CONFIG", _DEFAULT_CONFIG))
-        raw = json.loads(config_path.read_text(encoding="utf-8"))
+        fleet = db.fetch_fleet_config()
+        self.interface_name: str = fleet["interface_name"]
+        self.major_version: str = fleet["major_version"]
+        self.version: str = fleet["version"]
+        self.manufacturer: str = fleet["manufacturer"]
 
-        self.interface_name: str = raw["interfaceName"]
-        self.major_version: str = raw["majorVersion"]
-        self.version: str = raw["version"]
-        self.manufacturer: str = raw["manufacturer"]
-        self._robots: dict[str, dict] = {r["serialNumber"]: r for r in raw["robots"]}
+        self._robots: dict[str, dict] = {
+            row["serial_number"]: {
+                "serialNumber": row["serial_number"],
+                "rosbridgeUrl": row["rosbridge_url"],
+                "mapId": row["map_id"],
+            }
+            for row in db.fetch_robots()
+        }
 
         self._lock = Lock()
         self._header_counters: dict[tuple[str, str], int] = {}
@@ -42,6 +43,24 @@ class RobotRegistry:
             }
             for serial, robot in self._robots.items()
         ]
+
+    def fleet(self) -> dict:
+        """The full fleet definition, in the shape the ROS Bridge expects from
+        GET /fleet."""
+        return {
+            "interfaceName": self.interface_name,
+            "majorVersion": self.major_version,
+            "version": self.version,
+            "manufacturer": self.manufacturer,
+            "robots": [
+                {
+                    "serialNumber": robot["serialNumber"],
+                    "rosbridgeUrl": robot["rosbridgeUrl"],
+                    "mapId": robot["mapId"],
+                }
+                for robot in self._robots.values()
+            ],
+        }
 
     def get(self, serial: str) -> dict | None:
         return self._robots.get(serial)
