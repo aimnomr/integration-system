@@ -48,3 +48,32 @@ export function postInstantAction(serial: string, action: InstantAction) {
     { method: 'POST', body: { action } },
   );
 }
+
+// --- Admin CRUD (G15) ------------------------------------------------------
+
+export interface RobotIn {
+  serial_number: string;
+  rosbridge_url: string;
+  map_id: string;
+}
+
+export interface RobotUpdate {
+  rosbridge_url?: string;
+  map_id?: string;
+}
+
+export function createRobot(body: RobotIn) {
+  return apiFetch<Robot>('/robots', { method: 'POST', body });
+}
+
+export function updateRobot(serial: string, body: RobotUpdate) {
+  return apiFetch<Robot>(`/robots/${encodeURIComponent(serial)}`, {
+    method: 'PUT', body,
+  });
+}
+
+export function deleteRobot(serial: string) {
+  return apiFetch<void>(`/robots/${encodeURIComponent(serial)}`, {
+    method: 'DELETE',
+  });
+}

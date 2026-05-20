@@ -13,8 +13,9 @@ for the high-frequency lanes (camera + teleop).
 | UI          | React ^19 + TypeScript                                  |
 | Routing     | react-router-dom ^7                                     |
 | Styling     | Tailwind CSS ^4 (utility) + MUI ^7 (complex widgets)    |
-| State       | TanStack Query (server cache) — Zustand (small UI state) added in Phase 2 |
+| State       | TanStack Query (server cache)                           |
 | Realtime    | `mqtt` (browser) + `roslib` (per-robot rosbridge)       |
+| Data + chart| `@mui/x-data-grid` + `@mui/x-charts` (admin / OEE)      |
 
 Tailwind has `important: 'html'` set so its utilities win against MUI's
 component-internal styles. Both libraries source colours / sizes from

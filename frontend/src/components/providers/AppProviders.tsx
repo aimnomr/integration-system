@@ -3,6 +3,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BRAND } from '@/branding/branding';
+import { SnackbarProvider } from '@/components/common/Snackbar';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,7 +43,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <BrowserRouter>{children}</BrowserRouter>
+        <SnackbarProvider>
+          <BrowserRouter>{children}</BrowserRouter>
+        </SnackbarProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

@@ -8,6 +8,36 @@
 
 ## Recently completed (most recent first)
 
+**React frontend — Phase 4 analytics + admin (2026-05-20, uncommitted).** Every
+route is now a real screen. The UI is feature-complete for v1.
+
+- **Cross-cutting polish** — `SnackbarProvider` (wrapped in `AppProviders`)
+  with a `useToast()` hook (`success`/`error`); `ConfirmDialog` for
+  destructive actions; `EditDrawer` with header/body/footer slots that the
+  four admin pages reuse.
+- **Order History** (`/orders`) — DataGrid off `GET /orders` with
+  `useInfiniteQuery`. Filter by robot, choose page size (25–200). "Load older"
+  uses the last row's `ts` as the cursor; button changes to "End of history"
+  when there's no more.
+- **OEE** (`/oee`) — robot picker; four summary cards
+  (`total`/`succeeded`/`failed`/`avg`) with success-rate hint, an availability
+  bar, an MUI X `BarChart` of recent cycle durations, and a paginated
+  cycles log via DataGrid.
+- **Admin → Maps** — DataGrid + + Add / edit drawer / delete with 409
+  surfaced as a toast; the EditDrawer keeps the ID field read-only on edit.
+- **Admin → Named Locations** — same DataGrid pattern; the edit drawer embeds
+  the Phase 3 `MapCanvas` and binds `onClickWorld` so clicking on the map
+  sets `x` / `y` in the form. Pins re-render live as you type the label.
+- **Admin → Robots** — DataGrid + drawer; `createRobot` / `updateRobot` /
+  `deleteRobot` added to `api/robots.ts`. A persistent `Alert` reminds the
+  operator that adding a robot still needs a ROS Bridge restart.
+- **Admin → Fleet Config** — single form (interface_name, major_version,
+  version, manufacturer) with a warning callout explaining that
+  topic-prefix-affecting fields will silence robot firmware listening on the
+  old prefix.
+- **Deps** — added `@mui/x-data-grid` + `@mui/x-charts` (`^7.20.0`) to
+  `frontend/package.json`. Run `npm install` again before `npm run dev`.
+
 **React frontend — Phase 3 v1 screens (2026-05-20, uncommitted).** Dashboard,
 Robot Detail (with live map), Dispatch, and Teleop are all real and reachable.
 Order History, OEE, and the Admin pages are still Phase 4 placeholders.
