@@ -8,6 +8,47 @@
 
 ## Recently completed (most recent first)
 
+**React frontend — Phase 2 connectivity layer (2026-05-20, uncommitted).** All
+three live channels (REST, MQTT, rosbridge) are wired and the AppBar pills +
+Health page show live data. Screens themselves still placeholder — Phase 3
+builds the v1 features on top of this.
+
+- **Typed REST client** — `src/api/client.ts` is a single `apiFetch` wrapper
+  (base URL, optional `X-API-Key` from `VITE_API_KEY`, JSON body/parse, typed
+  `ApiError`). Per-router modules `fleet.ts`, `robots.ts`, `orders.ts`,
+  `system.ts`, `maps.ts`, `locations.ts`, `oee.ts` expose one async function
+  per endpoint. Response types in `src/types/api.ts` are hand-written to match
+  the FastAPI shapes — OpenAPI generation deferred (needs running backend).
+- **MQTT singleton** — `src/realtime/mqttClient.ts` opens one WS to
+  `VITE_MQTT_WS_URL` lazily on first subscribe/status listener. Reference-counted
+  subscriptions, MQTT wildcard matching (`+`/`#`), JSON auto-parse, status
+  observable, mqtt.js exponential reconnect with re-subscribe on reconnect.
+- **Rosbridge factory** — `src/realtime/rosbridgeClient.ts` keeps one
+  `ROSLIB.Ros` per URL, cached. `acquireRos(url)` + `release()` ref-counts
+  the connection. `onRosStatus(url, listener)` is the per-robot status
+  observable. Custom exponential backoff (1 s → 30 s). Topic / publisher /
+  service wrappers deferred to Phase 3.
+- **Hooks** — `useFleet` (React Query, `/fleet`), `useSystemStatus` (5 s
+  poll, no retries — failure = red pill), `useMqttStatus`, `useMqttTopic`
+  (returns `{ payload, topic }`), `useRosStatus(url)`.
+- **AppBar pills** — four live pills: **API** (from `useSystemStatus`),
+  **MQTT** (from `useMqttStatus`), **DB** + **ROS** (from
+  `/system/status` body). Tooltips on each show the underlying state.
+- **Health page** — upgraded from placeholder to a real readout: 6 service
+  rows (FastAPI, MQTT browser, MQTT backend, Postgres, rosbridge fleet,
+  Node-RED) with state pills + descriptive subtext.
+
+Next (Phase 3 — v1 screens):
+1. Dashboard — pulls `useFleet` + MQTT `state`+`connection` per robot,
+   renders RobotTile grid.
+2. Robot detail — map (`/reference/map` over rosbridge), pose arrow
+   (AMCL primary, EKF fallback), order path overlays, errors panel.
+3. Order dispatcher — click-on-map / named-location / x,y,θ inputs;
+   POST + active-order panel with cancel/retry/skip.
+4. Teleop — camera + 3×3 keyboard pad publishing `/web_teleop/cmd_vel`
+   (LINEAR_SPEED 0.3, ANGULAR_SPEED 0.5, 100 ms repeat — inherited from
+   the old interface).
+
 **React frontend — Phase 1 scaffold (2026-05-20, uncommitted).** New `frontend/`
 workspace; routes, layout, and branding are reviewable. No data wiring yet —
 that lands in Phase 2.
