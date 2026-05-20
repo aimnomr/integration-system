@@ -214,3 +214,282 @@ restart FastAPI.
 - [ ] Submit 5 orders rapidly → 5 distinct `orderId` suffixes, no duplicates.
 - [ ] **[robot]** Submit a new order while one is mid-execution → behaviour is
       defined (new order replaces current); confirm it matches expectation.
+
+---
+
+## Phase 9 — Recent backend additions
+
+### G21 startup-crash fix — non-numeric order suffix
+- [ ] Insert a legacy-style order row whose suffix isn't numeric:
+      `psql ... -c "INSERT INTO orders (serial_number, ts, header_id, order_id, order_update_id) VALUES ('amr001', now(), 1, 'amr001-order-goal', 0);"`
+- [ ] Stop FastAPI; restart it.
+- [ ] FastAPI **starts without traceback** (was `psycopg2.errors.InvalidTextRepresentation` before).
+- [ ] `GET /robots/amr001/state` works; counters keep ticking.
+- [ ] Clean up the row: `psql ... -c "DELETE FROM orders WHERE order_id='amr001-order-goal';"`
+
+### Node-RED DB Admin tab
+- [ ] Open `http://localhost:1880` → **DB Admin** tab is visible (5th tab).
+- [ ] `npm install` has been run in `node-red/` (pulls `node-red-contrib-postgresql`).
+- [ ] Stop FastAPI + ROS Bridge first (per the tab's docstring).
+- [ ] Click **Reset DB** inject → the postgresql node debug shows a result; no error fill.
+- [ ] `psql ... -c "SELECT count(*) FROM state_snapshots;"` → `0` (reset wiped telemetry).
+- [ ] Reseeded tables are back: `psql ... -c "SELECT * FROM robots;"` → `amr001`.
+- [ ] Edit the **Run custom SQL** inject payload to:
+      `INSERT INTO maps (map_id, label) VALUES ('map-009','Test') ON CONFLICT DO NOTHING;`
+- [ ] Press inject → `GET /maps` (after FastAPI restart) lists `map-009`.
+- [ ] If npm dep is missing, the workspace shows red "missing type" — that's the
+      tell that `npm install` wasn't run.
+
+### Phase 0 backend prep — CORS (G18)
+- [ ] FastAPI started with default env → `curl.exe -H "Origin: http://localhost:5173" -I http://localhost:8000/system/status`
+      returns `access-control-allow-origin: http://localhost:5173`.
+- [ ] Same request with `Origin: http://evil.example` → **no** `access-control-allow-origin` header.
+- [ ] Restart FastAPI with `CORS_ORIGINS=http://localhost:9999` → only that origin
+      is now allowed; the Vite dev server (`5173`) is blocked. Reset afterwards.
+
+### Phase 0 — GET /orders endpoint
+- [ ] `curl.exe http://localhost:8000/orders` → `{"orders":[...], "count":N}`.
+- [ ] `curl.exe "http://localhost:8000/orders?serial=amr001&limit=2"` → at most 2 rows, all for amr001.
+- [ ] `curl.exe "http://localhost:8000/orders?serial=ghost"` → **404**.
+- [ ] `curl.exe "http://localhost:8000/orders?limit=0"` → **422** (limit must be ≥ 1).
+- [ ] `curl.exe "http://localhost:8000/orders?limit=501"` → **422** (limit clamped to 500).
+- [ ] With `serial=amr001`, page through using `before=<ts>` — second call returns
+      strictly older rows; reaches an empty list once exhausted.
+- [ ] `node_count` matches `psql ... -c "SELECT count(*) FROM order_nodes WHERE order_pk=<id>;"`.
+
+### Phase 0 — Mosquitto WebSocket listener on :9001
+- [ ] `mosquitto.conf` has the `listener 9001` + `protocol websockets` block.
+- [ ] Mosquitto logs (or `docker compose logs mosquitto`) show two listeners.
+- [ ] `netstat -an | findstr ":9001"` (or `ss -lnt | grep 9001` in WSL) shows
+      mosquitto listening.
+- [ ] Browser → DevTools → Network → WS tab: with the React app open, you see
+      one WebSocket to `ws://localhost:9001/mqtt` in connected state. (`Frames`
+      tab shows the heartbeat / messages.)
+
+---
+
+## Phase 10 — Frontend smoke (scaffold + connectivity)
+
+### Build & dev server
+- [ ] `cd frontend && npm install` completes without errors.
+      (If MUI / TS peer-dep warnings: `npm install --legacy-peer-deps`.)
+- [ ] `npm run dev` prints `Local: http://localhost:5173/`; no compile errors.
+- [ ] If `optimizeDeps` complaint on first run: delete `node_modules/.vite/`,
+      re-run `npm run dev`.
+- [ ] `npm run typecheck` exits 0.
+- [ ] `npm run build` produces `dist/` without errors.
+
+### AppShell + routing
+- [ ] Open `http://localhost:5173/` → AppBar with logo + "AMR Console", four
+      pills (API / MQTT / DB / ROS), LeftNav with Operate + Admin sections.
+- [ ] Click each LeftNav entry — URL updates; main pane swaps. The currently
+      selected item is highlighted indigo.
+- [ ] Manually visit `/this-is-not-a-route` → "404 — Not found" page with a
+      back-to-dashboard link.
+- [ ] Hovering each pill shows a descriptive tooltip (e.g. "Mosquitto WebSocket: connected").
+
+### Health pills — live state transitions
+- [ ] All services running → API + MQTT + DB + ROS all green within 5 s.
+- [ ] Stop FastAPI → within 5 s: API red, DB red, ROS red. MQTT stays green
+      (different connection).
+- [ ] Restart FastAPI → all three flip back to green.
+- [ ] Stop Mosquitto → MQTT pill cycles yellow ("reconnecting") then red ("offline").
+- [ ] Restart Mosquitto → MQTT goes yellow then green; browser auto-reconnects.
+- [ ] **[robot]** Stop ROS Bridge while a robot was online → after the broker's
+      retention window, ROS pill flips red.
+
+### Health page
+- [ ] Navigate to **Health** in LeftNav → six rows (FastAPI, MQTT browser, MQTT
+      backend, PostgreSQL, rosbridge fleet, Node-RED), each with the right pill
+      and a descriptive subtitle.
+- [ ] The FastAPI row shows "Last response at HH:MM:SS"; refreshes every 5 s.
+
+### CORS (browser side)
+- [ ] DevTools → Console: no `blocked by CORS policy` errors after page loads.
+- [ ] Network tab: requests to `localhost:8000/*` carry `Origin:
+      http://localhost:5173` and get back `access-control-allow-origin` matching.
+
+---
+
+## Phase 11 — Frontend v1 screens
+
+### Dashboard
+- [ ] `/` shows one tile per robot from `GET /fleet` (just `amr001` if you haven't
+      added more).
+- [ ] Each tile fields populate: connection pill, mode, battery, orderId,
+      "last seen", map, rosbridge status. Empty fields show `—` (no `undefined`).
+- [ ] After a `state` MQTT message arrives, "last seen" resets to "0s ago" and
+      ticks upward.
+- [ ] Click a tile → navigates to `/robots/<serial>`.
+- [ ] No robots in fleet → "No robots in the fleet" hint with a pointer to
+      Admin → Robots.
+
+### Robot Detail — Map
+- [ ] `/robots/amr001` shows the MapCanvas on the left.
+- [ ] **[robot]** Without anyone publishing `/reference/map`: canvas shows
+      "Waiting for /reference/map…"; no crash.
+- [ ] **[robot]** Once map is publishing: occupancy grid renders (free white,
+      occupied dark, unknown grey). Aspect ratio preserved.
+- [ ] **[robot]** Resize the window — the canvas resizes with it (no stretching).
+- [ ] **[robot]** Robot arrow appears at the AMCL pose; rotates with yaw.
+- [ ] **[robot]** Top-right overlay reads `pose: AMCL`.
+- [ ] **[robot]** Stop the AMCL publisher (e.g. `rosnode kill /amcl`) for >2 s →
+      overlay flips to `pose: EKF (fallback)`; arrow turns amber.
+- [ ] **[robot]** Resume AMCL → overlay returns to AMCL after the next message;
+      arrow back to blue.
+- [ ] **[robot]** `/move_base_node/DWAPlannerROS/global_plan` published → sky-blue
+      polyline appears on the map.
+- [ ] **[robot]** `/move_base_node/DWAPlannerROS/local_plan` → red polyline.
+- [ ] Named locations on the robot's map appear as violet pins with labels.
+
+### Robot Detail — Side panel
+- [ ] **State** tab shows the VDA5050 field readout updating in real time.
+- [ ] **Errors** tab: with no errors, "No errors reported."; with errors, each
+      one shows level (colour-coded), errorType, and description.
+- [ ] **Actions** tab lists every `actionStates[]` entry with its status.
+- [ ] Connection pill (top-right) reflects the retained `connection` topic
+      (`ONLINE` / `OFFLINE` / `CONNECTIONBROKEN`).
+
+### Dispatch — Named mode
+- [ ] `/dispatch` → robot picker; pick `amr001`.
+- [ ] **Named** toggle selected by default.
+- [ ] Dropdown lists locations whose `map_id` matches the robot's `mapId`. Empty
+      if no locations match.
+- [ ] Pick a location → it appears in the ordered list below the dropdown.
+- [ ] Add a second location → list grows; "remove" button works.
+- [ ] **Send order** → toast "Order created" (or similar); the ActiveOrderPanel
+      below updates to show the new orderId and pending nodes.
+- [ ] If named POST returns 4xx (e.g. wrong location id) → error text under the
+      builder; no toast loop.
+
+### Dispatch — Manual mode
+- [ ] Toggle to **Manual** → empty row at x=0, y=0, θ=0.
+- [ ] Edit numeric values; add a second node; remove returns to one row;
+      remove button disabled at one row.
+- [ ] **Send order** → new orderId in the panel.
+
+### Active order panel
+- [ ] orderId shown in monospace; "N nodes remaining" reflects `state.nodeStates`.
+- [ ] **[robot]** As the robot completes nodes, `nodeStates` shrinks; once empty,
+      the panel collapses to "No active order".
+- [ ] **Cancel** → toast; the panel clears once the robot returns to no-orderId.
+- [ ] **Retry** sends a retryNode instant action; backend logs the call.
+- [ ] **Skip** sends a skipNode; backend logs the call.
+- [ ] Cancel/Retry/Skip while no order is active → button disabled? (currently
+      the panel is hidden — confirm there's no way to send a stray instant
+      action.)
+
+### Teleop
+- [ ] `/teleop` → robot picker; ENGAGED switch is disabled until rosbridge is
+      `connected` for the picked robot.
+- [ ] **[robot]** Connect → switch enabled; flip ENGAGED → switch label flips to
+      "ENGAGED — robot will move".
+- [ ] **[robot]** Camera stream appears in the left pane; topic name shown in
+      the corner overlay.
+- [ ] **[robot]** Press `W` → robot moves forward; `S` stops; `D` rotates; etc.
+      The 3×3 grid maps to QWE / ASD / ZXC.
+- [ ] **[robot]** Release key → zero Twist published (robot stops within 100 ms).
+- [ ] **[robot]** Click-and-hold a button works for mouse + touch.
+- [ ] **[robot]** Disengage → keys are inert; clicking a button shows the
+      disabled-grey style; no Twist published.
+- [ ] **[robot]** Mid-teleop, kill rosbridge → ENGAGED auto-disengages within
+      the reconnect window; no runaway after reconnect.
+- [ ] Deep-link `/teleop/amr001` directly → loads with `amr001` pre-selected.
+
+---
+
+## Phase 12 — Frontend analytics + admin
+
+### Order History
+- [ ] `/orders` shows the most recent N orders, newest first.
+- [ ] Filter by robot → list narrows to that robot only.
+- [ ] Change page size — list refetches.
+- [ ] Scroll to bottom, click **Load older** → older rows appended; cursor
+      advances; eventually button says **End of history** and is disabled.
+- [ ] Each row shows: time (localised), robot, order_id (mono font), update,
+      node count, header id.
+
+### OEE — empty state
+- [ ] `/oee` with no cycles → cards show `0` / `—`; "No cycles yet" in the chart
+      area; the cycles log shows the empty-grid hint.
+
+### OEE — populated **[robot]**
+- [ ] Run a couple of successful orders end-to-end (or insert OEE rows
+      manually).
+- [ ] Cards show totals and avg duration.
+- [ ] Success-rate hint under "Succeeded" reads `XX.X% success`.
+- [ ] Availability bar fills proportionally; raw count text on the right.
+- [ ] BarChart renders bars one per cycle; oldest on the left.
+- [ ] Cycles log table shows the rows; `SUCCEEDED` green, otherwise red;
+      duration formatted to one decimal.
+
+### Snackbar / toast
+- [ ] Trigger any admin save → a green toast appears bottom-right, auto-hides in 4 s.
+- [ ] Trigger any 4xx → red toast with the API error message.
+- [ ] Two saves in quick succession → toasts queue (one shows after the previous
+      closes), no overlap.
+
+### Admin — Maps
+- [ ] `/admin/maps` lists `map-001`, `map-002`.
+- [ ] **+ Add** → drawer; enter `map-test` / `Test Map` → toast "Map created";
+      grid refetches; new row visible.
+- [ ] Edit `map-test` (pencil) → drawer; label disabled-fields show ID; change
+      label; Save → toast updated; grid reflects new label.
+- [ ] Delete `map-test` (trash) → confirm dialog; confirm → toast deleted; row gone.
+- [ ] Try to delete `map-001` (used by `amr001`) → red toast
+      "Cannot delete: still in use" (HTTP 409). `map-001` still present.
+
+### Admin — Named Locations
+- [ ] `/admin/locations` lists the seeded four.
+- [ ] **+ Add** → drawer with form + embedded MapCanvas of the chosen map's
+      robot rosbridge.
+- [ ] Click on the embedded canvas → x and y fields snap to the clicked world
+      coords; pin appears at the click position.
+- [ ] Save → toast; new row in grid.
+- [ ] Edit an existing location → ID field disabled; map / label / x / y / θ
+      editable; clicking on canvas re-positions the pin.
+- [ ] Delete a location not referenced by any order → succeeds.
+- [ ] Switch the form's map dropdown → the embedded canvas re-subscribes to that
+      map's rosbridge (you may see a momentary "Waiting…" then the new grid).
+
+### Admin — Robots
+- [ ] `/admin/robots` lists current robots.
+- [ ] **+ Add** → drawer; serial `amr002`, URL `ws://localhost:9091`, pick a map.
+      Save → toast "Robot created — restart the ROS Bridge to pick it up".
+- [ ] `GET /fleet` now lists `amr002` (registry auto-reloaded).
+- [ ] Edit `amr002` → ID field disabled; change URL; Save → toast.
+- [ ] Delete `amr002` (no telemetry yet) → succeeds.
+- [ ] Try to delete `amr001` (has telemetry) → red toast with 409; row stays.
+- [ ] **[robot]** After adding a robot, the new tile appears on Dashboard;
+      MQTT topics for that serial start being subscribed to.
+
+### Admin — Fleet Config
+- [ ] `/admin/fleet` form pre-populated from current `/fleet`.
+- [ ] Save unchanged → toast "Fleet config updated — registry reloaded".
+- [ ] Change `version` to `2.0.1` → save → toast; refresh page → new value sticks.
+- [ ] **Warning banner** reads correctly with the current `interface_name`,
+      `major_version`, `manufacturer` interpolated in the example topic.
+- [ ] Restore original values when done.
+
+---
+
+## Phase 13 — End-to-end smoke
+
+A scripted "everything works together" run.
+
+- [ ] Start the full stack (`docker compose up --build` or the manual route).
+- [ ] React app loads at `http://localhost:5173/`. All four pills green within 10 s.
+- [ ] **[robot]** Robot is publishing; Dashboard tile shows ONLINE + battery.
+- [ ] **[robot]** Open Robot Detail; map + arrow + pins render.
+- [ ] **[robot]** Dispatch → send a named-location order → ActiveOrderPanel
+      shows the orderId. Robot moves.
+- [ ] **[robot]** On the same page, errors panel stays empty during a clean run.
+- [ ] **[robot]** Once order completes, an OEE cycle appears at `/oee` and the
+      order shows up at `/orders` (refresh).
+- [ ] **[robot]** Open Teleop in another tab → ENGAGED → drive briefly → release →
+      robot stops.
+- [ ] Add a map + location in Admin → it appears in Dispatch's named-location
+      list within a few seconds (React Query staleTime 30 s, or hit Refresh).
+- [ ] Stop FastAPI → pills flag the outage; existing MQTT live data (Dashboard
+      tiles) keeps updating (independent channel).
+- [ ] Restart FastAPI → no manual refresh needed; pills return to green.
