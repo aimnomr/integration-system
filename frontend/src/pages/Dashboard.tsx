@@ -1,11 +1,43 @@
-import { PagePlaceholder } from './_PagePlaceholder';
+import { useFleet } from '@/hooks/useFleet';
+import { Loading } from '@/components/common/Loading';
+import { RobotTile } from '@/components/robot/RobotTile';
 
 export default function Dashboard() {
+  const fleet = useFleet();
+
+  if (fleet.isLoading) return <Loading label="Loading fleet…" />;
+  if (fleet.isError) {
+    return (
+      <div className="text-sm text-red-400">
+        Failed to load fleet — {fleet.error.message}
+      </div>
+    );
+  }
+  const data = fleet.data;
+  if (!data) return null;
+
   return (
-    <PagePlaceholder
-      title="Dashboard"
-      phase="Phase 3 — coming soon"
-      description="Per-robot tiles: connection pill, mode, battery, current orderId, last-seen, mini-pose. Pulls GET /fleet on mount and subscribes amr/v2/+/+/state plus connection over MQTT-over-WebSockets."
-    />
+    <div>
+      <div className="flex items-baseline justify-between">
+        <h1 className="text-2xl font-semibold text-white">Dashboard</h1>
+        <span className="text-xs text-slate-400">
+          {data.robots.length} robot{data.robots.length === 1 ? '' : 's'} •
+          {' '}{data.interfaceName}/{data.majorVersion}
+        </span>
+      </div>
+
+      {data.robots.length === 0 ? (
+        <p className="mt-6 text-sm text-slate-400">
+          No robots in the fleet. Add one via Admin → Robots or
+          <code className="ml-1 rounded bg-surface-2 px-1">POST /robots</code>.
+        </p>
+      ) : (
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {data.robots.map((r) => (
+            <RobotTile key={r.serialNumber} fleet={data} robot={r} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

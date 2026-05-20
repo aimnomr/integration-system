@@ -139,3 +139,44 @@ export function onRosStatus(url: string, listener: StatusListener): () => void {
 export function getRosStatus(url: string): RosStatus {
   return cache.get(url)?.status ?? 'offline';
 }
+
+// --- Topic / publisher helpers --------------------------------------------
+
+/** Subscribe to a rosbridge topic. The connection to `url` is opened lazily
+ * if not already open. Returns an unsubscribe function. */
+export function subscribeRosTopic<T = unknown>(
+  url: string,
+  topic: string,
+  messageType: string,
+  handler: (msg: T) => void,
+): () => void {
+  const { ros, release } = acquireRos(url);
+  const sub = new ROSLIB.Topic({ ros, name: topic, messageType });
+  sub.subscribe((msg) => handler(msg as T));
+  return () => {
+    try { sub.unsubscribe(); } catch { /* already gone */ }
+    release();
+  };
+}
+
+/** Acquire a publisher handle. Caller is responsible for `release()` when
+ * done (otherwise the connection stays alive forever). */
+export function acquireRosPublisher<T = unknown>(
+  url: string,
+  topic: string,
+  messageType: string,
+): {
+  publish: (msg: T) => void;
+  release: () => void;
+} {
+  const { ros, release } = acquireRos(url);
+  const pub = new ROSLIB.Topic({ ros, name: topic, messageType });
+  pub.advertise();
+  return {
+    publish: (msg) => pub.publish(new ROSLIB.Message(msg as object)),
+    release: () => {
+      try { pub.unadvertise(); } catch { /* already gone */ }
+      release();
+    },
+  };
+}

@@ -8,6 +8,49 @@
 
 ## Recently completed (most recent first)
 
+**React frontend — Phase 3 v1 screens (2026-05-20, uncommitted).** Dashboard,
+Robot Detail (with live map), Dispatch, and Teleop are all real and reachable.
+Order History, OEE, and the Admin pages are still Phase 4 placeholders.
+
+- **Foundation** — `helper/angleHelper.ts` (degrees ↔ quaternion, direct port
+  of the v1 interface helper); `helper/mqttTopics.ts` (VDA topic builder from
+  fleet config); `types/ros.ts` (OccupancyGrid, Pose*, Path, CompressedImage,
+  Twist). Rosbridge client extended with `subscribeRosTopic` /
+  `acquireRosPublisher`. New hooks: `useRosTopic`, `useRosPublisher`,
+  `useRobotState` (REST cold-load + MQTT live merge).
+- **MapCanvas** (`components/map/MapCanvas.tsx`) — full custom canvas
+  renderer, no `ros2djs`. Subscribes per-robot to `/reference/map`,
+  `/amcl_pose`, `/robot_pose_ekf_node/odom_combined`, and the two DWA plan
+  topics. ROS Y-flip + offscreen canvas for the bitmap, world→pixel transform
+  for overlays. AMCL primary, EKF fallback after 2 s silence; the arrow gets
+  an amber fill on fallback so the operator notices. Responsive via
+  ResizeObserver. Click → world coordinate (used in Dispatch later).
+- **Dashboard** — fleet grid of `RobotTile`. Each tile shows the connection
+  state, mode, battery, current orderId, "last seen", map, and per-robot
+  rosbridge status. Clicking a tile navigates to `/robots/:serial`.
+- **Robot Detail** — MapCanvas left, tabbed side panel (State / Errors /
+  Actions) right. Named-location pins drawn on the map from
+  `/locations` filtered to the robot's map. Errors tab badge-counts the
+  current error list.
+- **Dispatch** — robot picker + Named-or-Manual toggle. Named mode adds
+  locations from `/locations` (filtered to the robot's map) in order;
+  manual mode is one-or-more x/y/θ rows. Below the builder, `ActiveOrderPanel`
+  shows the live orderId, remaining `nodeStates`, and the Cancel / Retry /
+  Skip buttons (instant actions).
+- **Teleop** — robot picker + ENGAGED toggle (gates publishing). Camera
+  stream (`/camera/front/image_raw/compressed`) on the left, 3×3 keyboard pad
+  on the right. Velocity table inherits the v1 contract — LINEAR 0.3 m/s,
+  ANGULAR 0.5 rad/s, 100 ms repeat — QWE/ASD/ZXC layout, mouse + touch +
+  keyboard. Releases publish a zero Twist; auto-disengages if rosbridge
+  drops.
+- **Docs** — `schema/ROS_TOPICS.md` gained a "consumed directly by the React
+  frontend" table at the top so the ROS-side contract is one click away.
+
+Next (Phase 4): Order History (`GET /orders`, paged with cursor), OEE charts
+(MUI X Charts on `GET /robots/{serial}/oee/*`), and the four Admin pages
+(Maps, Locations, Robots, FleetConfig — DataGrid + drawer-style edit forms
+on the existing CRUD endpoints).
+
 **React frontend — Phase 2 connectivity layer (2026-05-20, uncommitted).** All
 three live channels (REST, MQTT, rosbridge) are wired and the AppBar pills +
 Health page show live data. Screens themselves still placeholder — Phase 3

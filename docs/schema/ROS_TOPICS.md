@@ -2,6 +2,28 @@
 
 ROS topics exposed by the robot. The available set depends on the launch mode.
 
+## Topics consumed directly by the React frontend (Phase 3)
+
+The browser opens its own rosbridge WebSocket per robot (URL from `GET /fleet`)
+for the high-frequency lanes — these bypass FastAPI and Node-RED entirely.
+
+| Topic                                              | Message type                                     | UI use |
+|----------------------------------------------------|--------------------------------------------------|--------|
+| `/reference/map`                                   | `nav_msgs/OccupancyGrid`                         | MapCanvas — live SLAM map |
+| `/amcl_pose`                                       | `geometry_msgs/PoseWithCovarianceStamped`        | MapCanvas robot arrow (primary) |
+| `/robot_pose_ekf_node/odom_combined`               | `geometry_msgs/PoseWithCovarianceStamped`        | MapCanvas robot arrow (fallback if AMCL silent > 2 s) |
+| `/move_base_node/DWAPlannerROS/global_plan`        | `nav_msgs/Path`                                  | MapCanvas — sky overlay |
+| `/move_base_node/DWAPlannerROS/local_plan`         | `nav_msgs/Path`                                  | MapCanvas — red overlay |
+| `/camera/front/image_raw/compressed`               | `sensor_msgs/CompressedImage`                    | Teleop — CameraStream |
+| `/web_teleop/cmd_vel`                              | `geometry_msgs/Twist`                            | Teleop — KeyboardPad publishes here |
+
+Angles in UI code are **degrees** at the JS layer; the quaternion conversion
+happens at the rosbridge boundary (`src/helper/angleHelper.ts`). Goals sent via
+the FastAPI `/order` endpoint use VDA5050 conventions (radians, `frame_id =
+'map'`) — handled by FastAPI / ROS Bridge, not the browser.
+
+
+
 > **Two launch modes.**
 > - **`mapping:=true`** — SLAM / mapping mode; the robot builds a map (gmapping).
 >   136 topics. Includes `/gmapping_node/entropy`; **no** AMCL topics.
