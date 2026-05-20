@@ -5,6 +5,35 @@ FastAPI is the **FMS gateway**: robot-scoped routes that publish VDA5050 `order`
 from Node-RED. The legacy flat `/amr/*` and `/system/connect|disconnect` routes have
 been **removed**.
 
+## Authentication & rate limiting
+
+These are **cross-cutting** — they apply to the endpoints below in addition to each
+endpoint's own status codes.
+
+**Authentication (G10).** Opt-in via the `API_KEY` environment variable. When
+`API_KEY` is unset (the local-development default) the API is open. When it is set,
+every request to a guarded endpoint must carry a matching `X-API-Key` header, or it
+is rejected with **401**.
+
+| Scope | Endpoints | Guarded? |
+|---|---|---|
+| Client-facing | `/robots/*`, `/fleet`, `/system/*` | Yes — `X-API-Key` required when `API_KEY` is set |
+| Internal ingestion | `/ingest/*` | No — internal Node-RED → DB boundary, left open |
+
+When `API_KEY` is set, the ROS Bridge Service must also send it (set `API_KEY` in
+`ros-bridge-service/.env`) so its `GET /fleet` call still succeeds.
+
+**Rate limiting (G11).** A per-client-IP sliding window, `RATE_LIMIT_PER_MINUTE`
+requests per 60 s (default 120; `0` disables it). Exceeding it returns **429** with a
+`Retry-After` header. `/ingest/*` and the docs routes are exempt.
+
+**CORS (G18).** Origins allowed to call the API from a browser come from the
+`CORS_ORIGINS` env var (comma-separated; default `http://localhost:5173`, the Vite
+dev server). Preflight `OPTIONS` requests are handled by `CORSMiddleware`; any
+origin not in the list will have its responses stripped of the
+`Access-Control-Allow-Origin` header and be blocked by the browser. All methods and
+headers are allowed for listed origins; credentials (`X-API-Key`) are permitted.
+
 ## Table of Contents
 
 **POST**
@@ -23,7 +52,11 @@ been **removed**.
 - [GET /robots/{serial}/oee/summary](#get-robotsserialoeesummary)
 - [GET /robots/{serial}/oee/cycles](#get-robotsserialoeecycles)
 - [GET /robots/{serial}/oee/availability](#get-robotsserialoeeavailability)
+- [GET /orders](#get-orders)
 - [GET /system/status](#get-systemstatus)
+
+**Reference-data CRUD (G15)** — `maps`, `named_locations`, `robots`, `fleet_config`
+- [Reference-data CRUD](#reference-data-crud)
 
 ---
 
@@ -151,7 +184,7 @@ been **removed**.
 | Code | Condition |
 |------|-----------|
 | 200 | State persisted |
-| 422 | Request body is not a JSON object |
+| 422 | Request body missing/invalid a required field (`serialNumber`, `timestamp`) |
 | 503 | Database unavailable |
 
 ---
@@ -174,7 +207,7 @@ been **removed**.
 | Code | Condition |
 |------|-----------|
 | 200 | Connection event persisted |
-| 422 | Request body is not a JSON object |
+| 422 | Request body missing/invalid a required field (`serialNumber`, `timestamp`, `connectionState`) |
 | 503 | Database unavailable |
 
 ---
@@ -229,7 +262,7 @@ been **removed**.
 | Code | Condition |
 |------|-----------|
 | 200 | Cycle persisted |
-| 422 | Request body is not a JSON object |
+| 422 | Request body missing/invalid a required field (`serialNumber`, `orderId`, `startTime`, `endTime`, `result`) |
 | 503 | Database unavailable |
 
 ---
@@ -399,6 +432,52 @@ this endpoint is its gateway.
 
 ---
 
+### GET /orders
+
+**Purpose:** Paged historical order list (every `order` message persisted via the
+gateway's publish path or the Node-RED audit tap). Used by the UI's Order History
+screen.
+
+**Query Parameters:**
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| serial | string | _(all)_ | Filter to one robot's orders |
+| limit | integer | 50 | Max rows; clamped to `[1, 500]` |
+| before | string (ISO-8601) | _(none)_ | Cursor — return rows older than this timestamp |
+
+**Request Body:** None
+
+**Response Body:**
+```json
+{
+  "orders": [
+    {
+      "id":               <integer>,
+      "serial_number":    <string>,
+      "ts":               <string (ISO-8601)>,
+      "header_id":        <integer>,
+      "order_id":         <string>,
+      "order_update_id":  <integer>,
+      "node_count":       <integer>
+    }
+  ],
+  "count": <integer>
+}
+```
+
+Rows are newest-first. Paginate by passing the `ts` of the last row back as
+`before` on the next request.
+
+**Status Codes:**
+| Code | Condition |
+|------|-----------|
+| 200 | Orders returned (empty list if none match) |
+| 404 | `serial` was supplied but is not registered |
+| 422 | `limit` out of range or malformed `before` |
+| 503 | Database unavailable |
+
+---
+
 ### GET /system/status
 
 **Purpose:** Report gateway health — MQTT broker, database, rosbridge, and Node-RED
@@ -427,3 +506,72 @@ connectivity.
 | Code | Condition |
 |------|-----------|
 | 200 | Status returned |
+
+---
+
+## Reference-data CRUD
+
+Per-row create / update / delete for the reference tables (`maps`,
+`named_locations`, `robots`, `fleet_config`), so editing them no longer means
+re-applying `schema.sql` (which drops every table and wipes all telemetry).
+Added under **G15**. These endpoints are guarded by the same `X-API-Key` auth
+and rate limiting as the rest of the client-facing API.
+
+**Shared status codes**
+
+| Code | Condition |
+|------|-----------|
+| 200 | Read / update succeeded |
+| 201 | Resource created |
+| 404 | Resource not found |
+| 409 | Constraint conflict — duplicate primary key, or a `DELETE` that an existing foreign key still references (the FK is **never** cascaded) |
+| 422 | Request body failed schema validation, or references a non-existent map |
+| 503 | Database unavailable |
+
+### Maps — `/maps`
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/maps` | List all maps → `{ "maps": [{ "map_id", "label" }] }` |
+| GET | `/maps/{map_id}` | One map |
+| POST | `/maps` | Create. Body: `{ "map_id": <string>, "label": <string> }` → **201** |
+| PUT | `/maps/{map_id}` | Update `label`. Body: `{ "label": <string> }` |
+| DELETE | `/maps/{map_id}` | Delete. **409** if a robot or named location still references it |
+
+### Named locations — `/locations`
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/locations` | List all → `{ "locations": [...] }` |
+| GET | `/locations/{id}` | One location |
+| POST | `/locations` | Create. Body: `{ "id": <int>, "map_id": <string>, "label": <string>, "x": <float>, "y": <float>, "theta": <float> }` → **201** |
+| PUT | `/locations/{id}` | Update. Body: as POST minus `id` |
+| DELETE | `/locations/{id}` | Delete |
+
+`theta` is the heading in radians (map frame); it defaults to `0.0`.
+
+### Robots — `/robots`
+
+In addition to the existing `GET /robots`:
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/robots/{serial}` | One robot → `{ "serial_number", "rosbridge_url", "map_id" }` |
+| POST | `/robots` | Create. Body: `{ "serial_number": <string>, "rosbridge_url": <string>, "map_id": <string> }` → **201** |
+| PUT | `/robots/{serial}` | Update. Body: `{ "rosbridge_url": <string>, "map_id": <string> }` |
+| DELETE | `/robots/{serial}` | Delete. **409** if the robot still has telemetry / order history |
+
+After any robot write the in-memory `RobotRegistry` is reloaded, so the change is
+visible without a FastAPI restart. **The ROS Bridge Service still needs a restart**
+to actually start or stop a robot's process — it instantiates one `Robot` per
+`GET /fleet` entry at boot.
+
+### Fleet config — `PUT /fleet`
+
+In addition to the existing `GET /fleet`:
+
+| Method | Path | Purpose |
+|---|---|---|
+| PUT | `/fleet` | Update the single `fleet_config` row. Body: `{ "interface_name": <string>, "major_version": <string>, "version": <string>, "manufacturer": <string> }` |
+
+The registry is reloaded after the write.

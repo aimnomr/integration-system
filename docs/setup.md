@@ -1,6 +1,19 @@
 # Setup & Running
 
-## TL;DR — just the commands
+## TL;DR — Docker (the whole stack in one command)
+
+```bash
+docker compose up --build
+```
+
+This builds and starts all five services in the correct order (PostgreSQL →
+Mosquitto → FastAPI → ROS Bridge → Node-RED), with healthcheck-gated dependencies,
+and auto-applies `docs/schema/schema.sql` to a fresh database. Re-seed the database
+with `docker compose down -v` (drops the volume) then `up` again. A real robot's
+`rosbridge_server` still has to be reachable from the `ros-bridge` container for
+navigation to run.
+
+## TL;DR — run each service manually
 
 You already know the project and have prerequisites + `.env` files in place. Start
 each service in its own terminal:
@@ -46,8 +59,25 @@ robot in the `robots` database table (default `ws://localhost:9090`).
 | PostgreSQL | persistence | install separately; create the DB (below) |
 | ROS robot + `rosbridge_server` | — | external; exposes a WebSocket (default port 9090) |
 
-There is **no** docker-compose or unified launcher — each service starts independently.
-There are **no** test or lint commands configured.
+A root `docker-compose.yml` runs the whole stack (see the Docker TL;DR above);
+running the services manually, as below, is the alternative for development.
+
+### Tests
+
+Per-service test suites exist (G13):
+
+```bash
+# ROS Bridge Service — node:test, no extra install
+cd ros-bridge-service && npm test
+
+# FastAPI service — pytest
+cd fastapi-service
+venv\Scripts\activate
+pip install -r requirements-dev.txt
+pytest
+```
+
+`.github/workflows/ci.yml` runs both suites plus syntax checks on every push / PR.
 
 ---
 
@@ -107,6 +137,16 @@ cd ros-bridge-service
 npm install
 ```
 
+### 4b. Node dependencies (Node-RED)
+
+```bash
+cd node-red
+npm install
+```
+
+Pulls in `node-red-contrib-postgresql`, which the **DB Admin** tab needs to talk
+to PostgreSQL directly (see `docs/services/node-red.md` Tab 5).
+
 ### 5. Database
 
 ```bash
@@ -116,6 +156,13 @@ psql -U postgres -d amr_integration -f docs/schema/schema.sql
 
 `docs/schema/schema.sql` creates all 15 tables and seeds `fleet_config`, `maps`,
 `robots`, and `named_locations`. Re-running it resets the database.
+
+> **Tip:** once Node-RED is running, you can also reset the database from the
+> **DB Admin** tab — the *Reset DB* inject button runs the same `schema.sql`
+> against the live database via the `postgresql` node. The *Run custom SQL* inject
+> next to it lets you fire ad-hoc inserts (sample payloads included). Useful for
+> Docker setups where re-seeding via `docker compose down -v` would also wipe
+> Mosquitto state.
 
 ---
 
@@ -131,11 +178,17 @@ psql -U postgres -d amr_integration -f docs/schema/schema.sql
 | `DB_USER` | FastAPI | `postgres` | PostgreSQL user |
 | `DB_PASSWORD` | FastAPI | `admin` | PostgreSQL password |
 | `NODE_RED_URL` | FastAPI | `http://localhost:1880` | Node-RED URL probed by `/system/status` |
+| `API_KEY` | FastAPI | _(unset)_ | If set, the client-facing API requires a matching `X-API-Key` header (G10) |
+| `RATE_LIMIT_PER_MINUTE` | FastAPI | `120` | Requests per client IP per 60 s; `0` disables the limiter (G11) |
+| `CORS_ORIGINS` | FastAPI | `http://localhost:5173` | Comma-separated list of browser origins allowed to call the API (G18) |
 | `MQTT_BROKER` | ROS Bridge | _(required)_ | MQTT broker URL — validated at startup |
 | `FLEET_API_URL` | ROS Bridge | `http://localhost:8000/fleet` | FastAPI endpoint the fleet config is fetched from |
+| `API_KEY` | ROS Bridge | _(unset)_ | Sent as `X-API-Key` on `GET /fleet`; set it only if FastAPI's `API_KEY` is set |
 | `NAV_GOAL_TOPIC` | ROS Bridge | `/move_base_simple/goal` | ROS topic for navigation goals |
 | `CANCEL_TOPIC` | ROS Bridge | `/move_base/cancel` | ROS topic for goal cancellation |
 | `LOG_LEVEL` | ROS Bridge | `info` | Log verbosity — `debug`/`info`/`warn`/`error` (optional) |
+| `MQTT_HOST` | Node-RED | `localhost` | MQTT broker host for `flows.json` (defaulted in `settings.js`) |
+| `FASTAPI_HOST` | Node-RED | `localhost` | FastAPI host for the `/ingest/*` calls in `flows.json` |
 
 ---
 

@@ -416,11 +416,14 @@ for the FYP; it is documented here as a known scaling characteristic.
 - "Latest state" queries use `ORDER BY ts DESC LIMIT 1` on the
   `(serial_number, ts DESC)` index of `state_snapshots`, then join the child tables on
   `snapshot_id` to reassemble the VDA5050 `state` shape.
-- **Retention:** `state_snapshots` and `state_node_states` are the high-volume tables
-  (~80–100 k snapshot rows/day per robot at the 5 s heartbeat + change triggers, each
-  fanning out to several node-state rows). For production, partition them monthly
-  (`PARTITION BY RANGE (ts)`) and drop old partitions on a schedule. Not applied here —
-  out of FYP scope, documented as a known limitation.
+- **Retention (G19):** `state_snapshots` and `state_node_states` are the high-volume
+  tables (~80–100 k snapshot rows/day per robot at the 5 s heartbeat + change triggers,
+  each fanning out to several node-state rows). FastAPI runs a background task that
+  every 6 h deletes `state_snapshots` and `connection_log` rows older than
+  `TELEMETRY_RETENTION_DAYS` (default **30**; `0` disables it) — the child tables go via
+  `ON DELETE CASCADE`. This is a row-delete policy, not range partitioning; partitioning
+  (`PARTITION BY RANGE (ts)` with old partitions dropped) remains the heavier-duty option
+  if the deployment outgrows it.
 - Child tables use `ON DELETE CASCADE`, so deleting a snapshot or order removes its
   node/action/error rows automatically.
 - Enum-like columns use `CHECK` constraints (not PostgreSQL `ENUM` types) so the script

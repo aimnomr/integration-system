@@ -426,5 +426,25 @@
                 "file": "C:\\Users\\aimno\\AppData\\Roaming\\npm\\node_modules\\node-red\\node_modules\\@node-red\\nodes\\core\\storage\\23-watch.js"
             }
         }
+    },
+    "node-red-contrib-postgresql": {
+        "name": "node-red-contrib-postgresql",
+        "version": "0.15.4",
+        "local": true,
+        "user": true,
+        "nodes": {
+            "postgresql": {
+                "name": "postgresql",
+                "types": [
+                    "postgreSQLConfig",
+                    "postgresql"
+                ],
+                "enabled": true,
+                "local": true,
+                "user": false,
+                "module": "node-red-contrib-postgresql",
+                "file": "D:\\FYP\\integration-system\\node-red\\node_modules\\node-red-contrib-postgresql\\postgresql.js"
+            }
+        }
     }
 }

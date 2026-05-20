@@ -9,7 +9,7 @@ import logger from './logger.js'
 // Replaces the legacy navigation.js + navFeedback.js modules.
 
 // actionlib_msgs/GoalStatus code → status string
-function mapStatus(code) {
+export function mapStatus(code) {
     switch (code) {
         case 3:                 return 'SUCCEEDED'
         case 2: case 8:         return 'PREEMPTED'
@@ -34,6 +34,7 @@ export default class OrderStateMachine {
         this.lastNodeSequenceId = 0
         this.navStatus          = 'IDLE'
         this.actionStates       = []
+        this._navError          = null   // set on a failed node, cleared on success
 
         this._onChange = null
     }
@@ -83,6 +84,7 @@ export default class OrderStateMachine {
             .sort((a, b) => a.sequenceId - b.sequenceId)
         this._nodeIdx = 0
         this.actionStates = []
+        this._navError = null
         logger.info('Order accepted', {
             orderId: order.orderId, orderUpdateId: order.orderUpdateId, nodes: this._nodes.length,
         })
@@ -128,6 +130,7 @@ export default class OrderStateMachine {
                 this.lastNodeId         = node.nodeId
                 this.lastNodeSequenceId = node.sequenceId
             }
+            this._navError = null   // a node succeeded — clear any prior failure
             this._nodeIdx++
             if (this._nodeIdx < this._nodes.length) {
                 this._sendCurrentNode()
@@ -135,6 +138,16 @@ export default class OrderStateMachine {
                 logger.info('Order complete', { orderId: this._order?.orderId })
             }
         } else {
+            // G17 — surface the failure on the VDA5050 `state` message so
+            // telemetry consumers see it, not just the bridge console.
+            const node = this._nodes[this._nodeIdx]
+            this._navError = {
+                errorType: 'navigationFailed',
+                errorLevel: 'WARNING',
+                errorDescription:
+                    `Navigation ${mapped} at node ${node?.nodeId ?? '?'} `
+                    + `(${this._nodeIdx + 1}/${this._nodes.length})`,
+            }
             logger.warn('Node did not succeed; order paused', {
                 status: mapped, index: this._nodeIdx + 1,
             })
@@ -169,11 +182,18 @@ export default class OrderStateMachine {
         this._nodes    = []
         this._nodeIdx  = 0
         this.navStatus = 'IDLE'
+        this._navError = null
         logger.info('Order cancelled')
     }
 
     _emit() {
         this._onChange?.()
+    }
+
+    // VDA5050 `state.errors` contributed by navigation — a single
+    // navigationFailed entry while a node is failed, empty otherwise (G17).
+    getErrors() {
+        return this._navError ? [this._navError] : []
     }
 
     // The order-related fields of the VDA5050 `state` message.

@@ -264,15 +264,19 @@ CREATE INDEX idx_oee_serial_ts ON oee_cycles (serial_number, ts DESC);
 INSERT INTO fleet_config (id, interface_name, major_version, version, manufacturer)
     VALUES (1, 'amr', 'v2', '2.0.0', 'moverobotic');
 
+-- map_id follows the format map-NNN (zero-padded 3 digits) so maps stay filterable
+-- (WHERE map_id LIKE 'map-%') and sortable. label is the human-readable name.
 INSERT INTO maps (map_id, label) VALUES
-    ('default', 'Default map (placeholder — set to the real map name)');
+    ('map-001', 'Default Sim World'),
+    ('map-002', 'Office CPR');
 
 INSERT INTO robots (serial_number, rosbridge_url, map_id) VALUES
-    ('amr001', 'ws://localhost:9090', 'default');
+    ('amr001', 'ws://localhost:9090', 'map-001');
 
 -- theta is radians (the legacy angle.z values were degrees — converted here).
+-- These named locations belong to map-001 (Default Sim World).
 INSERT INTO named_locations (id, map_id, label, x, y, theta) VALUES
-    (1, 'default', 'Charging Station',  3.094,  1.412, -2.21568),
-    (2, 'default', 'Entrance',         -1.953,  2.467, -0.59145),
-    (3, 'default', 'Storage Room',     -2.690, -1.583,  2.48120),
-    (4, 'default', 'Home',              0.000,  0.000,  0.00000);
+    (1, 'map-001', 'Charging Station',  3.094,  1.412, -2.21568),
+    (2, 'map-001', 'Entrance',         -1.953,  2.467, -0.59145),
+    (3, 'map-001', 'Storage Room',     -2.690, -1.583,  2.48120),
+    (4, 'map-001', 'Home',              0.000,  0.000,  0.00000);

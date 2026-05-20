@@ -7,6 +7,20 @@ project `amr/v2/moverobotic/{serialNumber}/{topic}`.
 Full message schemas: [VDA5050_MESSAGES.md](VDA5050_MESSAGES.md). The legacy `amr/cmd/*`,
 `amr/state/*`, `amr/health/*` and `amr/system/*` topics have been **removed**.
 
+## Broker listeners
+
+Mosquitto exposes two listeners on the same topic tree:
+
+| Port | Protocol | Used by |
+|---|---|---|
+| 1883 | MQTT over TCP | FastAPI, Node-RED, ROS Bridge — all backend services |
+| 9001 | MQTT over WebSockets | Browser frontend (`mqtt.js`) — subscribes to `state` and `connection` directly |
+
+Both listeners are anonymous (`allow_anonymous true`) and share the broker's
+retained-message store, so the WebSocket subscriber receives the same retained
+`connection` messages as TCP clients. Securing them (TLS + credentials) is a
+deployment concern beyond the FYP scope.
+
 ## Table of Contents
 
 **Inbound (Commands to Robot)**

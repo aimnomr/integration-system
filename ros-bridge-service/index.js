@@ -22,7 +22,9 @@ if (missingEnv.length) {
 async function main() {
     let config
     try {
-        const res = await fetch(FLEET_API_URL)
+        // Send the API key if FastAPI's auth is enabled (G10); harmless when unset.
+        const headers = process.env.API_KEY ? { 'X-API-Key': process.env.API_KEY } : {}
+        const res = await fetch(FLEET_API_URL, { headers })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         config = await res.json()
     } catch (err) {

@@ -78,7 +78,9 @@ export default class StateBuilder {
             velocity:           this._velocity,
             driving:            this._driving,
             operatingMode:      'AUTOMATIC',
-            errors:             this._errors,
+            // ROS-connection errors plus any navigation failure from the
+            // order state machine (G17).
+            errors:             [...this._errors, ...this._osm.getErrors()],
             safetyState:        this._safety,
         }
         this._mqtt.publish(this._topic, JSON.stringify(msg), { qos: 0 }, (err) => {

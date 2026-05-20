@@ -1,0 +1,5 @@
+# Development / test dependencies for the FastAPI service (G13).
+# Install with:  pip install -r requirements.txt -r requirements-dev.txt
+# Run the tests with:  pytest   (from the fastapi-service/ directory)
+pytest>=8.0
+httpx>=0.27          # FastAPI TestClient backend

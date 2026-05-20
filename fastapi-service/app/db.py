@@ -4,7 +4,11 @@ The driver (psycopg2) is imported lazily so the service still boots when the
 database — or the driver — is unavailable. In that case queries raise
 DatabaseUnavailable, which the routers turn into HTTP 503.
 
-The schema is fully normalized (14 tables) — VDA5050's variable-length arrays
+Connections are served from a lazily-built ThreadedConnectionPool (G16) — a
+fresh TCP connect + auth handshake per query was needless latency on the
+telemetry hot path. Pool size: DB_POOL_MIN / DB_POOL_MAX.
+
+The schema is fully normalized (15 tables) — VDA5050's variable-length arrays
 live in child tables, so persisting one `state` or `order` message is a
 multi-table transaction. See docs/schema/DATABASE_SCHEMA.md.
 
@@ -12,6 +16,7 @@ Connection settings come from env vars (DB_HOST, DB_PORT, DB_NAME, DB_USER,
 DB_PASSWORD).
 """
 import os
+import threading
 from contextlib import contextmanager
 
 
@@ -19,43 +24,83 @@ class DatabaseUnavailable(RuntimeError):
     """Raised when the database or its driver cannot be reached."""
 
 
-def _connect():
+class IntegrityConflict(RuntimeError):
+    """Raised on a constraint violation (foreign-key / unique) so the CRUD
+    routers can return HTTP 409 instead of an opaque 500."""
+
+
+# --- Connection pool (G16) -------------------------------------------------
+
+_pool = None
+_pool_lock = threading.Lock()
+
+
+def _get_pool():
+    """Return the connection pool, building it lazily on first use. Raises
+    DatabaseUnavailable if the driver is missing or the database is unreachable."""
+    global _pool
+    if _pool is not None:
+        return _pool
+    with _pool_lock:
+        if _pool is not None:  # built while we waited for the lock
+            return _pool
+        try:
+            import psycopg2.pool
+        except ImportError as exc:  # driver not installed
+            raise DatabaseUnavailable("psycopg2 not installed") from exc
+        try:
+            _pool = psycopg2.pool.ThreadedConnectionPool(
+                int(os.getenv("DB_POOL_MIN", "1")),
+                int(os.getenv("DB_POOL_MAX", "10")),
+                host=os.getenv("DB_HOST", "localhost"),
+                port=int(os.getenv("DB_PORT", "5432")),
+                dbname=os.getenv("DB_NAME", "amr_integration"),
+                user=os.getenv("DB_USER", "postgres"),
+                password=os.getenv("DB_PASSWORD", "admin"),
+            )
+        except Exception as exc:  # connection refused, auth failure, ...
+            raise DatabaseUnavailable(str(exc)) from exc
+        return _pool
+
+
+def _pg_message(exc) -> str:
+    """The clean primary message of a psycopg2 error, without the SQL dump."""
     try:
-        import psycopg2
-    except ImportError as exc:  # driver not installed
-        raise DatabaseUnavailable("psycopg2 not installed") from exc
-    try:
-        return psycopg2.connect(
-            host=os.getenv("DB_HOST", "localhost"),
-            port=int(os.getenv("DB_PORT", "5432")),
-            dbname=os.getenv("DB_NAME", "amr_integration"),
-            user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD", "admin"),
-        )
-    except Exception as exc:  # connection refused, auth failure, ...
-        raise DatabaseUnavailable(str(exc)) from exc
+        return (exc.diag.message_primary or str(exc)).strip()
+    except Exception:
+        return str(exc).strip()
 
 
 @contextmanager
 def _transaction():
-    """A single connection committed as one unit — used by the multi-table
-    writes so a snapshot and its child rows land atomically."""
-    conn = _connect()
+    """A single pooled connection committed as one unit — used by the
+    multi-table writes so a snapshot and its child rows land atomically. A
+    connection that cannot be cleaned up is dropped rather than handed back."""
+    pool = _get_pool()
+    conn = pool.getconn()
+    broken = False
     try:
         with conn.cursor() as cur:
             yield cur
         conn.commit()
     except Exception:
-        conn.rollback()
+        try:
+            conn.rollback()
+        except Exception:
+            broken = True
         raise
     finally:
-        conn.close()
+        pool.putconn(conn, close=broken)
 
 
 def _query(sql: str, params: tuple = ()) -> list[dict]:
-    conn = _connect()
+    """Run a read-only query and return the rows. The connection's implicit
+    transaction is rolled back before it returns to the pool."""
     import psycopg2.extras
 
+    pool = _get_pool()
+    conn = pool.getconn()
+    broken = False
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, params)
@@ -63,23 +108,66 @@ def _query(sql: str, params: tuple = ()) -> list[dict]:
                 return []
             return [dict(row) for row in cur.fetchall()]
     finally:
-        conn.close()
+        try:
+            conn.rollback()
+        except Exception:
+            broken = True
+        pool.putconn(conn, close=broken)
 
 
 def _execute(sql: str, params: tuple = ()) -> None:
-    conn = _connect()
+    pool = _get_pool()
+    conn = pool.getconn()
+    broken = False
     try:
         with conn.cursor() as cur:
             cur.execute(sql, params)
         conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            broken = True
+        raise
     finally:
-        conn.close()
+        pool.putconn(conn, close=broken)
+
+
+def _execute_returning(sql: str, params: tuple = ()) -> list[dict]:
+    """Run a write with a RETURNING clause, commit, and return the rows.
+    Postgres integrity violations are translated into IntegrityConflict so the
+    CRUD routers can map them to HTTP 409."""
+    import psycopg2
+    import psycopg2.extras
+
+    pool = _get_pool()
+    conn = pool.getconn()
+    broken = False
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, params)
+            rows = [] if cur.description is None else [dict(r) for r in cur.fetchall()]
+        conn.commit()
+        return rows
+    except psycopg2.IntegrityError as exc:
+        conn.rollback()
+        raise IntegrityConflict(_pg_message(exc)) from exc
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            broken = True
+        raise
+    finally:
+        pool.putconn(conn, close=broken)
 
 
 def ping() -> bool:
     """True if the database is reachable."""
     try:
-        _connect().close()
+        pool = _get_pool()
+        conn = pool.getconn()
+        pool.putconn(conn)
         return True
     except DatabaseUnavailable:
         return False
@@ -268,9 +356,11 @@ def insert_oee_cycle(cycle: dict) -> None:
 def fetch_latest_state(serial: str) -> dict | None:
     """The latest state_snapshots row with its child rows joined back in, so the
     response carries the full VDA5050 `state` shape."""
-    conn = _connect()
     import psycopg2.extras
 
+    pool = _get_pool()
+    conn = pool.getconn()
+    broken = False
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
@@ -306,7 +396,11 @@ def fetch_latest_state(serial: str) -> dict | None:
             snap["errors"] = [dict(r) for r in cur.fetchall()]
             return snap
     finally:
-        conn.close()
+        try:
+            conn.rollback()
+        except Exception:
+            broken = True
+        pool.putconn(conn, close=broken)
 
 
 def fetch_fleet_config() -> dict:
@@ -378,3 +472,211 @@ def fetch_oee_availability(serial: str) -> dict:
         "total_samples": total,
         "availability": round(availability, 4),
     }
+
+
+# --- Counter persistence (G21) ---------------------------------------------
+#
+# The FMS gateway's VDA5050 headerId / orderId counters live in memory in
+# RobotRegistry. These helpers let it resume them from the database at startup
+# so a FastAPI restart does not reset them to 0.
+
+def fetch_max_header_ids() -> dict[tuple[str, str], int]:
+    """Highest headerId persisted per (serial, topic), across the order /
+    instantActions audit tables — the topics FastAPI itself generates."""
+    result: dict[tuple[str, str], int] = {}
+    for topic, table in (("order", "orders"),
+                          ("instantActions", "instant_action_messages")):
+        rows = _query(
+            f"SELECT serial_number, MAX(header_id) AS max_id "
+            f"FROM {table} GROUP BY serial_number"
+        )
+        for row in rows:
+            if row["max_id"] is not None:
+                result[(row["serial_number"], topic)] = row["max_id"]
+    return result
+
+
+def fetch_orders(
+    serial: str | None = None,
+    limit: int = 50,
+    before: str | None = None,
+) -> list[dict]:
+    """Order history, newest first. Optional filters:
+      * `serial` — restrict to one robot.
+      * `before` — ISO-8601 timestamp; only rows with ts < this value.
+    `limit` is clamped by the caller (router). Each row carries the count of
+    nodes in the order — cheap aggregate that saves the UI a second round trip.
+    """
+    where: list[str] = []
+    params: list = []
+    if serial:
+        where.append("o.serial_number = %s")
+        params.append(serial)
+    if before:
+        where.append("o.ts < %s")
+        params.append(before)
+    sql = (
+        "SELECT o.id, o.serial_number, o.ts, o.header_id, "
+        "       o.order_id, o.order_update_id, "
+        "       coalesce(n.node_count, 0) AS node_count "
+        "FROM orders o "
+        "LEFT JOIN ("
+        "    SELECT order_pk, count(*) AS node_count "
+        "    FROM order_nodes GROUP BY order_pk"
+        ") n ON n.order_pk = o.id "
+    )
+    if where:
+        sql += "WHERE " + " AND ".join(where) + " "
+    sql += "ORDER BY o.ts DESC LIMIT %s"
+    params.append(limit)
+    return _query(sql, tuple(params))
+
+
+def fetch_max_order_suffixes() -> dict[str, int]:
+    """Highest order-id suffix N (orderId is `{serial}-order-N`) per robot."""
+    rows = _query(
+        "SELECT serial_number, "
+        "MAX(CAST(split_part(order_id, '-order-', 2) AS INTEGER)) AS max_n "
+        "FROM orders "
+        "WHERE split_part(order_id, '-order-', 2) ~ '^[0-9]+$' "
+        "GROUP BY serial_number"
+    )
+    return {r["serial_number"]: r["max_n"] for r in rows if r["max_n"] is not None}
+
+
+# --- Telemetry retention (G19) ---------------------------------------------
+
+def prune_telemetry(retention_days: int) -> dict:
+    """Delete telemetry rows older than retention_days. state_snapshots' child
+    tables (node/action/error states) are removed via ON DELETE CASCADE.
+    Returns the deleted row counts."""
+    snaps = _execute_returning(
+        "DELETE FROM state_snapshots "
+        "WHERE ts < now() - make_interval(days => %s) RETURNING id",
+        (retention_days,),
+    )
+    conns = _execute_returning(
+        "DELETE FROM connection_log "
+        "WHERE ts < now() - make_interval(days => %s) RETURNING id",
+        (retention_days,),
+    )
+    return {"state_snapshots": len(snaps), "connection_log": len(conns)}
+
+
+# --- Reference-data CRUD (G15) ---------------------------------------------
+#
+# Per-row create / update / delete for the reference tables, so editing them no
+# longer means re-applying schema.sql (which drops every table). FK violations
+# surface as IntegrityConflict (-> HTTP 409); deletes are never cascaded.
+
+# Maps
+def fetch_maps() -> list[dict]:
+    return _query("SELECT map_id, label FROM maps ORDER BY map_id")
+
+
+def fetch_map(map_id: str) -> dict | None:
+    rows = _query("SELECT map_id, label FROM maps WHERE map_id = %s", (map_id,))
+    return rows[0] if rows else None
+
+
+def insert_map(map_id: str, label: str) -> dict:
+    return _execute_returning(
+        "INSERT INTO maps (map_id, label) VALUES (%s, %s) "
+        "RETURNING map_id, label",
+        (map_id, label),
+    )[0]
+
+
+def update_map(map_id: str, label: str) -> dict | None:
+    rows = _execute_returning(
+        "UPDATE maps SET label = %s WHERE map_id = %s RETURNING map_id, label",
+        (label, map_id),
+    )
+    return rows[0] if rows else None
+
+
+def delete_map(map_id: str) -> bool:
+    return bool(_execute_returning(
+        "DELETE FROM maps WHERE map_id = %s RETURNING map_id", (map_id,)
+    ))
+
+
+# Robots
+def fetch_robot(serial: str) -> dict | None:
+    rows = _query(
+        "SELECT serial_number, rosbridge_url, map_id FROM robots "
+        "WHERE serial_number = %s",
+        (serial,),
+    )
+    return rows[0] if rows else None
+
+
+def insert_robot(serial: str, rosbridge_url: str, map_id: str) -> dict:
+    return _execute_returning(
+        "INSERT INTO robots (serial_number, rosbridge_url, map_id) "
+        "VALUES (%s, %s, %s) RETURNING serial_number, rosbridge_url, map_id",
+        (serial, rosbridge_url, map_id),
+    )[0]
+
+
+def update_robot(serial: str, rosbridge_url: str, map_id: str) -> dict | None:
+    rows = _execute_returning(
+        "UPDATE robots SET rosbridge_url = %s, map_id = %s "
+        "WHERE serial_number = %s "
+        "RETURNING serial_number, rosbridge_url, map_id",
+        (rosbridge_url, map_id, serial),
+    )
+    return rows[0] if rows else None
+
+
+def delete_robot(serial: str) -> bool:
+    return bool(_execute_returning(
+        "DELETE FROM robots WHERE serial_number = %s RETURNING serial_number",
+        (serial,),
+    ))
+
+
+# Named locations
+def fetch_named_location(loc_id: int) -> dict | None:
+    rows = _query(
+        "SELECT id, map_id, label, x, y, theta FROM named_locations WHERE id = %s",
+        (loc_id,),
+    )
+    return rows[0] if rows else None
+
+
+def insert_named_location(loc_id: int, map_id: str, label: str,
+                          x: float, y: float, theta: float) -> dict:
+    return _execute_returning(
+        "INSERT INTO named_locations (id, map_id, label, x, y, theta) "
+        "VALUES (%s, %s, %s, %s, %s, %s) "
+        "RETURNING id, map_id, label, x, y, theta",
+        (loc_id, map_id, label, x, y, theta),
+    )[0]
+
+
+def update_named_location(loc_id: int, map_id: str, label: str,
+                          x: float, y: float, theta: float) -> dict | None:
+    rows = _execute_returning(
+        "UPDATE named_locations SET map_id = %s, label = %s, x = %s, y = %s, "
+        "theta = %s WHERE id = %s RETURNING id, map_id, label, x, y, theta",
+        (map_id, label, x, y, theta, loc_id),
+    )
+    return rows[0] if rows else None
+
+
+def delete_named_location(loc_id: int) -> bool:
+    return bool(_execute_returning(
+        "DELETE FROM named_locations WHERE id = %s RETURNING id", (loc_id,)
+    ))
+
+
+# Fleet config (single row, id = 1)
+def update_fleet_config(interface_name: str, major_version: str,
+                        version: str, manufacturer: str) -> dict:
+    return _execute_returning(
+        "UPDATE fleet_config SET interface_name = %s, major_version = %s, "
+        "version = %s, manufacturer = %s WHERE id = 1 "
+        "RETURNING interface_name, major_version, version, manufacturer",
+        (interface_name, major_version, version, manufacturer),
+    )[0]

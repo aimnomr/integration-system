@@ -20,6 +20,14 @@
  *
  **/
 
+// --- Environment defaults (G14) ---------------------------------------------
+// flows.json references ${MQTT_HOST} and ${FASTAPI_HOST} so the same flow file
+// works both on the host and inside docker-compose. These defaults keep local
+// runs working unchanged; docker-compose overrides them with the service names
+// (mosquitto / fastapi).
+process.env.MQTT_HOST = process.env.MQTT_HOST || 'localhost'
+process.env.FASTAPI_HOST = process.env.FASTAPI_HOST || 'localhost'
+
 module.exports = {
 
 /*******************************************************************************

@@ -1,6 +1,6 @@
 # Implementation Status
 
-> **This is a point-in-time snapshot and decays.** Last updated: 2026-05-17.
+> **This is a point-in-time snapshot and decays.** Last updated: 2026-05-18.
 > When in doubt, the code is authoritative.
 
 ---
@@ -26,10 +26,20 @@ The system speaks **VDA5050** end to end (migration Phases 0–7 complete — se
     motion from `/diff_controller/odom`) on change + 5 s heartbeat;
   - publishes the retained `connection` topic (`ONLINE` / `OFFLINE`, plus a
     `CONNECTIONBROKEN` MQTT Last-Will).
-- **Node-RED — telemetry sink.** Ingests `state` / `connection` and the `order` /
-  `instantActions` audit tap, derives OEE cycles from order-completion transitions, and
-  persists everything via the FastAPI `/ingest/*` API.
+- **Node-RED — telemetry sink + DB admin.** Ingests `state` / `connection` and the
+  `order` / `instantActions` audit tap, derives OEE cycles from order-completion
+  transitions, and persists everything via the FastAPI `/ingest/*` API. A separate
+  **DB Admin** tab uses the `node-red-contrib-postgresql` palette node to reset the
+  schema (run `docs/schema/schema.sql`) and run ad-hoc admin SQL directly against
+  Postgres — bypassing FastAPI, for setup/maintenance only.
 - **Structured logging** — ROS Bridge Service and FastAPI emit JSON-line logs.
+- **Authentication & rate limiting** — FastAPI supports opt-in `X-API-Key` auth
+  (`API_KEY`) on the client-facing API and a per-client rate limiter
+  (`RATE_LIMIT_PER_MINUTE`); both are off/permissive by default for local dev.
+- **Tests** — per-service suites: `node:test` for the ROS Bridge (`npm test`),
+  `pytest` for FastAPI; both run in CI.
+- **Docker & CI** — per-service `Dockerfile`s, a root `docker-compose.yml` for the
+  full stack, and a GitHub Actions workflow (`.github/workflows/ci.yml`).
 - **Mosquitto** — configured on `localhost:1883`.
 - **Database schema — fully normalized.** 15-table relational schema (1NF-strict,
   BCNF): VDA5050's variable-length arrays live in child tables, not JSONB. FastAPI
@@ -49,6 +59,10 @@ The system speaks **VDA5050** end to end (migration Phases 0–7 complete — se
   (`node --check`), all FastAPI files (`py_compile`), `flows.json` (JSON + node-graph
   integrity). The FastAPI registry now loads the fleet from the database at import, so
   it can no longer be run-tested without a live DB.
+- **Unit-tested:** the ROS Bridge `node:test` suite (15 tests) passes locally and
+  covers `vda5050.js`, `stateBuilder.js`, and `orderStateMachine.js` helpers. The
+  FastAPI `pytest` suite covers `config.py`, `auth.py`, and `ratelimit.py` — it runs
+  in CI but has not been run locally (pytest not yet installed in this environment).
 - **Not yet end-to-end tested:** the live pipeline needs an MQTT broker, rosbridge + a
   robot, and PostgreSQL. The persistence path additionally needs the `psycopg2-binary`
   dependency (`pip install -r fastapi-service/requirements.txt`) and the schema applied
@@ -58,6 +72,9 @@ The system speaks **VDA5050** end to end (migration Phases 0–7 complete — se
 
 ## Not yet implemented
 
-Tracked, with severity and fix paths, in **[gaps.md](gaps.md)** — open items are
-G10, G11, G13, G14: auth, rate limiting, tests, and Docker/CI. G1–G9 and G12 are
-resolved.
+G1–G17 and G19–G21 are resolved. The 2026-05-18 audit gaps are closed except
+**G18 (CORS)**, which the user deferred until the React frontend work begins — the
+reference-data CRUD API (G15), DB connection pooling (G16), navigation-failure
+observability (G17), telemetry retention (G19), ingest error handling (G20), and
+VDA5050 counter persistence (G21) all landed in this round. G18 remains tracked in
+**[gaps.md](gaps.md)**.

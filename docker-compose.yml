@@ -1,0 +1,102 @@
+# AMR Integration System — full local stack (G14).
+#
+# Start order matters and is enforced with healthchecks + depends_on:
+#   postgres -> fastapi -> ros-bridge
+# FastAPI loads the fleet from the database at boot; the ROS Bridge fetches
+# GET /fleet from FastAPI at boot. See docs/setup.md.
+#
+#   docker compose up --build
+#
+# The database is auto-initialised from docs/schema/schema.sql on first run
+# (the postgres volume is empty). Delete the volume to re-seed:
+#   docker compose down -v
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: amr_integration
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Auto-applied once, only when the data volume is empty.
+      - ./docs/schema/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d amr_integration"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"   # TCP — FastAPI, Node-RED, ROS Bridge
+      - "9001:9001"   # WebSocket — browser frontend (mqtt.js)
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_pub -t healthcheck -m ping || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  fastapi:
+    build: ./fastapi-service
+    ports:
+      - "8000:8000"
+    environment:
+      MQTT_BROKER: mosquitto
+      MQTT_PORT: "1883"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: amr_integration
+      DB_USER: postgres
+      DB_PASSWORD: admin
+      NODE_RED_URL: http://node-red:1880
+      # API_KEY: change-me            # uncomment to enable auth (G10)
+      RATE_LIMIT_PER_MINUTE: "120"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/openapi.json')\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ros-bridge:
+    build: ./ros-bridge-service
+    environment:
+      MQTT_BROKER: mqtt://mosquitto:1883
+      FLEET_API_URL: http://fastapi:8000/fleet
+      # API_KEY: change-me            # must match fastapi's API_KEY if auth is on
+    depends_on:
+      fastapi:
+        condition: service_healthy
+    # Each robot's rosbridge URL comes from the database; a real robot must be
+    # reachable from this container for navigation to actually run.
+
+  node-red:
+    image: nodered/node-red:4.0
+    ports:
+      - "1880:1880"
+    environment:
+      MQTT_HOST: mosquitto
+      FASTAPI_HOST: fastapi
+    volumes:
+      - ./node-red:/data
+    depends_on:
+      fastapi:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  mosquitto-data:

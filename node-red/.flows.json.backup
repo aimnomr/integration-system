@@ -34,7 +34,7 @@
         "id": "broker-local",
         "type": "mqtt-broker",
         "name": "Local MQTT",
-        "broker": "localhost",
+        "broker": "${MQTT_HOST}",
         "port": 1883,
         "clientid": "",
         "autoConnect": true,
@@ -87,7 +87,7 @@
         "type": "function",
         "z": "tab-ingest",
         "name": "validateState",
-        "func": "var s = msg.payload;\nif (!s || typeof s.serialNumber !== 'string' || !s.timestamp) {\n    node.error('Invalid VDA5050 state message', msg);\n    return null;\n}\nvar pos = s.agvPosition || {};\nnode.status({ fill: 'green', shape: 'dot', text: s.serialNumber + ' x:' + (pos.x || 0).toFixed(2) + ' y:' + (pos.y || 0).toFixed(2) });\nmsg.headers = { 'content-type': 'application/json' };\nmsg.payload = s;\nreturn msg;",
+        "func": "var s = msg.payload;\nif (!s || typeof s.serialNumber !== 'string' || !s.timestamp) {\n    node.error('Invalid VDA5050 state message', msg);\n    return null;\n}\nvar pos = s.agvPosition || {};\nnode.status({ fill: 'green', shape: 'dot', text: s.serialNumber + ' x:' + (pos.x || 0).toFixed(2) + ' y:' + (pos.y || 0).toFixed(2) });\nmsg.headers = { 'content-type': 'application/json' };\nmsg.payload = s;\nmsg.url = 'http://' + (env.get('FASTAPI_HOST') || 'localhost') + ':8000/ingest/state';\nreturn msg;",
         "outputs": 1,
         "timeout": "",
         "noerr": 0,
@@ -110,7 +110,7 @@
         "method": "POST",
         "ret": "obj",
         "paytoqs": "ignore",
-        "url": "http://localhost:8000/ingest/state",
+        "url": "",
         "tls": "",
         "persist": false,
         "proxy": "",
@@ -169,7 +169,7 @@
         "type": "function",
         "z": "tab-ingest",
         "name": "validateConnection",
-        "func": "var c = msg.payload;\nvar VALID = ['ONLINE', 'OFFLINE', 'CONNECTIONBROKEN'];\nif (!c || typeof c.serialNumber !== 'string' || VALID.indexOf(c.connectionState) === -1) {\n    node.error('Invalid VDA5050 connection message', msg);\n    return null;\n}\nvar fill = c.connectionState === 'ONLINE' ? 'green' : c.connectionState === 'OFFLINE' ? 'grey' : 'red';\nnode.status({ fill: fill, shape: 'dot', text: c.serialNumber + ': ' + c.connectionState });\nmsg.headers = { 'content-type': 'application/json' };\nmsg.payload = c;\nreturn msg;",
+        "func": "var c = msg.payload;\nvar VALID = ['ONLINE', 'OFFLINE', 'CONNECTIONBROKEN'];\nif (!c || typeof c.serialNumber !== 'string' || VALID.indexOf(c.connectionState) === -1) {\n    node.error('Invalid VDA5050 connection message', msg);\n    return null;\n}\nvar fill = c.connectionState === 'ONLINE' ? 'green' : c.connectionState === 'OFFLINE' ? 'grey' : 'red';\nnode.status({ fill: fill, shape: 'dot', text: c.serialNumber + ': ' + c.connectionState });\nmsg.headers = { 'content-type': 'application/json' };\nmsg.payload = c;\nmsg.url = 'http://' + (env.get('FASTAPI_HOST') || 'localhost') + ':8000/ingest/connection';\nreturn msg;",
         "outputs": 1,
         "timeout": "",
         "noerr": 0,
@@ -192,7 +192,7 @@
         "method": "POST",
         "ret": "obj",
         "paytoqs": "ignore",
-        "url": "http://localhost:8000/ingest/connection",
+        "url": "",
         "tls": "",
         "persist": false,
         "proxy": "",
@@ -251,7 +251,7 @@
         "type": "function",
         "z": "tab-audit",
         "name": "tagOrder",
-        "func": "var m = msg.payload;\nif (!m || typeof m.serialNumber !== 'string' || typeof m.orderId !== 'string') {\n    node.error('Invalid order message', msg);\n    return null;\n}\nnode.status({ fill: 'blue', shape: 'dot', text: m.serialNumber + ' ' + m.orderId });\nmsg.headers = { 'content-type': 'application/json' };\nmsg.payload = { kind: 'order', message: m };\nreturn msg;",
+        "func": "var m = msg.payload;\nif (!m || typeof m.serialNumber !== 'string' || typeof m.orderId !== 'string') {\n    node.error('Invalid order message', msg);\n    return null;\n}\nnode.status({ fill: 'blue', shape: 'dot', text: m.serialNumber + ' ' + m.orderId });\nmsg.headers = { 'content-type': 'application/json' };\nmsg.payload = { kind: 'order', message: m };\nmsg.url = 'http://' + (env.get('FASTAPI_HOST') || 'localhost') + ':8000/ingest/command';\nreturn msg;",
         "outputs": 1,
         "timeout": "",
         "noerr": 0,
@@ -274,7 +274,7 @@
         "method": "POST",
         "ret": "obj",
         "paytoqs": "ignore",
-        "url": "http://localhost:8000/ingest/command",
+        "url": "",
         "tls": "",
         "persist": false,
         "proxy": "",
@@ -295,7 +295,7 @@
         "type": "debug",
         "z": "tab-audit",
         "name": "order logged",
-        "active": false,
+        "active": true,
         "tosidebar": true,
         "console": false,
         "tostatus": false,
@@ -333,7 +333,7 @@
         "type": "function",
         "z": "tab-audit",
         "name": "tagInstantActions",
-        "func": "var m = msg.payload;\nif (!m || typeof m.serialNumber !== 'string' || !Array.isArray(m.actions)) {\n    node.error('Invalid instantActions message', msg);\n    return null;\n}\nvar types = m.actions.map(function (a) { return a.actionType; }).join(',');\nnode.status({ fill: 'blue', shape: 'dot', text: m.serialNumber + ' ' + types });\nmsg.headers = { 'content-type': 'application/json' };\nmsg.payload = { kind: 'instantActions', message: m };\nreturn msg;",
+        "func": "var m = msg.payload;\nif (!m || typeof m.serialNumber !== 'string' || !Array.isArray(m.actions)) {\n    node.error('Invalid instantActions message', msg);\n    return null;\n}\nvar types = m.actions.map(function (a) { return a.actionType; }).join(',');\nnode.status({ fill: 'blue', shape: 'dot', text: m.serialNumber + ' ' + types });\nmsg.headers = { 'content-type': 'application/json' };\nmsg.payload = { kind: 'instantActions', message: m };\nmsg.url = 'http://' + (env.get('FASTAPI_HOST') || 'localhost') + ':8000/ingest/command';\nreturn msg;",
         "outputs": 1,
         "timeout": "",
         "noerr": 0,
@@ -356,7 +356,7 @@
         "method": "POST",
         "ret": "obj",
         "paytoqs": "ignore",
-        "url": "http://localhost:8000/ingest/command",
+        "url": "",
         "tls": "",
         "persist": false,
         "proxy": "",
@@ -377,7 +377,7 @@
         "type": "debug",
         "z": "tab-audit",
         "name": "instantActions logged",
-        "active": false,
+        "active": true,
         "tosidebar": true,
         "console": false,
         "tostatus": false,
@@ -415,7 +415,7 @@
         "type": "function",
         "z": "tab-oee",
         "name": "deriveCycle",
-        "func": "var s = msg.payload;\nif (!s || typeof s.serialNumber !== 'string') { return null; }\nvar serial = s.serialNumber;\nvar key = 'oee_' + serial;\nvar ctx = flow.get(key) || { orderId: '', startTime: null, active: false };\nvar cur = s.orderId || '';\nvar remaining = (s.nodeStates || []).length;\nvar cycle = null;\n\nif (cur && cur !== ctx.orderId) {\n    // a new order has started\n    ctx = { orderId: cur, startTime: s.timestamp, active: true };\n} else if (cur && cur === ctx.orderId && ctx.active && remaining === 0) {\n    // the active order has finished all of its nodes\n    cycle = { serialNumber: serial, orderId: cur, startTime: ctx.startTime, endTime: s.timestamp, result: 'SUCCEEDED' };\n    ctx.active = false;\n} else if (!cur && ctx.active) {\n    // the order was cleared (cancelled) while still active\n    cycle = { serialNumber: serial, orderId: ctx.orderId, startTime: ctx.startTime, endTime: s.timestamp, result: 'ABORTED' };\n    ctx = { orderId: '', startTime: null, active: false };\n}\n\nflow.set(key, ctx);\nif (!cycle) { return null; }\n\nvar dur = (new Date(cycle.endTime) - new Date(cycle.startTime)) / 1000;\ncycle.durationS = Math.max(0, Math.round(dur * 10) / 10);\nnode.status({ fill: cycle.result === 'SUCCEEDED' ? 'green' : 'red', shape: 'dot', text: cycle.orderId + ' ' + cycle.result + ' (' + cycle.durationS + 's)' });\nmsg.headers = { 'content-type': 'application/json' };\nmsg.payload = cycle;\nreturn msg;",
+        "func": "var s = msg.payload;\nif (!s || typeof s.serialNumber !== 'string') { return null; }\nvar serial = s.serialNumber;\nvar key = 'oee_' + serial;\nvar ctx = flow.get(key) || { orderId: '', startTime: null, active: false };\nvar cur = s.orderId || '';\nvar remaining = (s.nodeStates || []).length;\nvar cycle = null;\n\nif (cur && cur !== ctx.orderId) {\n    // a new order has started\n    ctx = { orderId: cur, startTime: s.timestamp, active: true };\n} else if (cur && cur === ctx.orderId && ctx.active && remaining === 0) {\n    // the active order has finished all of its nodes\n    cycle = { serialNumber: serial, orderId: cur, startTime: ctx.startTime, endTime: s.timestamp, result: 'SUCCEEDED' };\n    ctx.active = false;\n} else if (!cur && ctx.active) {\n    // the order was cleared (cancelled) while still active\n    cycle = { serialNumber: serial, orderId: ctx.orderId, startTime: ctx.startTime, endTime: s.timestamp, result: 'ABORTED' };\n    ctx = { orderId: '', startTime: null, active: false };\n}\n\nflow.set(key, ctx);\nif (!cycle) { return null; }\n\nvar dur = (new Date(cycle.endTime) - new Date(cycle.startTime)) / 1000;\ncycle.durationS = Math.max(0, Math.round(dur * 10) / 10);\nnode.status({ fill: cycle.result === 'SUCCEEDED' ? 'green' : 'red', shape: 'dot', text: cycle.orderId + ' ' + cycle.result + ' (' + cycle.durationS + 's)' });\nmsg.headers = { 'content-type': 'application/json' };\nmsg.payload = cycle;\nmsg.url = 'http://' + (env.get('FASTAPI_HOST') || 'localhost') + ':8000/ingest/oee-cycle';\nreturn msg;",
         "outputs": 1,
         "timeout": "",
         "noerr": 0,
@@ -438,7 +438,7 @@
         "method": "POST",
         "ret": "obj",
         "paytoqs": "ignore",
-        "url": "http://localhost:8000/ingest/oee-cycle",
+        "url": "",
         "tls": "",
         "persist": false,
         "proxy": "",
@@ -706,6 +706,192 @@
         "statusType": "msg",
         "x": 540,
         "y": 520,
+        "wires": []
+    },
+    {
+        "id": "tab-db-admin",
+        "type": "tab",
+        "label": "DB Admin",
+        "disabled": false,
+        "info": "Database reset + ad-hoc SQL via the postgresql node (node-red-contrib-postgresql).\n\n* **Reset DB** reads `docs/schema/schema.sql` from disk and executes it against Postgres — drops + recreates all tables, then reseeds fleet_config / maps / robots / named_locations.\n* **Run custom SQL** sends the inject payload straight to Postgres, so you can edit SQL right in the inject node and fire it.\n\nConnection params live on the `db-pg-config` config node (host=localhost, port=5432, db=amr_integration, user=postgres, password=admin — matching docker-compose.yml). Stop FastAPI/ROS Bridge before resetting, or they may crash on the missing tables mid-drop.\n\nRequires the `node-red-contrib-postgresql` palette package — install via Manage palette, or `npm install node-red-contrib-postgresql` in the node-red folder."
+    },
+    {
+        "id": "db-pg-config",
+        "type": "postgreSQLConfig",
+        "name": "amr_integration@localhost",
+        "host": "localhost",
+        "hostFieldType": "str",
+        "port": "5432",
+        "portFieldType": "num",
+        "database": "amr_integration",
+        "databaseFieldType": "str",
+        "ssl": "false",
+        "sslFieldType": "bool",
+        "applicationName": "node-red",
+        "applicationNameType": "str",
+        "max": "10",
+        "maxFieldType": "num",
+        "idle": "1000",
+        "idleFieldType": "num",
+        "connectionTimeout": "10000",
+        "connectionTimeoutType": "num",
+        "user": "postgres",
+        "userFieldType": "str",
+        "password": "admin",
+        "passwordFieldType": "str"
+    },
+    {
+        "id": "db-cmt-reset",
+        "type": "comment",
+        "z": "tab-db-admin",
+        "name": "Reset DB to default (runs schema.sql)",
+        "info": "Drops + recreates all tables and reseeds fleet_config / maps / robots / named_locations. Idempotent — safe to run repeatedly.",
+        "x": 220,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "db-reset-inject",
+        "type": "inject",
+        "z": "tab-db-admin",
+        "name": "Reset DB",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 130,
+        "y": 120,
+        "wires": [
+            [
+                "db-reset-read"
+            ]
+        ]
+    },
+    {
+        "id": "db-reset-read",
+        "type": "file in",
+        "z": "tab-db-admin",
+        "name": "read schema.sql",
+        "filename": "D:\\FYP\\integration-system\\docs\\schema\\schema.sql",
+        "filenameType": "str",
+        "format": "utf8",
+        "chunk": false,
+        "sendError": true,
+        "encoding": "utf8",
+        "allProps": false,
+        "x": 350,
+        "y": 120,
+        "wires": [
+            [
+                "db-reset-pg"
+            ]
+        ]
+    },
+    {
+        "id": "db-reset-pg",
+        "type": "postgresql",
+        "z": "tab-db-admin",
+        "name": "execute schema.sql",
+        "query": "{{{payload}}}",
+        "postgreSQLConfig": "db-pg-config",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 580,
+        "y": 120,
+        "wires": [
+            [
+                "db-reset-dbg"
+            ]
+        ]
+    },
+    {
+        "id": "db-reset-dbg",
+        "type": "debug",
+        "z": "tab-db-admin",
+        "name": "reset result",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload",
+        "statusType": "auto",
+        "x": 810,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "db-cmt-custom",
+        "type": "comment",
+        "z": "tab-db-admin",
+        "name": "Run custom SQL (edit payload, then inject)",
+        "info": "Double-click the inject node and edit the SQL in its payload field. On inject, the payload is sent straight to Postgres via the postgresql node. Multiple statements separated by `;` are supported; only the result of the last statement is returned.",
+        "x": 240,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "db-custom-inject",
+        "type": "inject",
+        "z": "tab-db-admin",
+        "name": "Run custom SQL",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "-- Edit this SQL, then press the inject button.\n-- Sent straight to Postgres via the postgresql node.\n--\n-- Examples (uncomment to use):\n--\n-- Add a new named location:\n-- INSERT INTO named_locations (id, map_id, label, x, y, theta)\n--     VALUES (5, 'map-001', 'Loading Bay', 1.500, 2.000, 0.0)\n--     ON CONFLICT (id) DO UPDATE\n--         SET map_id = EXCLUDED.map_id,\n--             label  = EXCLUDED.label,\n--             x      = EXCLUDED.x,\n--             y      = EXCLUDED.y,\n--             theta  = EXCLUDED.theta;\n--\n-- Add a second robot:\n-- INSERT INTO robots (serial_number, rosbridge_url, map_id)\n--     VALUES ('amr002', 'ws://localhost:9091', 'map-001')\n--     ON CONFLICT (serial_number) DO NOTHING;\n--\n-- Add a new map:\n-- INSERT INTO maps (map_id, label)\n--     VALUES ('map-003', 'Warehouse A')\n--     ON CONFLICT (map_id) DO NOTHING;\n--\n-- Wipe telemetry only (keep fleet definition):\n-- TRUNCATE state_snapshots, connection_log, oee_cycles,\n--          orders, instant_action_messages RESTART IDENTITY CASCADE;\n\nSELECT 'replace me with real SQL' AS note;\n",
+        "payloadType": "str",
+        "x": 150,
+        "y": 320,
+        "wires": [
+            [
+                "db-custom-pg"
+            ]
+        ]
+    },
+    {
+        "id": "db-custom-pg",
+        "type": "postgresql",
+        "z": "tab-db-admin",
+        "name": "execute SQL",
+        "query": "{{{payload}}}",
+        "postgreSQLConfig": "db-pg-config",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 400,
+        "y": 320,
+        "wires": [
+            [
+                "db-custom-dbg"
+            ]
+        ]
+    },
+    {
+        "id": "db-custom-dbg",
+        "type": "debug",
+        "z": "tab-db-admin",
+        "name": "custom result",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload",
+        "statusType": "auto",
+        "x": 620,
+        "y": 320,
         "wires": []
     }
 ]

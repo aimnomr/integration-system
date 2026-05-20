@@ -5,6 +5,7 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
+.pytest_cache/
 
 # Node.js
 node_modules/
@@ -12,6 +13,8 @@ node_modules/
 # Environment variables
 .env
 .env.*
+# ...but the committed templates must stay tracked.
+!.env.example
 
 # Node-RED credentials
 flows_cred.json

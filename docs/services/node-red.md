@@ -5,15 +5,17 @@ topics, audits commands, derives OEE, and persists everything to PostgreSQL via 
 FastAPI `/ingest/*` API. It is **no longer in the command path** — FastAPI publishes
 `order` / `instantActions` directly.
 
-The flow lives in `node-red/flows.json`, organised into **4 tabs**. Run it with
+The flow lives in `node-red/flows.json`, organised into **5 tabs**. Run it with
 `node-red --settings settings.js --userDir .` (UI at `http://localhost:1880`). All
 MQTT nodes use the shared `Local MQTT` broker config (`localhost:1883`); all topic
 subscriptions use `+` wildcards so they capture every robot.
 
-> **Persistence design:** Node-RED writes by POSTing to FastAPI `/ingest/*` (core
-> `http request` node) rather than holding its own PostgreSQL connection. No
-> PostgreSQL Node-RED contrib node is installed; this keeps the SQL in one place
-> (`fastapi-service/app/db.py`). See migration plan §8a.
+> **Persistence design:** the runtime telemetry tabs (1–3) write by POSTing to
+> FastAPI `/ingest/*` (core `http request` node) rather than holding their own
+> PostgreSQL connection — this keeps the SQL in one place (`fastapi-service/app/db.py`).
+> The **DB Admin** tab is the one exception: it uses the `node-red-contrib-postgresql`
+> palette node to talk to Postgres directly for schema reset and ad-hoc admin SQL,
+> bypassing FastAPI entirely. See migration plan §8a.
 
 ---
 
@@ -57,6 +59,32 @@ Manual VDA5050 injectors for `amr001`, plus outbound debug:
 - `amr/v2/+/+/state` and `amr/v2/+/+/connection` → debug
 
 Lets you exercise the robot directly, skipping FastAPI.
+
+## Tab 5 — DB Admin
+
+```
+Reset DB         → file in (schema.sql)        → postgresql node → debug
+Run custom SQL   → (inject payload as msg.payload) → postgresql node → debug
+```
+
+Two utility flows that talk straight to PostgreSQL via the shared `db-pg-config`
+config node (host=localhost, port=5432, db=amr_integration, user=postgres,
+password=admin — matching `docker-compose.yml`):
+
+- **Reset DB** — reads `docs/schema/schema.sql` from disk and executes it in one
+  call. This drops + recreates all 15 tables and reseeds `fleet_config`, `maps`,
+  `robots`, and `named_locations` — i.e. brings the database back to its
+  pre-runtime default. Stop FastAPI and the ROS Bridge first; both will crash if
+  they query while tables are dropped.
+- **Run custom SQL** — the inject node's payload is preloaded with commented
+  examples (add a named location, add a second robot, add a map, wipe telemetry
+  only). Double-click the inject node, replace the payload with whatever SQL you
+  want, and hit the button. Multi-statement payloads are supported; only the
+  result of the last statement comes back in the debug pane.
+
+> **Requires** the `node-red-contrib-postgresql` palette package (declared in
+> `node-red/package.json`). Run `npm install` in the `node-red/` folder, or install
+> via *Manage palette → Install* in the Node-RED UI.
 
 ---
 

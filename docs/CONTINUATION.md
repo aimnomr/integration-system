@@ -2,11 +2,129 @@
 
 > A point-in-time handoff snapshot so work can resume without re-deriving context.
 > **This decays** — trust the code and the canonical docs over this page.
-> Last updated: 2026-05-17.
+> Last updated: 2026-05-20.
 
 ---
 
 ## Recently completed (most recent first)
+
+**React frontend — Phase 0 backend prep (2026-05-20, uncommitted).** Backend
+work that unblocks the new React UI; no frontend code yet.
+
+- **G18 closed — CORS.** `main.py` registers `CORSMiddleware`; origins from
+  `CORS_ORIGINS` env (comma-separated, default `http://localhost:5173`).
+  `.env.example` and `schema/REST_ENDPOINTS.md` document the var. The last open
+  audit gap is now resolved.
+- **New `GET /orders` endpoint** — paged historical order list for the UI's
+  Order History screen. Filters: `serial`, `limit` (1–500, default 50), `before`
+  (ISO timestamp cursor). New `routers/orders.py` + `db.fetch_orders()`
+  (LEFT JOIN-aggregating `node_count` from `order_nodes`). Registered guarded
+  by `X-API-Key` in `main.py`. Documented in `schema/REST_ENDPOINTS.md`.
+- **Mosquitto WebSocket listener on port 9001** for the browser MQTT client.
+  Added to `mosquitto/mosquitto.conf` (3-line block, `protocol websockets`,
+  anonymous), exposed in `docker-compose.yml`. Backend services still use 1883
+  unchanged. Documented in `schema/MQTT_TOPICS.md` (new "Broker listeners" §).
+- **Tests** — `tests/test_orders.py` (5 SQL-shape + 3 router cases) and
+  `tests/test_cors.py` (4 origin / preflight cases). `httpx` added to
+  `requirements-dev.txt` for `TestClient`.
+
+Next: Phase 1 — scaffold `frontend/` (Vite + React + TS + Tailwind + MUI), wire
+the realtime singletons (REST client, MQTT-over-WS, rosbridge per robot), and
+deliver the AppShell + health pills as the first vertical slice. ROS contract
+to follow is captured in `docs/old-interface/PROJECT_OVERVIEW.md` (map topic
+`/reference/map`, camera `/camera/front/image_raw/compressed`, teleop
+`/web_teleop/cmd_vel`, action `/move_base`, degrees-at-UI angle convention).
+
+**Node-RED DB Admin tab + db.py startup-crash fix (2026-05-20, uncommitted).**
+
+- **`fetch_max_order_suffixes` crash on startup.** When seeding the per-robot
+  order-suffix counters (G21), `app/db.py` was casting
+  `split_part(order_id, '-order-', 2)` to INTEGER for every row in `orders`.
+  Legacy / hand-inserted `order_id` values whose suffix wasn't numeric (e.g.
+  a row whose suffix happened to be `goal`) made the CAST throw
+  `InvalidTextRepresentation` and FastAPI failed to boot. Fixed by filtering rows
+  to the canonical template — `WHERE split_part(order_id, '-order-', 2) ~ '^[0-9]+$'`
+  — so non-matching rows are ignored.
+- **New "DB Admin" tab in `node-red/flows.json`.** Two utility flows:
+  - **Reset DB** — `inject` → `file in` reads `docs/schema/schema.sql` from disk
+    → `postgresql` node executes it → `debug`. Drops + recreates all 15 tables
+    and reseeds `fleet_config`, `maps`, `robots`, `named_locations`.
+  - **Run custom SQL** — `inject` (editable SQL payload, preloaded with
+    commented examples) → `postgresql` node → `debug`. For ad-hoc inserts.
+  - Shared config node `db-pg-config` (host=localhost, db=amr_integration,
+    user=postgres, password=admin) targets the same instance as
+    `docker-compose.yml`.
+- **Dependency:** `node-red-contrib-postgresql` (`~0.15.4`) added to
+  `node-red/package.json`. `npm install` in `node-red/` before next Node-RED
+  start.
+- Docs updated: `docs/gaps.md` (note on G21 fix), `docs/services/node-red.md`
+  (Tab 5 added), `docs/setup.md` (step 4b + DB-reset tip).
+
+**Gaps G15–G21 closed except G18 (2026-05-18, uncommitted).** Six of the seven
+audit gaps are resolved; **G18 (CORS) was deferred by the user** — not needed until
+the React frontend work begins, kept open in [gaps.md](gaps.md).
+
+- **G16 — DB connection pooling.** `app/db.py` serves connections from a lazily
+  built `psycopg2.pool.ThreadedConnectionPool`; `_transaction` / `_query` /
+  `_execute` borrow + return instead of connect-per-query. New `_execute_returning`
+  helper for writes with `RETURNING` (also translates integrity errors). Pool size:
+  `DB_POOL_MIN` / `DB_POOL_MAX`. `DatabaseUnavailable` fallback preserved.
+- **G21 — counter persistence.** `RobotRegistry` seeds `headerId` / `orderId`
+  counters from the DB at startup (`db.fetch_max_header_ids`,
+  `db.fetch_max_order_suffixes`) so a restart resumes rather than resets.
+- **G20 — ingest validation.** `/ingest/*` routes typed with Pydantic models
+  (`IngestStateMessage` etc. in `app/schemas.py`, `extra="allow"` for VDA5050
+  arrays); malformed payloads → 422, not 500.
+- **G15 — reference-data CRUD.** New `routers/maps.py`, `routers/locations.py`;
+  robot CRUD added to `routers/robots.py`; `PUT /fleet` added to `routers/fleet.py`.
+  `db.py` CRUD helpers; `IntegrityConflict` → HTTP 409 (FK never cascaded).
+  `registry.reload()` after robots / fleet_config writes. Registered in `main.py`.
+- **G17 — navigation-failure observability.** `OrderStateMachine` records a
+  `navigationFailed` error on a non-`SUCCEEDED` result and exposes `getErrors()`;
+  `StateBuilder` merges it into `state.errors`. Cleared on the next node success.
+- **G19 — telemetry retention.** `main.py` background task prunes `state_snapshots`
+  + `connection_log` older than `TELEMETRY_RETENTION_DAYS` (default 30; 0 disables)
+  every 6 h via `db.prune_telemetry`.
+- **Tests.** ROS Bridge `npm test` — 19 passing (added G17 cases). FastAPI new
+  `tests/test_schemas.py` (8 tests, ingest + CRUD model validation) — passing.
+
+**Gap audit — G15–G21 opened (2026-05-18).** A code review surfaced seven gaps;
+see [gaps.md](gaps.md).
+
+**Operational gaps G10/G11/G13/G14 closed (2026-05-18, uncommitted).** The last four
+operational-readiness gaps are resolved — all of G1–G14 are now done.
+
+- **G10 — authentication.** New `fastapi-service/app/auth.py`: opt-in `X-API-Key`
+  auth via the `API_KEY` env var (unset = open API, the local-dev default). Guards
+  the client-facing routers (`robots`, `fleet`, `system`, `oee`); `/ingest/*` is
+  left open as the internal Node-RED → DB boundary. The ROS Bridge (`index.js`)
+  sends the key on `GET /fleet` when `API_KEY` is set.
+- **G11 — rate limiting.** New `fastapi-service/app/ratelimit.py`: a per-client-IP
+  sliding-window middleware, `RATE_LIMIT_PER_MINUTE` (default 120, `0` disables).
+  `/ingest/*` and docs routes are exempt; over-limit → 429 + `Retry-After`.
+- **G13 — tests.** ROS Bridge `node:test` suite under `ros-bridge-service/test/`
+  (15 tests, `npm test` — passing locally). FastAPI `pytest` suite under
+  `fastapi-service/tests/` (config/auth/ratelimit); needs `requirements-dev.txt`
+  installed — **not run locally yet** (pytest not installed in this environment),
+  but wired into CI. `mapStatus` was exported from `orderStateMachine.js` for tests.
+- **G14 — Docker & CI.** `Dockerfile` for each service, root `docker-compose.yml`
+  (full stack, healthcheck-gated start order, auto-applies `schema.sql`),
+  `.github/workflows/ci.yml`. `mosquitto/mosquitto.conf` was written (it was empty).
+  `node-red/flows.json` MQTT broker host is `${MQTT_HOST}` (a whole-property
+  `${ENV}` — Node-RED substitutes those). The `/ingest/*` HTTP URLs are built in
+  the validating `function` nodes via `env.get('FASTAPI_HOST')` and passed as
+  `msg.url` (the `http request` nodes have a blank `url`) — embedded `${ENV}` in a
+  URL string is *not* substituted by Node-RED, so this is the reliable form. Both
+  default to `localhost` via `settings.js`; docker-compose overrides them
+  (`MQTT_HOST: mosquitto`, `FASTAPI_HOST: fastapi`).
+
+**Real map seed data (2026-05-18, uncommitted).** `docs/schema/schema.sql` —
+replaced the `'default'` placeholder map with two real maps, `map-001`
+("Default Sim World") and `map-002` ("Office CPR"). `amr001` and all four named
+locations re-pointed from `'default'` to `map-001`. Added the `map-NNN`
+(zero-padded 3-digit) naming convention so maps stay filterable
+(`WHERE map_id LIKE 'map-%'`) and sortable. This resolves the old placeholder-`mapId`
+caveat. No code changes — seed data only.
 
 **The VDA5050 migration is fully implemented — Phases 0–7 done** (see
 [plans/vda5050-migration.md](plans/vda5050-migration.md)). The project has moved off
@@ -39,10 +157,13 @@ multi-robot capable.
 ## Current state
 
 - **Code-complete and syntax-checked, NOT end-to-end runtime-tested.**
-  - ros-bridge-service: all files `node --check` + module-graph import OK.
-  - fastapi-service: all files `py_compile` OK; registry + VDA5050 builders run-tested.
-  - node-red/flows.json: valid JSON, node-graph integrity OK (36 nodes, 4 tabs).
-- Resolved gaps: G1–G9, G12. Open: G10, G11, G13, G14 ([gaps.md](gaps.md)).
+  - ros-bridge-service: all files `node --check` + module-graph import OK;
+    `npm test` (15 `node:test` tests) passing.
+  - fastapi-service: all files `py_compile` OK; `pytest` suite written, runs in CI,
+    not yet run locally (pytest not installed here).
+  - node-red/flows.json: valid JSON, node-graph integrity OK.
+- **Gaps G1–G17, G19–G21 resolved; only G18 (CORS) open** ([gaps.md](gaps.md)).
+  G18 was deferred by the user until the React frontend work begins.
 
 ---
 
@@ -115,23 +236,25 @@ It now lives **only in the database**:
 
 ### NEXT: runtime-test the pipeline
 
-- **Runtime-test the pipeline** — needs MQTT broker, rosbridge + a robot, PostgreSQL:
-  `pip install -r fastapi-service/requirements.txt`; create the DB + apply
-  `docs/schema/schema.sql`; start services **in order** (Postgres → FastAPI → ROS
-  Bridge → Node-RED); `POST /robots/amr001/order`; verify auto-advance, instant
-  actions, and the retained `CONNECTIONBROKEN`.
-- Address open gaps G10, G11, G13, G14 ([gaps.md](gaps.md)).
+- **Runtime-test the pipeline** — needs MQTT broker, rosbridge + a robot, PostgreSQL.
+  Either `docker compose up --build` (brings up the whole stack in order and
+  auto-applies the schema), or manually: `pip install -r fastapi-service/requirements.txt`;
+  create the DB + apply `docs/schema/schema.sql`; start services **in order**
+  (Postgres → FastAPI → ROS Bridge → Node-RED). Then `POST /robots/amr001/order` and
+  verify auto-advance, instant actions, and the retained `CONNECTIONBROKEN`.
+- Run the FastAPI `pytest` suite once `requirements-dev.txt` is installed.
+- All gaps G1–G14 are resolved. The reference-data CRUD API (G15) is the next
+  feature — see the PLANNED section below.
 
 ---
 
-## ▶ PLANNED: CRUD API for reference data (decided, not started)
+## ✅ DONE: CRUD API for reference data (G15) — 2026-05-18
 
-**Problem.** There is **no CRUD API** for the reference tables (`fleet_config`, `maps`,
-`robots`, `named_locations`). They are only seed data — editing them means re-applying
-`schema.sql`, which **drops and recreates every table and wipes all telemetry**. The
-existing endpoints are command / telemetry-ingest / read-only only. Now that the DB is
-the single source of truth, per-row CRUD is the natural next step. (Suggested gap ID
-**G15** — add to [gaps.md](gaps.md) when this is picked up.)
+Per-row CRUD for the reference tables is implemented as designed below. Endpoints:
+`maps` (`routers/maps.py`), `named_locations` (`routers/locations.py`), robot CRUD on
+`routers/robots.py`, `PUT /fleet` on `routers/fleet.py`. FK / unique violations →
+HTTP 409 via `db.IntegrityConflict` (never cascaded); `registry.reload()` runs after
+robots / fleet_config writes. The original design follows for reference.
 
 ### Endpoints to add
 
@@ -191,8 +314,8 @@ the 409 guard), then `robots` (FK + `registry.reload()`), then `fleet_config` (j
   amr_integration, `DB_USER` postgres, `DB_PASSWORD` admin.
 - Node-RED's `/ingest/*` calls assume FastAPI at `http://localhost:8000`; the ROS
   Bridge's `FLEET_API_URL` defaults to `http://localhost:8000/fleet`.
-- `mapId` is the placeholder `"default"` — set it to the real map name in the `maps`
-  and `robots` tables once one is established.
+- Maps now use the `map-NNN` convention (`map-001`, `map-002`) — seeded in
+  `schema.sql`. Add new maps with the next `map-NNN` id and a human-readable `label`.
 
 ## Canonical docs
 

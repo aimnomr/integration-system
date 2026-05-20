@@ -1,0 +1,51 @@
+name: CI
+
+# Continuous integration (G14): syntax-checks and per-service test suites (G13).
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  ros-bridge:
+    name: ROS Bridge Service
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ros-bridge-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - name: Syntax-check sources
+        run: node --check index.js && for f in src/*.js; do node --check "$f"; done
+      - name: Run tests
+        run: npm test
+
+  fastapi:
+    name: FastAPI Service
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fastapi-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Compile-check sources
+        run: python -m compileall app main.py
+      - name: Run tests
+        run: pytest
+
+  node-red:
+    name: Node-RED flows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate flows.json
+        run: python -c "import json; json.load(open('node-red/flows.json'))"
