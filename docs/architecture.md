@@ -14,14 +14,22 @@ and [schema/VDA5050_MESSAGES.md](schema/VDA5050_MESSAGES.md).
 
 | Service | Tech | Address | Role |
 |---|---|---|---|
-| **FastAPI Service** | Python, FastAPI, paho-mqtt | HTTP `:8000` | FMS gateway — publishes VDA5050 orders, serves state/OEE, ingests telemetry |
-| **Mosquitto** | Mosquitto MQTT broker | `:1883` | Central message broker between all services |
-| **Node-RED** | Node-RED | `:1880` | Telemetry sink — ingests `state`/`connection`, audits commands, derives OEE |
+| **React Frontend** | Vite + React 19 + TS + Tailwind + MUI | `:5173` (dev) | Operator console — commands via REST, telemetry via MQTT-over-WS, camera + teleop via per-robot rosbridge |
+| **FastAPI Service** | Python, FastAPI, paho-mqtt | HTTP `:8000` | FMS gateway — publishes VDA5050 orders, serves state/OEE/order history, ingests telemetry, reference-data CRUD |
+| **Mosquitto** | Mosquitto MQTT broker | TCP `:1883` + WS `:9001` | Central message broker; TCP for backend services, WS for the browser |
+| **Node-RED** | Node-RED | `:1880` | Telemetry sink — ingests `state`/`connection`, audits commands, derives OEE; also a DB Admin tab |
 | **ROS Bridge Service** | Node.js, roslib, mqtt | — | Per-robot VDA5050 ↔ ROS bridge (FleetManager + Robot) |
-| **PostgreSQL** | PostgreSQL | `:5432` | Persistent storage — state, connection, command audit, OEE |
+| **PostgreSQL** | PostgreSQL | `:5432` | Persistent storage — state, connection, command audit, OEE, reference data |
 
-MQTT is the central backbone — every service is decoupled and communicates through
-Mosquitto topics. Topics are per-robot: `amr/v2/moverobotic/{serialNumber}/{topic}`.
+MQTT is the central backbone for backend services — they are decoupled and
+communicate through Mosquitto topics. Topics are per-robot:
+`amr/v2/moverobotic/{serialNumber}/{topic}`.
+
+The browser has **three independent realtime lanes** that bypass each other:
+REST (FastAPI), MQTT-over-WS (Mosquitto :9001 — VDA5050 `state` + `connection`),
+and rosbridge WebSocket (per robot — `/reference/map`, `/amcl_pose`,
+`/camera/front/image_raw/compressed`, `/web_teleop/cmd_vel`, …). Losing one
+lane degrades only the features that use it.
 
 ---
 
@@ -68,10 +76,11 @@ passive audit log — parallel to the command path, it cannot block delivery.
 
 | Service | Does |
 |---|---|
-| **FastAPI** | FMS gateway — builds & publishes VDA5050 `order`/`instantActions`; serves state/OEE from PostgreSQL; `/ingest/*` writes telemetry. See [services/fastapi-service.md](services/fastapi-service.md) |
-| **Node-RED** | Subscribes the VDA5050 telemetry topics, derives OEE, persists via the `/ingest/*` API. See [services/node-red.md](services/node-red.md) |
+| **React Frontend** | Operator console; consumes the REST + MQTT-over-WS + rosbridge contracts. See [services/frontend.md](services/frontend.md) |
+| **FastAPI** | FMS gateway — builds & publishes VDA5050 `order`/`instantActions`; serves state/OEE/order history from PostgreSQL; `/ingest/*` writes telemetry; reference-data CRUD. See [services/fastapi-service.md](services/fastapi-service.md) |
+| **Node-RED** | Subscribes the VDA5050 telemetry topics, derives OEE, persists via the `/ingest/*` API. DB Admin tab for schema reset + ad-hoc SQL. See [services/node-red.md](services/node-red.md) |
 | **ROS Bridge Service** | One `Robot` per registry entry; translates VDA5050 ↔ ROS. See [services/ros-bridge-service.md](services/ros-bridge-service.md) |
-| **Mosquitto** | MQTT broker — routes all messages between services |
+| **Mosquitto** | MQTT broker — routes all messages between services (TCP `:1883`) and between Mosquitto and the browser (WS `:9001`) |
 | **PostgreSQL** | Persistent storage. See [schema/DATABASE_SCHEMA.md](schema/DATABASE_SCHEMA.md) |
 
 ---

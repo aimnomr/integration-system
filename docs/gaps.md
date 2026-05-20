@@ -3,7 +3,7 @@
 Open items not yet addressed, consolidated for visibility. For what *is* working see
 [status.md](status.md). Resolved gaps are listed at the bottom.
 
-> Last updated: 2026-05-20. Severity is a rough triage (High = blocks core function,
+> Last updated: 2026-05-21. Severity is a rough triage (High = blocks core function,
 > Medium = limits usefulness, Low = polish / hardening). Gap IDs are stable — resolved
 > ones keep their number rather than being renumbered.
 

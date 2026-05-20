@@ -6,7 +6,52 @@
 
 ---
 
+## Current project state (snapshot)
+
+End-to-end implemented + manually verified:
+
+- **Backend (FastAPI + Mosquitto + ROS Bridge + Node-RED + PostgreSQL)** —
+  code-complete, CI green, manually exercised against a real robot. All
+  originally tracked gaps **G1–G21 closed** (see `docs/gaps.md`).
+- **React frontend (`frontend/`)** — feature-complete v1: Dashboard, Robot
+  Detail (live MapCanvas), Dispatch (named + manual), Teleop (camera + 3×3
+  keyboard pad), Order History (paged), OEE dashboard (cards + bar chart +
+  cycles log), Admin CRUD for Maps / Locations / Robots / Fleet Config, Health
+  page. Stack: Vite 6 + React 19 + TS + Tailwind 4 + MUI 7 + MUI X (DataGrid
+  & Charts) + TanStack Query + `mqtt` + `roslib`.
+- **Realtime split** — MQTT-over-WS to Mosquitto :9001 for low-frequency
+  telemetry; rosbridge direct from the browser per robot for high-frequency
+  camera + teleop + map.
+- **Newman smoke suite** (`docs/postman/`) — 30 requests, 46 assertions
+  replayable via `.\docs\postman\run-newman.ps1`. HTML + JSON reports.
+- **CI** (`.github/workflows/ci.yml`) — three jobs (ROS Bridge, FastAPI,
+  Node-RED). FastAPI suite includes `test_orders.py`, `test_cors.py`,
+  `test_schemas.py`, `test_auth.py`, `test_config.py`, `test_ratelimit.py`.
+  `tests/conftest.py` stubs the four DB calls `RobotRegistry.__init__` makes,
+  so router imports don't need a live Postgres in CI.
+
+Nothing tracked as open in `docs/gaps.md`. The manual test checklist
+(`docs/manual-test-checklist.md`) is the long-form regression script;
+Phase 9–13 cover the new frontend and Phase-0 backend work.
+
+---
+
 ## Recently completed (most recent first)
+
+**FastAPI CI fix — DB stub in conftest (2026-05-21, uncommitted).** GitHub
+Actions was red because `test_orders.py` imports `app.routers.orders`, which
+transitively imports `app.robots`, which constructs `registry = RobotRegistry()`
+at module load, which calls `db.fetch_fleet_config()` — no Postgres in CI.
+
+- New `fastapi-service/tests/conftest.py` — starts four `unittest.mock.patch`
+  instances against `app.db.fetch_fleet_config`, `app.db.fetch_robots`,
+  `app.db.fetch_max_header_ids`, `app.db.fetch_max_order_suffixes` returning
+  canned fleet data (one robot `amr001`, identity `amr/v2/moverobotic`).
+- `conftest.py` is loaded by pytest before any test file, so the patches are
+  in place when the module-level `RobotRegistry()` call fires.
+- Production fail-fast design unchanged: `app/robots.py` still raises if
+  Postgres is unreachable at startup; only the test-time path gets a stub.
+- After this change the FastAPI CI job is green.
 
 **Newman smoke-test suite (2026-05-21, uncommitted).** Replayable HTTP smoke
 tests for the FastAPI gateway.

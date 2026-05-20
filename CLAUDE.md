@@ -11,10 +11,10 @@ Need to update CONTINUATION.md before ending session
 
 ## Project Overview
 
-This is an **AMR (Autonomous Mobile Robot) Integration System** — middleware that
-bridges a ROS-based mobile robot to external REST clients, using MQTT as the central
-messaging backbone across four services (FastAPI, Mosquitto, Node-RED, ROS Bridge
-Service).
+This is an **AMR (Autonomous Mobile Robot) Integration System** — full-stack
+fleet console for a ROS-based mobile robot, using MQTT as the central messaging
+backbone. Five components: a React frontend (operator console) on top of four
+backend services (FastAPI, Mosquitto, Node-RED, ROS Bridge Service).
 
 ## Knowledge Base
 
@@ -27,13 +27,18 @@ All project documentation lives under `docs/`. Start at
 | How services connect, message pathways | `docs/architecture.md` |
 | Prerequisites and how to run everything | `docs/setup.md` |
 | What is implemented | `docs/status.md` |
-| Gaps not yet addressed (G1–G14) | `docs/gaps.md` |
+| Gaps tracker (currently empty — G1–G21 resolved) | `docs/gaps.md` |
+| Handoff snapshot — recent work + current state | `docs/CONTINUATION.md` |
 | Why key design choices were made | `docs/decisions.md` |
 | Domain terms | `docs/glossary.md` |
-| Per-service reference | `docs/services/` |
+| Per-service reference (FastAPI, ROS Bridge, Node-RED, frontend) | `docs/services/` |
 | Contracts — REST, MQTT, ROS, database | `docs/schema/` |
 | Documentation format standards | `docs/convention/` |
 | Forward-looking plans (e.g. VDA5050) | `docs/plans/` |
+| Newman API smoke suite (collection + runner) | `docs/postman/` |
+| Long-form regression checklist | `docs/manual-test-checklist.md` |
+| Reference notes from the previous single-robot UI | `docs/old-interface/` |
+| The React frontend itself | `frontend/` (see `frontend/README.md`) |
 
 ## Source of Truth
 

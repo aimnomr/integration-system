@@ -36,3 +36,9 @@ Domain terms used across this project.
 | **connection (message)** | The VDA5050 liveness message — `ONLINE` / `OFFLINE` / `CONNECTIONBROKEN`; published retained, the broken state set as the MQTT Last-Will. |
 | **headerId** | A counter on every VDA5050 message, incrementing per topic per robot — lets a receiver detect dropped or reordered messages. |
 | **serialNumber** | The unique identifier of one robot; a segment of every VDA5050 topic (`amr/v2/moverobotic/{serialNumber}/...`). |
+| **Vite** | The frontend build tool / dev server. Run with `npm run dev`; produces a static bundle with `npm run build`. |
+| **MUI / MUI X** | Material UI — the React component library used for complex widgets (DataGrid, Drawer, charts). The X packages are the data + chart additions. |
+| **Tailwind CSS** | Utility-first CSS used for layout / spacing / custom components in the frontend, alongside MUI. |
+| **TanStack Query** | The React data-fetching / server-cache library (`useQuery`, `useInfiniteQuery`, `useMutation`) — keeps REST responses cached and in sync across components. |
+| **Newman** | The CLI runner for Postman collections — used in `docs/postman/` for replayable HTTP smoke tests. |
+| **MapCanvas** | The frontend's live SLAM map component (`src/components/map/MapCanvas.tsx`). Renders `/reference/map` and overlays the robot arrow + paths + named-location pins. |
