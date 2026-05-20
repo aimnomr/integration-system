@@ -8,6 +8,39 @@
 
 ## Recently completed (most recent first)
 
+**React frontend — Phase 1 scaffold (2026-05-20, uncommitted).** New `frontend/`
+workspace; routes, layout, and branding are reviewable. No data wiring yet —
+that lands in Phase 2.
+
+- **Stack:** Vite 6 + React 19 + TypeScript, Tailwind 4 + MUI 7 (Tailwind
+  `important: 'html'` so utilities win over MUI's component styles), TanStack
+  Query, `mqtt`, `roslib`. Path alias `@/* → src/*`.
+- **AppShell** — `components/layout/{AppShell,AppBar,LeftNav}.tsx`. Permanent
+  left nav with two sections (Operate, Admin); the AppBar carries the brand
+  logo + name and three stub StatusPills (MQTT / DB / ROS) that Phase 2 will
+  wire to live data.
+- **Branding** — `src/branding/branding.ts` is the single source of truth
+  consumed by both Tailwind (build-time via `tailwind.config.ts`) and MUI
+  (runtime via `AppProviders.tsx`). Default palette inherits the previous
+  interface (slate-900 / indigo-500). Editing one file rebrands the app.
+- **Routes** — `/`, `/robots`, `/robots/:serial`, `/dispatch`, `/orders`,
+  `/oee`, `/teleop`, `/teleop/:serial`, `/health`, `/admin/{maps,locations,robots,fleet}`,
+  `*` (404). Every page is a `PagePlaceholder` shell that names which phase
+  will deliver it. The router compiles and navigates without any backend
+  running.
+- **Dev experience** — Vite proxies `/api/*` → `VITE_API_URL` so the React app
+  can call same-origin paths in dev (CORS is still in place on the backend as
+  a backup for prod). `.env.example` documents all `VITE_*` vars.
+- **Docs** — new `frontend/README.md`; `docs/setup.md` got a step 6 and four
+  `VITE_*` rows in the env-vars table.
+
+**Next (Phase 2 — connectivity layer):** add `src/api/*` (typed REST client
+wrappers, one per FastAPI router), `src/realtime/{mqttClient,rosbridgeClient}.ts`,
+`src/hooks/{useFleet,useRobotState,useMqttTopic,useRosTopic,useSystemStatus}.ts`,
+generate `types/openapi.d.ts` from FastAPI's `/openapi.json`, and wire the
+three header StatusPills + the Health page to live data. Phase 3 builds the
+v1 screens on top.
+
 **React frontend — Phase 0 backend prep (2026-05-20, uncommitted).** Backend
 work that unblocks the new React UI; no frontend code yet.
 

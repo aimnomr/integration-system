@@ -36,6 +36,11 @@ node index.js
 # 5. Node-RED  (http://localhost:1880)
 cd node-red
 node-red --settings settings.js --userDir .
+
+# 6. Frontend  (http://localhost:5173 — Vite dev server)
+cd frontend
+npm install
+npm run dev
 ```
 
 The robot's `rosbridge_server` must be reachable at the `rosbridge_url` set for the
@@ -53,7 +58,7 @@ robot in the `robots` database table (default `ws://localhost:9090`).
 | Requirement | Used by | Notes |
 |---|---|---|
 | Python 3.11+ | FastAPI service | `venv` provided under `fastapi-service/venv/` |
-| Node.js (LTS) | ROS Bridge Service, Node-RED | |
+| Node.js (LTS) | ROS Bridge Service, Node-RED, Frontend | |
 | Mosquitto | broker | install separately; run with the repo's config |
 | Node-RED | Node-RED service | install globally (`npm i -g node-red`) or locally |
 | PostgreSQL | persistence | install separately; create the DB (below) |
@@ -189,6 +194,10 @@ psql -U postgres -d amr_integration -f docs/schema/schema.sql
 | `LOG_LEVEL` | ROS Bridge | `info` | Log verbosity — `debug`/`info`/`warn`/`error` (optional) |
 | `MQTT_HOST` | Node-RED | `localhost` | MQTT broker host for `flows.json` (defaulted in `settings.js`) |
 | `FASTAPI_HOST` | Node-RED | `localhost` | FastAPI host for the `/ingest/*` calls in `flows.json` |
+| `VITE_API_URL` | Frontend | `http://localhost:8000` | FastAPI base URL — REST + Vite dev-proxy target |
+| `VITE_MQTT_WS_URL` | Frontend | `ws://localhost:9001` | Mosquitto WebSocket listener |
+| `VITE_API_KEY` | Frontend | _(empty)_ | Sent as `X-API-Key` on every REST call when set |
+| `VITE_APP_NAME` | Frontend | `AMR Console` | App name shown in the top bar |
 
 ---
 
