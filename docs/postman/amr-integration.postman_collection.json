@@ -1,0 +1,604 @@
+{
+  "info": {
+    "name": "AMR Integration API",
+    "_postman_id": "f1d5a8a0-amr1-4f80-9b0e-amrcollection01",
+    "description": "Smoke-test collection for the FastAPI gateway. Each request has at least a status-code assertion; many also verify JSON shape. CRUD blocks are self-cleaning (the DELETE at the end of each section removes anything POSTed earlier).\n\nRun with Newman: `npx newman run docs/postman/amr-integration.postman_collection.json -e docs/postman/local.postman_environment.json -r cli,htmlextra`.\n\nRun via the wrapper: `.\\docs\\postman\\run-newman.ps1`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      { "key": "key",   "value": "X-API-Key",   "type": "string" },
+      { "key": "value", "value": "{{apiKey}}",  "type": "string" },
+      { "key": "in",    "value": "header",      "type": "string" }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Strip the auth header when no API key is configured — sending an empty",
+          "// X-API-Key would still be rejected if FastAPI later turns auth on.",
+          "if (!pm.environment.get('apiKey')) {",
+          "    pm.request.headers.remove('X-API-Key');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Health & System",
+      "item": [
+        {
+          "name": "GET /system/status",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/system/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["system", "status"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('reports each service', () => {",
+              "  pm.expect(j).to.have.property('mosquitto');",
+              "  pm.expect(j).to.have.property('database');",
+              "  pm.expect(j).to.have.property('roslib');",
+              "  pm.expect(j).to.have.property('node_red');",
+              "});",
+              "pm.test('mosquitto connected', () => pm.expect(j.mosquitto.status).to.eql('connected'));",
+              "pm.test('database connected',  () => pm.expect(j.database.status).to.eql('connected'));"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "2. Fleet",
+      "item": [
+        {
+          "name": "GET /fleet",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/fleet", "host": ["{{baseUrl}}"], "path": ["fleet"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('has identity fields', () => {",
+              "  pm.expect(j).to.have.property('interfaceName');",
+              "  pm.expect(j).to.have.property('majorVersion');",
+              "  pm.expect(j).to.have.property('manufacturer');",
+              "  pm.expect(j).to.have.property('robots').that.is.an('array');",
+              "});",
+              "if (j.robots.length > 0) pm.collectionVariables.set('seedSerial', j.robots[0].serialNumber);"
+            ]}
+          }]
+        },
+        {
+          "name": "PUT /fleet (no-op rewrite)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"interface_name\": \"amr\",\n  \"major_version\": \"v2\",\n  \"version\": \"2.0.0\",\n  \"manufacturer\": \"moverobotic\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/fleet", "host": ["{{baseUrl}}"], "path": ["fleet"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "3. Robots — read",
+      "item": [
+        {
+          "name": "GET /robots",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/robots", "host": ["{{baseUrl}}"], "path": ["robots"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('robots array present', () => pm.expect(j.robots).to.be.an('array'));"
+            ]}
+          }]
+        },
+        {
+          "name": "GET /robots/{seed}",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/robots/{{seedSerial}}",
+              "host": ["{{baseUrl}}"], "path": ["robots", "{{seedSerial}}"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('returned seed serial', () => pm.expect(j.serialNumber).to.eql(pm.collectionVariables.get('seedSerial')));"
+            ]}
+          }]
+        },
+        {
+          "name": "GET /robots/{seed}/state",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/robots/{{seedSerial}}/state",
+              "host": ["{{baseUrl}}"], "path": ["robots", "{{seedSerial}}", "state"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 or 503 (DB)', () => pm.expect([200, 503]).to.include(pm.response.code));"
+            ]}
+          }]
+        },
+        {
+          "name": "GET /robots/UNKNOWN (404 expected)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/robots/UNKNOWN",
+              "host": ["{{baseUrl}}"], "path": ["robots", "UNKNOWN"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "4. Robots — write (round-trip)",
+      "item": [
+        {
+          "name": "POST /robots (create amr-test)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serial_number\": \"amr-test\",\n  \"rosbridge_url\": \"ws://localhost:9099\",\n  \"map_id\": \"map-001\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/robots", "host": ["{{baseUrl}}"], "path": ["robots"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('201 Created (or 409 if it already exists)', () => pm.expect([201, 409]).to.include(pm.response.code));"
+            ]}
+          }]
+        },
+        {
+          "name": "PUT /robots/amr-test",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rosbridge_url\": \"ws://localhost:9100\",\n  \"map_id\": \"map-001\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/robots/amr-test",
+              "host": ["{{baseUrl}}"], "path": ["robots", "amr-test"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));"
+            ]}
+          }]
+        },
+        {
+          "name": "DELETE /robots/amr-test",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/robots/amr-test",
+              "host": ["{{baseUrl}}"], "path": ["robots", "amr-test"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "5. Orders & instant actions",
+      "item": [
+        {
+          "name": "POST /robots/{seed}/order — single node",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nodes\": [\n    { \"x\": 0.0, \"y\": 0.0, \"theta\": 0.0 }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/robots/{{seedSerial}}/order",
+              "host": ["{{baseUrl}}"], "path": ["robots", "{{seedSerial}}", "order"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('returns orderId + nodeCount', () => {",
+              "  pm.expect(j.orderId).to.be.a('string');",
+              "  pm.expect(j.nodeCount).to.eql(1);",
+              "});"
+            ]}
+          }]
+        },
+        {
+          "name": "POST /robots/{seed}/instant-actions (cancel)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action_type\": \"cancelOrder\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/robots/{{seedSerial}}/instant-actions",
+              "host": ["{{baseUrl}}"], "path": ["robots", "{{seedSerial}}", "instant-actions"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));"
+            ]}
+          }]
+        },
+        {
+          "name": "POST /robots/{seed}/order — empty (422 expected)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"nodes\": []\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/robots/{{seedSerial}}/order",
+              "host": ["{{baseUrl}}"], "path": ["robots", "{{seedSerial}}", "order"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('422 Unprocessable Entity', () => pm.response.to.have.status(422));"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "6. Order history (Phase 0)",
+      "item": [
+        {
+          "name": "GET /orders",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/orders", "host": ["{{baseUrl}}"], "path": ["orders"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('orders + count', () => {",
+              "  pm.expect(j.orders).to.be.an('array');",
+              "  pm.expect(j.count).to.be.a('number');",
+              "});"
+            ]}
+          }]
+        },
+        {
+          "name": "GET /orders?serial={seed}&limit=5",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/orders?serial={{seedSerial}}&limit=5",
+              "host": ["{{baseUrl}}"], "path": ["orders"],
+              "query": [
+                { "key": "serial", "value": "{{seedSerial}}" },
+                { "key": "limit",  "value": "5" }
+              ]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('at most 5 rows', () => pm.expect(j.orders.length).to.be.at.most(5));",
+              "pm.test('all rows are for the seed serial', () => {",
+              "  j.orders.forEach(o => pm.expect(o.serial_number).to.eql(pm.collectionVariables.get('seedSerial')));",
+              "});"
+            ]}
+          }]
+        },
+        {
+          "name": "GET /orders?serial=ghost (404 expected)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/orders?serial=ghost",
+              "host": ["{{baseUrl}}"], "path": ["orders"],
+              "query": [{ "key": "serial", "value": "ghost" }]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+            ]}
+          }]
+        },
+        {
+          "name": "GET /orders?limit=0 (422 expected)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/orders?limit=0",
+              "host": ["{{baseUrl}}"], "path": ["orders"],
+              "query": [{ "key": "limit", "value": "0" }]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('422 Unprocessable Entity', () => pm.response.to.have.status(422));"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "7. OEE",
+      "item": [
+        {
+          "name": "GET /robots/{seed}/oee/summary",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/robots/{{seedSerial}}/oee/summary",
+              "host": ["{{baseUrl}}"], "path": ["robots", "{{seedSerial}}", "oee", "summary"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('has totals', () => {",
+              "  pm.expect(j).to.have.property('total_cycles');",
+              "  pm.expect(j).to.have.property('succeeded');",
+              "  pm.expect(j).to.have.property('failed');",
+              "});"
+            ]}
+          }]
+        },
+        {
+          "name": "GET /robots/{seed}/oee/cycles?limit=10",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/robots/{{seedSerial}}/oee/cycles?limit=10",
+              "host": ["{{baseUrl}}"], "path": ["robots", "{{seedSerial}}", "oee", "cycles"],
+              "query": [{ "key": "limit", "value": "10" }]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('cycles array', () => pm.expect(j.cycles).to.be.an('array'));"
+            ]}
+          }]
+        },
+        {
+          "name": "GET /robots/{seed}/oee/availability",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/robots/{{seedSerial}}/oee/availability",
+              "host": ["{{baseUrl}}"], "path": ["robots", "{{seedSerial}}", "oee", "availability"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('availability is a fraction', () => {",
+              "  pm.expect(j.availability).to.be.at.least(0);",
+              "  pm.expect(j.availability).to.be.at.most(1);",
+              "});"
+            ]}
+          }]
+        }
+      ]
+    },
+    {
+      "name": "8. Maps CRUD",
+      "item": [
+        {
+          "name": "GET /maps",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/maps", "host": ["{{baseUrl}}"], "path": ["maps"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));"
+          ]}}]
+        },
+        {
+          "name": "POST /maps (create map-test)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"map_id\": \"map-test\",\n  \"label\": \"Newman Test Map\"\n}" },
+            "url": { "raw": "{{baseUrl}}/maps", "host": ["{{baseUrl}}"], "path": ["maps"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 or 409 (already exists)', () => pm.expect([201, 409]).to.include(pm.response.code));"
+          ]}}]
+        },
+        {
+          "name": "PUT /maps/map-test",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"label\": \"Renamed by Newman\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/maps/map-test",
+              "host": ["{{baseUrl}}"], "path": ["maps", "map-test"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));"
+          ]}}]
+        },
+        {
+          "name": "DELETE /maps/map-test",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/maps/map-test",
+              "host": ["{{baseUrl}}"], "path": ["maps", "map-test"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));"
+          ]}}]
+        },
+        {
+          "name": "DELETE /maps/map-001 (409 expected — referenced)",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/maps/map-001",
+              "host": ["{{baseUrl}}"], "path": ["maps", "map-001"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('409 Conflict (FK still references it)', () => pm.response.to.have.status(409));"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "9. Named Locations CRUD",
+      "item": [
+        {
+          "name": "GET /locations",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/locations", "host": ["{{baseUrl}}"], "path": ["locations"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const j = pm.response.json();",
+            "pm.test('locations array', () => pm.expect(j.locations).to.be.an('array'));"
+          ]}}]
+        },
+        {
+          "name": "POST /locations (create #999)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"id\": 999,\n  \"map_id\": \"map-001\",\n  \"label\": \"Newman Dock\",\n  \"x\": 1.0,\n  \"y\": 2.0\n}" },
+            "url": { "raw": "{{baseUrl}}/locations", "host": ["{{baseUrl}}"], "path": ["locations"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 or 409', () => pm.expect([201, 409]).to.include(pm.response.code));",
+            "if (pm.response.code === 201) {",
+            "  const j = pm.response.json();",
+            "  pm.test('theta defaults to 0', () => pm.expect(j.theta).to.eql(0));",
+            "}"
+          ]}}]
+        },
+        {
+          "name": "PUT /locations/999",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"map_id\": \"map-001\",\n  \"label\": \"Renamed Dock\",\n  \"x\": 1.5,\n  \"y\": 2.5,\n  \"theta\": 1.57\n}" },
+            "url": { "raw": "{{baseUrl}}/locations/999", "host": ["{{baseUrl}}"], "path": ["locations", "999"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));"
+          ]}}]
+        },
+        {
+          "name": "DELETE /locations/999",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/locations/999", "host": ["{{baseUrl}}"], "path": ["locations", "999"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "10. Ingest (open endpoints)",
+      "item": [
+        {
+          "name": "POST /ingest/state — bad payload (422 expected)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"timestamp\": \"t\"\n}" },
+            "url": { "raw": "{{baseUrl}}/ingest/state", "host": ["{{baseUrl}}"], "path": ["ingest", "state"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('422 Unprocessable Entity', () => pm.response.to.have.status(422));",
+            "pm.test('error names serialNumber', () => {",
+            "  pm.expect(JSON.stringify(pm.response.json())).to.include('serialNumber');",
+            "});"
+          ]}}]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl",    "value": "http://localhost:8000" },
+    { "key": "seedSerial", "value": "amr001" }
+  ]
+}

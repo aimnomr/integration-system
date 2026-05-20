@@ -4,6 +4,11 @@ A step-by-step manual verification of the AMR Integration System — happy paths
 the G15–G21 gap fixes, and extreme / failure cases.
 
 > Conventions
+> - **For backend HTTP smoke-testing, prefer `.\docs\postman\run-newman.ps1`** —
+>   it replays the Postman collection (`docs/postman/`) and writes a
+>   pass/fail HTML report. The checklist below stays useful for behavioural
+>   scenarios Newman can't easily express (multi-step flows, robot interactions,
+>   restart-survives, etc.).
 > - HTTP examples use `curl.exe` (PowerShell aliases bare `curl` to a different
 >   command — always type `curl.exe`). The Swagger UI at
 >   <http://localhost:8000/docs> is an easier alternative for every FastAPI call.
@@ -58,6 +63,12 @@ the G15–G21 gap fixes, and extreme / failure cases.
 
 ### Robots
 - [x] `GET /robots/amr001` → returns the robot row.
+  > **REMARK (Newman run 2026-05-21):** endpoint returns HTTP 200 but the
+  > response body does **not** include a top-level `serialNumber` field — the
+  > Newman assertion `expected ... to deeply equal 'amr001'` failed against
+  > `undefined`. Likely the route returns the snake_case row (`serial_number`)
+  > or wraps it under another key. Worth eyeballing the actual response shape
+  > in Swagger / a Postman run before declaring this fully green.
 - [x] `POST /robots` body `{"serial_number":"amr002","rosbridge_url":"ws://localhost:9091","map_id":"map-001"}`
       → **201**.
 - [x] `GET /robots` → now lists `amr002` too (registry reloaded — **no restart needed**).
@@ -90,23 +101,37 @@ the G15–G21 gap fixes, and extreme / failure cases.
 Without a robot, fake a `state` message. Escaping JSON inline in PowerShell is
 fragile — put the payload in a file and publish with `-f`:
 
-```powershell
-# save as state.json
-'{"headerId":1,"timestamp":"2026-05-18T12:00:00Z","serialNumber":"amr001","orderId":"","orderUpdateId":0,"lastNodeId":"","lastNodeSequenceId":0,"nodeStates":[],"edgeStates":[],"actionStates":[],"agvPosition":{"x":1.0,"y":2.0,"theta":0,"mapId":"map-001","positionInitialized":true},"velocity":{"vx":0,"vy":0,"omega":0},"driving":false,"operatingMode":"AUTOMATIC","errors":[],"safetyState":{"eStop":"NONE","fieldViolation":false}}' | Out-File -Encoding ascii state.json
+**What this phase does:** fakes the telemetry a robot would normally publish, so
+you can confirm the ingestion pipeline (Mosquitto → Node-RED → FastAPI →
+PostgreSQL) works end-to-end without needing a robot.
 
-mosquitto_pub -h localhost -t "amr/v2/moverobotic/amr001/state" -f state.json
-```
-{Starting of not sure what is asked here #1}
-- [ ] Node-RED "Telemetry Ingestion" tab — `validateState` shows green status; the
-      `state persisted` debug shows `{"status":"ok"}`.
-- [ ] `psql ... -c "SELECT count(*) FROM state_snapshots;"` → count increased.
-- [ ] Publish a `connection` message: save
-      `{"headerId":1,"timestamp":"2026-05-18T12:00:00Z","serialNumber":"amr001","connectionState":"ONLINE"}`
-      to `conn.json`, then `mosquitto_pub -h localhost -t "amr/v2/moverobotic/amr001/connection" -f conn.json`
-      → `connection_log` row added.
-- [ ] **[robot]** With a real robot, the same rows appear automatically from the
-      ROS Bridge's published `state`/`connection`.
-{End of not sure what is asked here #1}
+**Step-by-step (no robot):**
+
+1. Open a PowerShell terminal in any folder (e.g. `D:\FYP\integration-system\`).
+2. Save a state message to disk — copy/paste this exact block:
+
+   ```powershell
+   '{"headerId":1,"timestamp":"2026-05-18T12:00:00Z","serialNumber":"amr001","orderId":"","orderUpdateId":0,"lastNodeId":"","lastNodeSequenceId":0,"nodeStates":[],"edgeStates":[],"actionStates":[],"agvPosition":{"x":1.0,"y":2.0,"theta":0,"mapId":"map-001","positionInitialized":true},"velocity":{"vx":0,"vy":0,"omega":0},"driving":false,"operatingMode":"AUTOMATIC","errors":[],"safetyState":{"eStop":"NONE","fieldViolation":false}}' | Out-File -Encoding ascii state.json
+   ```
+3. Publish it:
+   ```powershell
+   mosquitto_pub -h localhost -t "amr/v2/moverobotic/amr001/state" -f state.json
+   ```
+4. Now run the four assertions below.
+
+- [ ] **In Node-RED** (<http://localhost:1880>) → **Telemetry Ingestion** tab:
+      the `validateState` node briefly shows a green status; the
+      `state persisted` debug pane prints `{"status":"ok"}`.
+- [ ] Open another terminal: `psql -U postgres -d amr_integration -c "SELECT count(*) FROM state_snapshots;"`
+      → count is **higher** than before the publish.
+- [ ] Repeat with a connection message:
+      ```powershell
+      '{"headerId":1,"timestamp":"2026-05-18T12:00:00Z","serialNumber":"amr001","connectionState":"ONLINE"}' | Out-File -Encoding ascii conn.json
+      mosquitto_pub -h localhost -t "amr/v2/moverobotic/amr001/connection" -f conn.json
+      ```
+      Then `psql ... -c "SELECT count(*) FROM connection_log;"` increased.
+- [ ] **[robot]** With a real robot publishing, the same rows appear
+      automatically — no need to run `mosquitto_pub` manually.
 
 ---
 
@@ -126,7 +151,22 @@ mosquitto_pub -h localhost -t "amr/v2/moverobotic/amr001/state" -f state.json
 - [x] `POST /ingest/state` body `{"timestamp":"t"}` (no `serialNumber`)
       → **422**, response names `serialNumber`. (Was a 500 before.)
 - [x] `POST /ingest/connection` body with `connectionState":"BOGUS"` → **422**.
-- [ ] `POST /ingest/state` with a full valid body → **200**. {Returns 500, maybe wrong body sent. Give me example}
+- [ ] `POST /ingest/state` with a full valid body → **200**.
+      **Use exactly the body from Phase 4 step 2** (save it to `state.json`),
+      then:
+      ```powershell
+      curl.exe -X POST -H "Content-Type: application/json" -d "@state.json" http://localhost:8000/ingest/state
+      ```
+      Expected: `{"status":"ok"}`. If you got a 500, it usually means the JSON
+      was malformed (PowerShell sometimes adds a UTF-8 BOM — that's why the
+      Phase 4 example uses `-Encoding ascii`). Alternative without a file:
+      ```powershell
+      curl.exe -X POST -H "Content-Type: application/json" `
+        -d "{\"headerId\":1,\"timestamp\":\"2026-05-18T12:00:00Z\",\"serialNumber\":\"amr001\",\"orderId\":\"\",\"orderUpdateId\":0,\"lastNodeId\":\"\",\"lastNodeSequenceId\":0,\"nodeStates\":[],\"edgeStates\":[],\"actionStates\":[],\"agvPosition\":{\"x\":1.0,\"y\":2.0,\"theta\":0,\"mapId\":\"map-001\",\"positionInitialized\":true},\"velocity\":{\"vx\":0,\"vy\":0,\"omega\":0},\"driving\":false,\"operatingMode\":\"AUTOMATIC\",\"errors\":[],\"safetyState\":{\"eStop\":\"NONE\",\"fieldViolation\":false}}" `
+        http://localhost:8000/ingest/state
+      ```
+      The Swagger UI at <http://localhost:8000/docs> → `POST /ingest/state` →
+      *Try it out* is the easiest version — it pre-fills a valid body.
 
 ### G17 — navigation failure visible **[robot]**
 - [x] Force a nav failure (send the robot an unreachable goal, or e-stop mid-order).
@@ -148,46 +188,91 @@ mosquitto_pub -h localhost -t "amr/v2/moverobotic/amr001/state" -f state.json
       → connection count stays at/below `DB_POOL_MAX` (default 10), not one-per-request. {It stays at 2 before, during and after the command runs}
 
 ### G19 — telemetry retention
-{Starting of not sure what is asked here #1}
-- [ ] Insert an old row:
-      `psql ... -c "INSERT INTO state_snapshots (serial_number,ts,header_id) VALUES ('amr001', now() - interval '90 days', 999);"`
-- [ ] Stop FastAPI; restart it with `TELEMETRY_RETENTION_DAYS=30` set.
-- [ ] The startup prune runs immediately — FastAPI log shows `telemetry pruned`.
-- [ ] `psql ... -c "SELECT count(*) FROM state_snapshots WHERE header_id=999;"` → `0`.
-- [ ] Recent rows are untouched.
-- [ ] With `TELEMETRY_RETENTION_DAYS=0` the log shows no retention task started.
-{End of not sure what is asked here #2}
+
+**What this phase does:** verifies the background task that prunes telemetry
+rows older than `TELEMETRY_RETENTION_DAYS` actually works. The trick is to
+plant a deliberately-old row, then restart FastAPI and check it's gone.
+
+**Step-by-step:**
+
+1. With FastAPI running, open a PowerShell terminal and **plant a 90-day-old row**:
+   ```powershell
+   psql -U postgres -d amr_integration -c "INSERT INTO state_snapshots (serial_number,ts,header_id) VALUES ('amr001', now() - interval '90 days', 999);"
+   ```
+2. **Stop FastAPI** (Ctrl+C in its window).
+3. **Set the retention window** to 30 days for this restart:
+   ```powershell
+   $env:TELEMETRY_RETENTION_DAYS = "30"
+   uvicorn main:app --reload --port 8000      # from fastapi-service/, venv activated
+   ```
+   (Or just edit `fastapi-service/.env` to add `TELEMETRY_RETENTION_DAYS=30`
+   and restart normally — same effect.)
+4. Watch the FastAPI startup log — within a few seconds you should see a line
+   like `telemetry pruned {"deleted":{...}}`.
+5. Now run the assertions:
+
+- [ ] FastAPI log printed a `telemetry pruned` line within ~6 hours of startup.
+      (The background task fires at boot + every 6 h after; the boot one is
+      the one you see now.)
+- [ ] `psql ... -c "SELECT count(*) FROM state_snapshots WHERE header_id=999;"`
+      → `0`. The 90-day-old row is gone.
+- [ ] `psql ... -c "SELECT count(*) FROM state_snapshots WHERE ts > now() - interval '1 day';"`
+      → unchanged from before the restart. Recent rows untouched.
+- [ ] Restart FastAPI again with `TELEMETRY_RETENTION_DAYS=0` — the startup
+      log does **not** print `telemetry retention enabled`; the prune task
+      doesn't start.
+- [ ] Reset `TELEMETRY_RETENTION_DAYS` back to `30` (or remove it) after testing.
 
 ---
 
 ## Phase 7 — Auth & rate limiting (G10 / G11)
 
-Set `API_KEY=test-key` and `RATE_LIMIT_PER_MINUTE=5` in `fastapi-service/.env`,
-restart FastAPI.
+**Setup:** add these two lines to `fastapi-service/.env`, then restart FastAPI:
+```
+API_KEY=test-key
+RATE_LIMIT_PER_MINUTE=5
+```
 
-- [ ] `GET /robots` with no header → **401**.
-- [ ] `GET /robots` with `-H "X-API-Key: wrong"` → **401**.
-- [ ] `GET /robots` with `-H "X-API-Key: test-key"` → 200.
-- [ ] `POST /ingest/state` with no header → still works (ingest is unguarded).
-- [ ] Fire 7 requests quickly → the 6th/7th return **429** with a `Retry-After` header.
-- [ ] **[robot]** ROS Bridge can still `GET /fleet` — it needs `API_KEY=test-key`
-      in `ros-bridge-service/.env` to match.
-- [ ] Reset both env vars afterwards.
+- [x] `GET /robots` with no header → **401**.
+- [x] `GET /robots` with `-H "X-API-Key: wrong"` → **401**.
+- [x] `GET /robots` with `-H "X-API-Key: test-key"` → 200.
+- [ ] `POST /ingest/state` with **no `X-API-Key` header** (but a full valid
+      body — same body the Phase 4 example uses) → **200** with
+      `{"status":"ok"}`. The point of this test is that `/ingest/*` is
+      deliberately **exempt** from the auth check (it's the internal
+      Node-RED → DB boundary). Example:
+      ```powershell
+      curl.exe -X POST -H "Content-Type: application/json" -d "@state.json" http://localhost:8000/ingest/state
+      ```
+      (Reuse `state.json` from Phase 4 step 2 — that's the "full valid body".)
+- [x] Fire 7 requests quickly → the 6th/7th return **429** with a `Retry-After` header.
+- [ ] **[robot] How to test:** you don't make this call yourself — the **ROS
+      Bridge Service** does it automatically at startup. With `API_KEY=test-key`
+      set on FastAPI:
+        1. Edit `ros-bridge-service/.env`, add `API_KEY=test-key`.
+        2. Restart the ROS Bridge.
+        3. Look at its startup log — you should see `Fleet loaded:` (success)
+           rather than `401`. If the keys mismatch the bridge logs the 401 and
+           exits.
+- [ ] **Cleanup:** remove `API_KEY` and reset `RATE_LIMIT_PER_MINUTE=120` (or
+      delete the lines) in both `.env` files; restart both services. Otherwise
+      every subsequent test that doesn't send the key will fail with 401.
 
 ---
 
 ## Phase 8 — Extreme / failure cases
 
 ### Bad input
-- [ ] `POST /robots/amr001/order` body `{"nodes":[]}` → **422** (empty order).
-- [ ] `POST /robots/amr001/order` body `{"nodes":[{"x":1}]}` → **422** (`y` missing).
-- [ ] `POST /robots/UNKNOWN/order` → **404** (robot not registered).
-- [ ] `POST /robots/amr001/order/named` body `{"location_ids":[9999]}` → **404**.
-- [ ] `POST /robots/amr001/instant-actions` body `{"action_type":"fly"}` → **422**.
+- [x] `POST /robots/amr001/order` body `{"nodes":[]}` → **422** (empty order).
+- [x] `POST /robots/amr001/order` body `{"nodes":[{"x":1}]}` → **422** (`y` missing).
+- [x] `POST /robots/UNKNOWN/order` → **404** (robot not registered).
+- [x] `POST /robots/amr001/order/named` body `{"location_ids":[9999]}` → **404**.
+- [x] `POST /robots/amr001/instant-actions` body `{"action_type":"fly"}` → **422**.
 
 ### CRUD conflicts (G15 — no cascade)
+> ✅ `DELETE /maps/map-001` 409 verified by Newman run 2026-05-21 02:37.
 - [ ] `POST /maps` with an existing `map_id` → **409** (duplicate).
-- [ ] `DELETE /maps/map-001` while a robot/location references it → **409**;
+- [x] `DELETE /maps/map-001` while a robot/location references it → **409**;
       `map-001` is **not** deleted, telemetry untouched.
 - [ ] `POST /robots` with `map_id":"map-404"` (nonexistent) → **422**.
 - [ ] `DELETE /robots/amr001` after it has telemetry/orders → **409**.
@@ -251,10 +336,11 @@ restart FastAPI.
       is now allowed; the Vite dev server (`5173`) is blocked. Reset afterwards.
 
 ### Phase 0 — GET /orders endpoint
-- [ ] `curl.exe http://localhost:8000/orders` → `{"orders":[...], "count":N}`.
-- [ ] `curl.exe "http://localhost:8000/orders?serial=amr001&limit=2"` → at most 2 rows, all for amr001.
-- [ ] `curl.exe "http://localhost:8000/orders?serial=ghost"` → **404**.
-- [ ] `curl.exe "http://localhost:8000/orders?limit=0"` → **422** (limit must be ≥ 1).
+> ✅ First four items verified by Newman run 2026-05-21 02:37.
+- [x] `curl.exe http://localhost:8000/orders` → `{"orders":[...], "count":N}`.
+- [x] `curl.exe "http://localhost:8000/orders?serial=amr001&limit=2"` → at most 2 rows, all for amr001.
+- [x] `curl.exe "http://localhost:8000/orders?serial=ghost"` → **404**.
+- [x] `curl.exe "http://localhost:8000/orders?limit=0"` → **422** (limit must be ≥ 1).
 - [ ] `curl.exe "http://localhost:8000/orders?limit=501"` → **422** (limit clamped to 500).
 - [ ] With `serial=amr001`, page through using `before=<ts>` — second call returns
       strictly older rows; reaches an empty list once exhausted.

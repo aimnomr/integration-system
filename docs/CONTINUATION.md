@@ -2,11 +2,31 @@
 
 > A point-in-time handoff snapshot so work can resume without re-deriving context.
 > **This decays** — trust the code and the canonical docs over this page.
-> Last updated: 2026-05-20.
+> Last updated: 2026-05-21.
 
 ---
 
 ## Recently completed (most recent first)
+
+**Newman smoke-test suite (2026-05-21, uncommitted).** Replayable HTTP smoke
+tests for the FastAPI gateway.
+
+- New folder `docs/postman/` with:
+  - `amr-integration.postman_collection.json` — collection v2.1 with 10
+    grouped sections (health, fleet, robots read/write, orders + instant
+    actions, order history, OEE, maps + locations CRUD, ingest). Every
+    request carries at least a status-code assertion; CRUD blocks are
+    self-cleaning.
+  - `local.postman_environment.json` — `baseUrl` + `apiKey` placeholders.
+  - `run-newman.ps1` — wraps `npx newman run` with CLI + JSON + HTML reporters.
+    First run pulls `newman` + `newman-reporter-htmlextra` via the npx cache.
+  - `README.md` — usage, what's covered, how to add tests, CI pointer.
+- Pre-request script strips the `X-API-Key` header automatically when the
+  environment's `apiKey` is empty, so the same collection works against an
+  open-API local FastAPI and a locked-down deployment.
+- `docs/manual-test-checklist.md` Conventions block now points to the Newman
+  runner as the preferred path for HTTP smoke; the manual checklist remains
+  for the behavioural scenarios Newman can't easily express.
 
 **React frontend — Phase 4 analytics + admin (2026-05-20, uncommitted).** Every
 route is now a real screen. The UI is feature-complete for v1.
