@@ -31,6 +31,13 @@
         "info": "Manual VDA5050 message injectors for amr001. Click an inject to publish an `order` or `instantActions` message straight to the robot's MQTT topic, skipping FastAPI. Outbound `state`/`connection` are shown on the right."
     },
     {
+        "id": "tab-db-admin",
+        "type": "tab",
+        "label": "DB Admin",
+        "disabled": false,
+        "info": "Database reset + ad-hoc SQL via the postgresql node (node-red-contrib-postgresql).\n\n* **Reset DB** reads `docs/schema/schema.sql` from disk and executes it against Postgres — drops + recreates all tables, then reseeds fleet_config / maps / robots / named_locations.\n* **Run custom SQL** sends the inject payload straight to Postgres, so you can edit SQL right in the inject node and fire it.\n\nConnection params live on the `db-pg-config` config node (host=localhost, port=5432, db=amr_integration, user=postgres, password=admin — matching docker-compose.yml). Stop FastAPI/ROS Bridge before resetting, or they may crash on the missing tables mid-drop.\n\nRequires the `node-red-contrib-postgresql` palette package — install via Manage palette, or `npm install node-red-contrib-postgresql` in the node-red folder."
+    },
+    {
         "id": "broker-local",
         "type": "mqtt-broker",
         "name": "Local MQTT",
@@ -60,6 +67,30 @@
         "willMsg": {},
         "userProps": "",
         "sessionExpiry": ""
+    },
+    {
+        "id": "db-pg-config",
+        "type": "postgreSQLConfig",
+        "name": "amr_integration@localhost",
+        "host": "localhost",
+        "hostFieldType": "str",
+        "port": "5432",
+        "portFieldType": "num",
+        "database": "amr_integration",
+        "databaseFieldType": "str",
+        "ssl": "false",
+        "sslFieldType": "bool",
+        "applicationName": "node-red",
+        "applicationNameType": "str",
+        "max": "10",
+        "maxFieldType": "num",
+        "idle": "1000",
+        "idleFieldType": "num",
+        "connectionTimeout": "10000",
+        "user": "postgres",
+        "userFieldType": "str",
+        "password": "admin",
+        "passwordFieldType": "str"
     },
     {
         "id": "ingest-in-state",
@@ -709,38 +740,6 @@
         "wires": []
     },
     {
-        "id": "tab-db-admin",
-        "type": "tab",
-        "label": "DB Admin",
-        "disabled": false,
-        "info": "Database reset + ad-hoc SQL via the postgresql node (node-red-contrib-postgresql).\n\n* **Reset DB** reads `docs/schema/schema.sql` from disk and executes it against Postgres — drops + recreates all tables, then reseeds fleet_config / maps / robots / named_locations.\n* **Run custom SQL** sends the inject payload straight to Postgres, so you can edit SQL right in the inject node and fire it.\n\nConnection params live on the `db-pg-config` config node (host=localhost, port=5432, db=amr_integration, user=postgres, password=admin — matching docker-compose.yml). Stop FastAPI/ROS Bridge before resetting, or they may crash on the missing tables mid-drop.\n\nRequires the `node-red-contrib-postgresql` palette package — install via Manage palette, or `npm install node-red-contrib-postgresql` in the node-red folder."
-    },
-    {
-        "id": "db-pg-config",
-        "type": "postgreSQLConfig",
-        "name": "amr_integration@localhost",
-        "host": "localhost",
-        "hostFieldType": "str",
-        "port": "5432",
-        "portFieldType": "num",
-        "database": "amr_integration",
-        "databaseFieldType": "str",
-        "ssl": "false",
-        "sslFieldType": "bool",
-        "applicationName": "node-red",
-        "applicationNameType": "str",
-        "max": "10",
-        "maxFieldType": "num",
-        "idle": "1000",
-        "idleFieldType": "num",
-        "connectionTimeout": "10000",
-        "connectionTimeoutType": "num",
-        "user": "postgres",
-        "userFieldType": "str",
-        "password": "admin",
-        "passwordFieldType": "str"
-    },
-    {
         "id": "db-cmt-reset",
         "type": "comment",
         "z": "tab-db-admin",
@@ -849,7 +848,7 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "payload": "-- Edit this SQL, then press the inject button.\n-- Sent straight to Postgres via the postgresql node.\n--\n-- Examples (uncomment to use):\n--\n-- Add a new named location:\n-- INSERT INTO named_locations (id, map_id, label, x, y, theta)\n--     VALUES (5, 'map-001', 'Loading Bay', 1.500, 2.000, 0.0)\n--     ON CONFLICT (id) DO UPDATE\n--         SET map_id = EXCLUDED.map_id,\n--             label  = EXCLUDED.label,\n--             x      = EXCLUDED.x,\n--             y      = EXCLUDED.y,\n--             theta  = EXCLUDED.theta;\n--\n-- Add a second robot:\n-- INSERT INTO robots (serial_number, rosbridge_url, map_id)\n--     VALUES ('amr002', 'ws://localhost:9091', 'map-001')\n--     ON CONFLICT (serial_number) DO NOTHING;\n--\n-- Add a new map:\n-- INSERT INTO maps (map_id, label)\n--     VALUES ('map-003', 'Warehouse A')\n--     ON CONFLICT (map_id) DO NOTHING;\n--\n-- Wipe telemetry only (keep fleet definition):\n-- TRUNCATE state_snapshots, connection_log, oee_cycles,\n--          orders, instant_action_messages RESTART IDENTITY CASCADE;\n\nSELECT 'replace me with real SQL' AS note;\n",
+        "payload": "-- Edit this SQL, then press the inject button.-- Sent straight to Postgres via the postgresql node.---- Examples (uncomment to use):---- Add a new named location:-- INSERT INTO named_locations (id, map_id, label, x, y, theta)--     VALUES (5, 'map-001', 'Loading Bay', 1.500, 2.000, 0.0)--     ON CONFLICT (id) DO UPDATE--         SET map_id = EXCLUDED.map_id,--             label  = EXCLUDED.label,--             x      = EXCLUDED.x,--             y      = EXCLUDED.y,--             theta  = EXCLUDED.theta;---- Add a second robot:-- INSERT INTO robots (serial_number, rosbridge_url, map_id)--     VALUES ('amr002', 'ws://localhost:9091', 'map-001')--     ON CONFLICT (serial_number) DO NOTHING;---- Add a new map:-- INSERT INTO maps (map_id, label)--     VALUES ('map-003', 'Warehouse A')--     ON CONFLICT (map_id) DO NOTHING;---- Wipe telemetry only (keep fleet definition):-- TRUNCATE state_snapshots, connection_log, oee_cycles,--          orders, instant_action_messages RESTART IDENTITY CASCADE;SELECT 'replace me with real SQL' AS note;",
         "payloadType": "str",
         "x": 150,
         "y": 320,
