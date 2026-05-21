@@ -48,6 +48,18 @@ def list_robots():
     return {"robots": registry.list()}
 
 
+def _to_camel(row: dict) -> dict:
+    """db.fetch_robot/insert/update return raw snake_case rows. The list
+    endpoint (and the rest of the API) speak camelCase, so single-row
+    responses must match. Mapped here at the router boundary so db.py stays
+    SQL-shaped."""
+    return {
+        "serialNumber": row["serial_number"],
+        "rosbridgeUrl": row["rosbridge_url"],
+        "mapId":        row["map_id"],
+    }
+
+
 # --- Robot CRUD (G15) ---
 #
 # The DB is the single source of truth for the fleet; after any write the
@@ -63,7 +75,7 @@ def get_robot(serial: str):
         return _unavailable(exc)
     if row is None:
         raise HTTPException(status_code=404, detail=f"Robot '{serial}' not found")
-    return row
+    return _to_camel(row)
 
 
 @router.post("", status_code=201)
@@ -81,7 +93,7 @@ def create_robot(body: RobotIn):
             status_code=409, detail=f"Robot '{body.serial_number}' already exists"
         )
     registry.reload()
-    return row
+    return _to_camel(row)
 
 
 @router.put("/{serial}")
@@ -97,7 +109,7 @@ def update_robot(serial: str, body: RobotUpdate):
     if row is None:
         raise HTTPException(status_code=404, detail=f"Robot '{serial}' not found")
     registry.reload()
-    return row
+    return _to_camel(row)
 
 
 @router.delete("/{serial}")

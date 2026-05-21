@@ -63,19 +63,46 @@ Lets you exercise the robot directly, skipping FastAPI.
 ## Tab 5 — DB Admin
 
 ```
-Reset DB         → file in (schema.sql)        → postgresql node → debug
+Reset DB (A)     → Reset Schema (DDL)         → Setup Tables (seed) → debug
+Reset DB (B)     → Apply full schema (DDL+seed)                     → debug
+Row Counts       → SELECT counts UNION ALL …                        → debug
+View <table>     → SELECT * FROM <table> ORDER BY … LIMIT 20         → debug
 Run custom SQL   → (inject payload as msg.payload) → postgresql node → debug
 ```
 
-Two utility flows that talk straight to PostgreSQL via the shared `db-pg-config`
-config node (host=localhost, port=5432, db=amr_integration, user=postgres,
-password=admin — matching `docker-compose.yml`):
+Three utility flows that talk straight to PostgreSQL via the shared
+`db-pg-config` config node (host=localhost, port=5432, db=amr_integration,
+user=postgres, password=admin — matching `docker-compose.yml`):
 
-- **Reset DB** — reads `docs/schema/schema.sql` from disk and executes it in one
-  call. This drops + recreates all 15 tables and reseeds `fleet_config`, `maps`,
-  `robots`, and `named_locations` — i.e. brings the database back to its
-  pre-runtime default. Stop FastAPI and the ROS Bridge first; both will crash if
-  they query while tables are dropped.
+- **Reset DB (Pipeline A)** — two `postgresql` nodes wired in sequence. The
+  first holds all `DROP` + `CREATE TABLE` + `CREATE INDEX` statements inline
+  in its `query` field; the second holds the `INSERT` seed rows. No filesystem
+  dependency. Use this if the driver dislikes mixing DDL and DML in one batch.
+- **Reset DB (Pipeline B)** — single `postgresql` node with the full schema
+  (DDL + seed) baked into its `query` field. Same end state as Pipeline A;
+  use this to compare behaviour against A. (Both pipelines exist side-by-side
+  so you can verify which the driver handles correctly — once you settle on
+  one, delete the other.)
+- Both pipelines drop + recreate all 15 tables and reseed `fleet_config`,
+  `maps`, `robots`, `named_locations`. **Stop FastAPI and the ROS Bridge
+  first**; both will crash if they query while tables are dropped.
+- **The inline SQL in these nodes is a hand-maintained copy of
+  `docs/schema/schema.sql`.** If you change the schema there, update the two
+  nodes' `query` fields (Pipeline A's "Reset Schema" + "Setup Tables", or
+  Pipeline B's "Apply full schema") to keep them in sync.
+- **Row Counts** — fires one SQL statement that `UNION ALL`s `COUNT(*)` across
+  all 15 tables. Useful for a quick "did anything update?" check after dispatching
+  an order or driving the robot. Result lands in the debug pane as a single
+  payload of 15 `{tbl, rows}` rows.
+- **View &lt;table&gt;** — one inject button per live table (11 buttons:
+  `orders`, `order_nodes`, `order_edges`, `instant_action_messages`,
+  `instant_actions`, `state_snapshots`, `state_node_states`,
+  `state_action_states`, `state_errors`, `connection_log`, `oee_cycles`).
+  Each runs `SELECT * FROM <table> ORDER BY ts DESC LIMIT 20` (or by `id` for
+  tables without `ts`). The reference tables (`fleet_config`, `maps`,
+  `robots`, `named_locations`) are intentionally omitted — they almost never
+  change at runtime; use the `Run custom SQL` flow if you need to inspect
+  them.
 - **Run custom SQL** — the inject node's payload is preloaded with commented
   examples (add a named location, add a second robot, add a map, wipe telemetry
   only). Double-click the inject node, replace the payload with whatever SQL you

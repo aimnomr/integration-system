@@ -2,7 +2,7 @@
 
 > A point-in-time handoff snapshot so work can resume without re-deriving context.
 > **This decays** — trust the code and the canonical docs over this page.
-> Last updated: 2026-05-21.
+> Last updated: 2026-05-21 (test-automation suite fully green: Newman 66/66, pytest 36/36, node:test 19/19, Playwright 24/24, three PowerShell integration scripts).
 
 ---
 
@@ -12,7 +12,7 @@ End-to-end implemented + manually verified:
 
 - **Backend (FastAPI + Mosquitto + ROS Bridge + Node-RED + PostgreSQL)** —
   code-complete, CI green, manually exercised against a real robot. All
-  originally tracked gaps **G1–G21 closed** (see `docs/gaps.md`).
+  originally tracked gaps **G1–G23 closed** (see `docs/gaps.md`).
 - **React frontend (`frontend/`)** — feature-complete v1: Dashboard, Robot
   Detail (live MapCanvas), Dispatch (named + manual), Teleop (camera + 3×3
   keyboard pad), Order History (paged), OEE dashboard (cards + bar chart +
@@ -22,8 +22,10 @@ End-to-end implemented + manually verified:
 - **Realtime split** — MQTT-over-WS to Mosquitto :9001 for low-frequency
   telemetry; rosbridge direct from the browser per robot for high-frequency
   camera + teleop + map.
-- **Newman smoke suite** (`docs/postman/`) — 30 requests, 46 assertions
-  replayable via `.\docs\postman\run-newman.ps1`. HTML + JSON reports.
+- **Newman smoke suite** (`docs/postman/`) — **13 sections / 61 requests /
+  66 assertions** replayable via `.\docs\postman\run-newman.ps1`. HTML + JSON
+  reports. Coverage extended 2026-05-21 with negative-case section (Phase 8),
+  CORS pos/neg (Phase 9), and `/orders` cursor pagination.
 - **CI** (`.github/workflows/ci.yml`) — three jobs (ROS Bridge, FastAPI,
   Node-RED). FastAPI suite includes `test_orders.py`, `test_cors.py`,
   `test_schemas.py`, `test_auth.py`, `test_config.py`, `test_ratelimit.py`.
@@ -37,6 +39,104 @@ Phase 9–13 cover the new frontend and Phase-0 backend work.
 ---
 
 ## Recently completed (most recent first)
+
+**Test-automation suite fully green (2026-05-21, uncommitted).**
+Both `.\scripts\test\run-all.ps1` and `npm run e2e` end-to-end passing on a
+quiet stack:
+
+- Phase 4 ingestion: **6/6** (`test-ingest.ps1`)
+- Phase 6 G19 retention: **6/6** (`test-retention.ps1`)
+- Phase 8/9 misc: **4/4** (`test-misc.ps1`)
+- Newman backend HTTP: **66/66 assertions** (Phase 4 G20 + Phase 5 OEE + Phase 8 negative cases + Phase 9 CORS + cursor pagination)
+- pytest fastapi-service: **36 passed**, 7 deprecation warnings (Pydantic v1 + `app.on_event` migration noise — non-blocking)
+- node:test ros-bridge-service: **19/19**
+- Playwright frontend E2E: **24/24** (0 skipped, 0 failed, 2.2 min)
+
+Two real bugs surfaced and fixed during this push: **G22** (frontend
+`postNamedOrder` sent camelCase but FastAPI expected snake_case — 422 on
+every Dispatch → Named send) and **G23** (single-row `/robots/{serial}`
+endpoints returned snake_case while the list endpoint returned camelCase —
+API self-inconsistency). Both logged in `docs/gaps.md`.
+
+**Test-automation expansion (2026-05-21, uncommitted).** Took the long-form
+manual checklist (`docs/manual-test-checklist.md`) and automated everything
+that can be automated without a robot or a service-stop-and-restart:
+
+- **Newman collection** (`docs/postman/amr-integration.postman_collection.json`)
+  grew from 10 to **13 sections** (61 requests). New sections 11/12/13 cover
+  Phase 8 negative cases (missing y, UNKNOWN robot, bogus instant-action type,
+  bad map_id, duplicate map_id, 404 trio on `/maps/nope`, `limit=501` clamp),
+  CORS positive + negative (allowed Origin gets ACAO; evil Origin doesn't),
+  and `/orders` cursor pagination via a captured `cursorTs` variable.
+- **PowerShell integration scripts** under `scripts/test/`:
+  - `test-ingest.ps1` — Phase 4 MQTT→DB pipeline (state + connection +
+    malformed dropped + G20 happy body).
+  - `test-retention.ps1` — Phase 6 G19 prune SQL (plant 90-day row, run prune,
+    assert recents untouched).
+  - `test-misc.ps1` — Phase 8 5-rapid-orders distinct + Phase 9 G21 legacy
+    suffix tolerated + Mosquitto :9001 reachable.
+  - `run-all.ps1` — wraps all three plus Newman, pytest, and `npm test`.
+- **pytest** additions: `fastapi-service/tests/test_retention.py` covers the
+  G19 lifespan hook (disabled when `TELEMETRY_RETENTION_DAYS=0`, scheduled
+  when >0) and the prune SQL shape.
+- **Playwright suite** at `frontend/tests/e2e/` covers the non-robot React
+  surface (AppShell + 404 + LeftNav, Health page rows + live timestamp,
+  Dashboard render + click-through, Dispatch named/manual happy paths,
+  Admin Maps/Robots/Fleet CRUD incl. 409 toasts, Orders + OEE empty state,
+  no-CORS-errors check). Added `@playwright/test` devDep, `e2e` / `e2e:ui` /
+  `e2e:headed` npm scripts, `playwright.config.ts` that auto-spawns the
+  Vite dev server. First-time setup: `npm install` + `npx playwright install
+  chromium` (~150 MB).
+- **Docs**: `docs/manual-test-checklist.md` got a status legend at the top
+  and `[auto: newman|pytest|node|ps|e2e]` tags inline next to every
+  automated item. New companion doc `docs/manual-test-by-service.md`
+  re-groups the *remaining* manual items by service (Mosquitto, PostgreSQL,
+  FastAPI, Node-RED, ROS Bridge, Frontend, cross-service) so spot-checks
+  can be picked at random instead of phase-walked.
+
+What's left manual on purpose: `[robot]`-gated items, service-stop chaos
+(stop Postgres / stop Mosquitto), Node-RED DB-Admin tab clicks, frontend
+visual interactions (canvas pixel-clicks, key-hold teleop, tooltip hovers).
+
+**Node-RED DB Admin — View Tables pipeline (2026-05-21, uncommitted).** Added
+a third section to the DB Admin tab so the operator can verify writes from
+inside Node-RED without opening psql:
+
+- **Row Counts** button — single `postgresql` node runs a 15-table
+  `UNION ALL SELECT COUNT(*)` and prints `{tbl, rows}` to the debug pane.
+- **11 per-table buttons** — only the live/log tables: `orders`,
+  `order_nodes`, `order_edges`, `instant_action_messages`, `instant_actions`,
+  `state_snapshots`, `state_node_states`, `state_action_states`,
+  `state_errors`, `connection_log`, `oee_cycles`. Each fires one `SELECT *`
+  with `ORDER BY ts DESC LIMIT 20` (or `ORDER BY id` for tables without `ts`).
+  Each button has its own debug node so multiple inspections don't overwrite
+  each other. The four reference tables (`fleet_config`, `maps`, `robots`,
+  `named_locations`) were intentionally omitted — they barely change at
+  runtime, and the `Row Counts` button still includes them.
+
+Doc updated: `docs/services/node-red.md` Tab 5.
+
+**Node-RED DB Admin — inline-SQL reset pipelines (2026-05-21, uncommitted).**
+The previous `Reset DB` flow read `docs/schema/schema.sql` from disk via a
+`file in` node and piped the whole payload into one `postgresql` node. In
+practice the read was truncating — the schema only partially applied. Replaced
+with two side-by-side reset pipelines on the **DB Admin** tab so we can A/B
+which the `node-red-contrib-postgresql` driver actually accepts:
+
+- **Pipeline A** — `inject → Reset Schema (postgresql) → Setup Tables
+  (postgresql) → debug`. DDL inline in the first node's `query`, INSERT seed
+  inline in the second's.
+- **Pipeline B** — `inject → Apply full schema (postgresql) → debug`. The
+  entire DDL+seed lives in one node's `query` field.
+
+Both reach the same end state (drop + recreate 15 tables, reseed fleet_config /
+maps / robots / named_locations). No filesystem dependency. The `Run custom
+SQL` flow is unchanged. Once one pipeline is confirmed working, delete the
+other. Doc updated: `docs/services/node-red.md` Tab 5 section.
+
+> Caveat: the inline SQL is a hand-maintained copy of `docs/schema/schema.sql`.
+> Edit both when the schema changes. `schema.sql` remains canonical (FastAPI's
+> docker-compose still applies it on first boot).
 
 **FastAPI CI fix — DB stub in conftest (2026-05-21, uncommitted).** GitHub
 Actions was red because `test_orders.py` imports `app.routers.orders`, which

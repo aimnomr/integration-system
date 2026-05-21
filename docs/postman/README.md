@@ -48,7 +48,12 @@ this into a `&& echo OK` chain or wire it into CI.
 | **7. OEE** | summary, cycles, availability — shape only, doesn't require live cycles |
 | **8. Maps CRUD** | full round-trip + 409 for deleting a referenced map |
 | **9. Named Locations CRUD** | full round-trip, default-theta check |
-| **10. Ingest** | malformed payload → 422 (was 500 before G20) |
+| **10. Ingest** | malformed payload → 422 (G20), bogus connectionState → 422, full valid body → 200 |
+| **11. Negative cases (Phase 8)** | missing-y order → 422, UNKNOWN robot → 404, bogus instant-action → 422, bad map_id → 422, duplicate map_id → 409, `/maps/nope` 404 trio, `?limit=501` → 422 |
+| **12. CORS (Phase 9 G18)** | allowed Origin → ACAO matches; disallowed Origin → no ACAO header |
+| **13. Order history pagination** | capture last-row `ts` cursor; refetch with `before=<cursorTs>` and assert strictly older |
+
+**13 sections / 61 requests / 66 assertions** at last count (2026-05-21).
 
 Every request has at least a status-code assertion. CRUD blocks are
 **self-cleaning** — the DELETE at the end of each section removes anything the

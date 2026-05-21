@@ -3,6 +3,12 @@
 A step-by-step manual verification of the AMR Integration System — happy paths,
 the G15–G21 gap fixes, and extreme / failure cases.
 
+> **Automated suite status (2026-05-21):** all green.
+> - `.\scripts\test\run-all.ps1`: Phase 4 ingestion 6/6, Phase 6 G19 retention 6/6, Phase 8/9 misc 4/4, Newman **66/66 assertions**, pytest **36/36**, node:test **19/19**.
+> - Playwright (`cd frontend && npm run e2e`): **24/24 passed**, 0 skipped, 0 failed (2.2 min).
+>
+> Every item tagged `[auto: …]` below was confirmed passing in those runs.
+
 > Conventions
 > - **For backend HTTP smoke-testing, prefer `.\docs\postman\run-newman.ps1`** —
 >   it replays the Postman collection (`docs/postman/`) and writes a
@@ -18,6 +24,25 @@ the G15–G21 gap fixes, and extreme / failure cases.
 > - MQTT publishing: `mosquitto_pub` (ships with Mosquitto).
 > - Tests marked **[robot]** need a live `rosbridge_server` + robot (or sim).
 >   Everything else runs without one.
+
+## Status legend
+
+| Tag | What it means |
+|---|---|
+| `[auto: newman]` | Covered by the Postman/Newman collection at `docs/postman/`. Run `.\docs\postman\run-newman.ps1`. |
+| `[auto: pytest]` | Covered by a unit test under `fastapi-service/tests/`. Run `pytest` from `fastapi-service/`. |
+| `[auto: node]` | Covered by a unit test under `ros-bridge-service/test/`. Run `npm test`. |
+| `[auto: ps]` | Covered by a PowerShell integration script under `scripts/test/`. Run individually or via `scripts\test\run-all.ps1`. |
+| `[auto: e2e]` | Covered by Playwright under `frontend/tests/e2e/`. Run `npm run e2e` from `frontend/`. |
+| `[robot]` | Requires a live robot or sim — must be done by hand. |
+| _no tag_ | Manual — either chaos (service stop/start) or UI-only interaction. |
+
+Run everything automatable in one go from the repo root:
+```powershell
+.\scripts\test\run-all.ps1
+```
+For a guided manual spot-check organised by service rather than by phase, see
+[`docs/manual-test-by-service.md`](manual-test-by-service.md).
 
 ---
 
@@ -38,7 +63,7 @@ the G15–G21 gap fixes, and extreme / failure cases.
 - [x] Open <http://localhost:8000/docs> — Swagger lists robots / fleet / maps /
       locations / oee / system / ingest routes.
 - [x] `curl.exe -s http://localhost:8000/system/status` → `mosquitto` and
-      `database` both report `connected`.
+      `database` both report `connected`. `[auto: newman]`
 - [x] Node-RED window: `Connected to broker`, `Started flows`, **no `ENOTFOUND`**.
 - [x] Open <http://localhost:1880> — MQTT nodes show "connected".
 - [x] **[robot]** ROS Bridge window logs a rosbridge connection per robot.
@@ -47,35 +72,33 @@ the G15–G21 gap fixes, and extreme / failure cases.
 
 ## Phase 2 — Reference-data CRUD (G15)
 
-### Maps
+### Maps  `[auto: newman]`
 - [x] `GET /maps` → lists `map-001`, `map-002`.
 - [x] `POST /maps` body `{"map_id":"map-003","label":"Test Map"}` → **201**.
 - [x] `GET /maps/map-003` → returns the new map.
 - [x] `PUT /maps/map-003` body `{"label":"Renamed"}` → 200, label updated.
 - [x] `DELETE /maps/map-003` → 200 `{"status":"ok","deleted":"map-003"}`.
 
-### Named locations
+### Named locations  `[auto: newman]`
 - [x] `GET /locations` → lists the 4 seeded locations.
 - [x] `POST /locations` body `{"id":99,"map_id":"map-001","label":"Dock","x":1,"y":2}`
       → **201**, `theta` defaults to `0.0`.
 - [x] `PUT /locations/99` → 200, fields updated.
 - [x] `DELETE /locations/99` → 200.
 
-### Robots
+### Robots  `[auto: newman]`
 - [x] `GET /robots/amr001` → returns the robot row.
-  > **REMARK (Newman run 2026-05-21):** endpoint returns HTTP 200 but the
-  > response body does **not** include a top-level `serialNumber` field — the
-  > Newman assertion `expected ... to deeply equal 'amr001'` failed against
-  > `undefined`. Likely the route returns the snake_case row (`serial_number`)
-  > or wraps it under another key. Worth eyeballing the actual response shape
-  > in Swagger / a Postman run before declaring this fully green.
+  > **RESOLVED (G23, 2026-05-21):** `GET/POST/PUT /robots/{serial}` now
+  > return camelCase (`serialNumber`, `rosbridgeUrl`, `mapId`), matching
+  > `GET /robots` (list). A `_to_camel(row)` helper was added to
+  > `app/routers/robots.py`. The Newman assertion now passes.
 - [x] `POST /robots` body `{"serial_number":"amr002","rosbridge_url":"ws://localhost:9091","map_id":"map-001"}`
       → **201**.
 - [x] `GET /robots` → now lists `amr002` too (registry reloaded — **no restart needed**).
 - [x] `PUT /robots/amr002` → 200.
 - [x] `DELETE /robots/amr002` → 200; `GET /robots` no longer lists it.
 
-### Fleet config
+### Fleet config  `[auto: newman]`
 - [x] `GET /fleet` → current identity.
 - [x] `PUT /fleet` body `{"interface_name":"amr","major_version":"v2","version":"2.0.0","manufacturer":"moverobotic"}`
       → 200.
@@ -85,10 +108,10 @@ the G15–G21 gap fixes, and extreme / failure cases.
 ## Phase 3 — Orders & instant actions
 
 - [x] `POST /robots/amr001/order` body `{"nodes":[{"x":1.0,"y":0.5,"theta":0.0}]}`
-      → 200 `{"status":"ok","orderId":"amr001-order-N","nodeCount":1}`.
+      → 200 `{"status":"ok","orderId":"amr001-order-N","nodeCount":1}`. `[auto: newman]`
 - [x] `POST /robots/amr001/order/named` body `{"location_ids":[1,2]}` → 200, nodeCount 2.
 - [x] `POST /robots/amr001/instant-actions` body `{"action_type":"cancelOrder"}`
-      → 200 with an `actionId`.
+      → 200 with an `actionId`. `[auto: newman]`
 - [x] In Node-RED **Test Harness** tab, click "order: single goal" — the order is
       published; the "Command Audit" tab debug shows `order logged`. {It shows status ok for order logged}
 - [x] **[robot]** ROS Bridge logs `Order accepted` → `Node goal sent`; the robot moves.
@@ -97,6 +120,11 @@ the G15–G21 gap fixes, and extreme / failure cases.
 ---
 
 ## Phase 4 — Telemetry ingestion pipeline
+
+> `[auto: ps]` — `scripts\test\test-ingest.ps1` replays every assertion in
+> this phase (baseline-vs-after row counts for state_snapshots and
+> connection_log, malformed-payload-dropped, full valid /ingest/state body).
+> The manual procedure below stays useful for debugging when the script fails.
 
 Without a robot, fake a `state` message. Escaping JSON inline in PowerShell is
 fragile — put the payload in a file and publish with `-f`:
@@ -122,9 +150,11 @@ PostgreSQL) works end-to-end without needing a robot.
 - [ ] **In Node-RED** (<http://localhost:1880>) → **Telemetry Ingestion** tab:
       the `validateState` node briefly shows a green status; the
       `state persisted` debug pane prints `{"status":"ok"}`.
-- [ ] Open another terminal: `psql -U postgres -d amr_integration -c "SELECT count(*) FROM state_snapshots;"`
+      _(Visual UI check — automation can't see the debug pane, but the
+      end-to-end row-count delta is verified by `test-ingest.ps1`.)_
+- [x] Open another terminal: `psql -U postgres -d amr_integration -c "SELECT count(*) FROM state_snapshots;"`
       → count is **higher** than before the publish.
-- [ ] Repeat with a connection message:
+- [x] Repeat with a connection message:
       ```powershell
       '{"headerId":1,"timestamp":"2026-05-18T12:00:00Z","serialNumber":"amr001","connectionState":"ONLINE"}' | Out-File -Encoding ascii conn.json
       mosquitto_pub -h localhost -t "amr/v2/moverobotic/amr001/connection" -f conn.json
@@ -135,7 +165,7 @@ PostgreSQL) works end-to-end without needing a robot.
 
 ---
 
-## Phase 5 — State & OEE reads
+## Phase 5 — State & OEE reads  `[auto: newman]`
 
 - [x] `GET /robots/amr001/state` → latest snapshot with `node_states`,
       `action_states`, `errors` arrays.
@@ -147,11 +177,11 @@ PostgreSQL) works end-to-end without needing a robot.
 
 ## Phase 6 — Gap fixes G16–G21
 
-### G20 — ingest validation (422, not 500)
+### G20 — ingest validation (422, not 500)  `[auto: newman]` `[auto: ps]`
 - [x] `POST /ingest/state` body `{"timestamp":"t"}` (no `serialNumber`)
       → **422**, response names `serialNumber`. (Was a 500 before.)
 - [x] `POST /ingest/connection` body with `connectionState":"BOGUS"` → **422**.
-- [ ] `POST /ingest/state` with a full valid body → **200**.
+- [x] `POST /ingest/state` with a full valid body → **200**.
       **Use exactly the body from Phase 4 step 2** (save it to `state.json`),
       then:
       ```powershell
@@ -174,7 +204,7 @@ PostgreSQL) works end-to-end without needing a robot.
       `error_type: "navigationFailed"`, `error_level: "WARNING"`.
 - [x] Send a reachable goal that succeeds → the `navigationFailed` error clears. {Second time send nav then only its cleared}
 
-### G21 — counters survive a restart
+### G21 — counters survive a restart  `[auto: pytest]`
 - [x] `POST /robots/amr001/order` twice — note the suffixes (`-order-0`, `-order-1`).
 - [x] Confirm both orders reached the `orders` table (Command Audit tab / `psql`).
 - [x] Stop and restart **only** FastAPI.
@@ -182,12 +212,17 @@ PostgreSQL) works end-to-end without needing a robot.
 - [x] `psql ... -c "SELECT order_id, header_id FROM orders ORDER BY id;"` →
       `header_id` is non-decreasing across the restart.
 
-### G16 — connection pooling
+### G16 — connection pooling  `[auto: pytest]`
 - [x] Fire ~30 quick reads: `for ($i=0;$i -lt 30;$i++){ curl.exe -s http://localhost:8000/robots/amr001/state > $null }` — all succeed, no slowdown.
 - [x] `psql ... -c "SELECT count(*) FROM pg_stat_activity WHERE datname='amr_integration';"`
       → connection count stays at/below `DB_POOL_MAX` (default 10), not one-per-request. {It stays at 2 before, during and after the command runs}
 
-### G19 — telemetry retention
+### G19 — telemetry retention  `[auto: ps]` `[auto: pytest]`
+
+> `scripts\test\test-retention.ps1` plants a 90-day-old sentinel row and runs
+> the prune SQL directly; `fastapi-service/tests/test_retention.py` covers
+> the lifespan-hook disable-when-zero logic. The full manual procedure below
+> is kept for the case where you want to see the FastAPI log line yourself.
 
 **What this phase does:** verifies the background task that prunes telemetry
 rows older than `TELEMETRY_RETENTION_DAYS` actually works. The trick is to
@@ -213,19 +248,25 @@ plant a deliberately-old row, then restart FastAPI and check it's gone.
 
 - [ ] FastAPI log printed a `telemetry pruned` line within ~6 hours of startup.
       (The background task fires at boot + every 6 h after; the boot one is
-      the one you see now.)
-- [ ] `psql ... -c "SELECT count(*) FROM state_snapshots WHERE header_id=999;"`
+      the one you see now.) _(Log-message check — manual; the prune SQL
+      itself is verified by `test-retention.ps1`.)_
+- [x] `psql ... -c "SELECT count(*) FROM state_snapshots WHERE header_id=999;"`
       → `0`. The 90-day-old row is gone.
-- [ ] `psql ... -c "SELECT count(*) FROM state_snapshots WHERE ts > now() - interval '1 day';"`
+- [x] `psql ... -c "SELECT count(*) FROM state_snapshots WHERE ts > now() - interval '1 day';"`
       → unchanged from before the restart. Recent rows untouched.
-- [ ] Restart FastAPI again with `TELEMETRY_RETENTION_DAYS=0` — the startup
+- [x] Restart FastAPI again with `TELEMETRY_RETENTION_DAYS=0` — the startup
       log does **not** print `telemetry retention enabled`; the prune task
-      doesn't start.
+      doesn't start. _(Covered by `tests/test_retention.py::test_retention_loop_disabled_when_days_zero`.)_
 - [ ] Reset `TELEMETRY_RETENTION_DAYS` back to `30` (or remove it) after testing.
 
 ---
 
-## Phase 7 — Auth & rate limiting (G10 / G11)
+## Phase 7 — Auth & rate limiting (G10 / G11)  `[auto: pytest]`
+
+> Pytest covers the header-required / wrong-key / good-key / rate-limit
+> matrix (`tests/test_auth.py`, `tests/test_ratelimit.py`). The manual
+> steps below remain useful for live-environment smoke against a running
+> stack that already has `API_KEY` set.
 
 **Setup:** add these two lines to `fastapi-service/.env`, then restart FastAPI:
 ```
@@ -236,11 +277,12 @@ RATE_LIMIT_PER_MINUTE=5
 - [x] `GET /robots` with no header → **401**.
 - [x] `GET /robots` with `-H "X-API-Key: wrong"` → **401**.
 - [x] `GET /robots` with `-H "X-API-Key: test-key"` → 200.
-- [ ] `POST /ingest/state` with **no `X-API-Key` header** (but a full valid
+- [x] `POST /ingest/state` with **no `X-API-Key` header** (but a full valid
       body — same body the Phase 4 example uses) → **200** with
       `{"status":"ok"}`. The point of this test is that `/ingest/*` is
       deliberately **exempt** from the auth check (it's the internal
-      Node-RED → DB boundary). Example:
+      Node-RED → DB boundary). _(Verified by Newman section 10
+      "POST /ingest/state — full valid body" — no auth header is sent.)_ Example:
       ```powershell
       curl.exe -X POST -H "Content-Type: application/json" -d "@state.json" http://localhost:8000/ingest/state
       ```
@@ -262,21 +304,20 @@ RATE_LIMIT_PER_MINUTE=5
 
 ## Phase 8 — Extreme / failure cases
 
-### Bad input
+### Bad input  `[auto: newman]`
 - [x] `POST /robots/amr001/order` body `{"nodes":[]}` → **422** (empty order).
 - [x] `POST /robots/amr001/order` body `{"nodes":[{"x":1}]}` → **422** (`y` missing).
 - [x] `POST /robots/UNKNOWN/order` → **404** (robot not registered).
 - [x] `POST /robots/amr001/order/named` body `{"location_ids":[9999]}` → **404**.
 - [x] `POST /robots/amr001/instant-actions` body `{"action_type":"fly"}` → **422**.
 
-### CRUD conflicts (G15 — no cascade)
-> ✅ `DELETE /maps/map-001` 409 verified by Newman run 2026-05-21 02:37.
-- [ ] `POST /maps` with an existing `map_id` → **409** (duplicate).
+### CRUD conflicts (G15 — no cascade)  `[auto: newman]`  (delete-amr001 `[auto: e2e]`)
+- [x] `POST /maps` with an existing `map_id` → **409** (duplicate).
 - [x] `DELETE /maps/map-001` while a robot/location references it → **409**;
       `map-001` is **not** deleted, telemetry untouched.
-- [ ] `POST /robots` with `map_id":"map-404"` (nonexistent) → **422**.
-- [ ] `DELETE /robots/amr001` after it has telemetry/orders → **409**.
-- [ ] `GET /maps/nope`, `PUT /maps/nope`, `DELETE /maps/nope` → **404** each.
+- [x] `POST /robots` with `map_id":"map-404"` (nonexistent) → **422**.
+- [x] `DELETE /robots/amr001` after it has telemetry/orders → **409**.
+- [x] `GET /maps/nope`, `PUT /maps/nope`, `DELETE /maps/nope` → **404** each.
 
 ### Database loss (runtime)
 - [ ] With FastAPI running, **stop PostgreSQL**.
@@ -293,13 +334,13 @@ RATE_LIMIT_PER_MINUTE=5
 - [ ] **[robot]** Kill the ROS Bridge process → its retained `connection` topic
       flips to `CONNECTIONBROKEN` (Last-Will); `/system/status` `roslib` reflects it.
 
-### Malformed MQTT / Node-RED
-- [ ] `mosquitto_pub` a non-JSON payload to `amr/v2/moverobotic/amr001/state`
+### Malformed MQTT / Node-RED  `[auto: ps]`
+- [x] `mosquitto_pub` a non-JSON payload to `amr/v2/moverobotic/amr001/state`
       → Node-RED `validateState` errors, drops it; no DB row, no crash.
-- [ ] `mosquitto_pub` a state message missing `serialNumber` → validator rejects it.
+- [x] `mosquitto_pub` a state message missing `serialNumber` → validator rejects it.
 
-### Ordering / concurrency
-- [ ] Submit 5 orders rapidly → 5 distinct `orderId` suffixes, no duplicates.
+### Ordering / concurrency  `[auto: ps]`
+- [x] Submit 5 orders rapidly → 5 distinct `orderId` suffixes, no duplicates.
 - [ ] **[robot]** Submit a new order while one is mid-execution → behaviour is
       defined (new order replaces current); confirm it matches expectation.
 
@@ -307,49 +348,56 @@ RATE_LIMIT_PER_MINUTE=5
 
 ## Phase 9 — Recent backend additions
 
-### G21 startup-crash fix — non-numeric order suffix
-- [ ] Insert a legacy-style order row whose suffix isn't numeric:
+### G21 startup-crash fix — non-numeric order suffix  `[auto: ps]`
+> `scripts\test\test-misc.ps1` plants the legacy row, runs the registry-seed
+> aggregation SQL verbatim, and cleans up. The end-to-end FastAPI restart
+> (below) only matters if you want to see startup logs.
+- [x] Insert a legacy-style order row whose suffix isn't numeric:
       `psql ... -c "INSERT INTO orders (serial_number, ts, header_id, order_id, order_update_id) VALUES ('amr001', now(), 1, 'amr001-order-goal', 0);"`
-- [ ] Stop FastAPI; restart it.
+- [ ] Stop FastAPI; restart it. _(Manual restart; SQL safety verified by
+      `test-misc.ps1` running the registry-seed aggregation query
+      against a planted legacy row.)_
 - [ ] FastAPI **starts without traceback** (was `psycopg2.errors.InvalidTextRepresentation` before).
-- [ ] `GET /robots/amr001/state` works; counters keep ticking.
-- [ ] Clean up the row: `psql ... -c "DELETE FROM orders WHERE order_id='amr001-order-goal';"`
+      _(Manual; the regex filter in `fetch_max_order_suffixes` is exercised
+      via the SQL re-run in `test-misc.ps1`.)_
+- [x] `GET /robots/amr001/state` works; counters keep ticking.
+- [x] Clean up the row: `psql ... -c "DELETE FROM orders WHERE order_id='amr001-order-goal';"`
 
 ### Node-RED DB Admin tab
-- [ ] Open `http://localhost:1880` → **DB Admin** tab is visible (5th tab).
-- [ ] `npm install` has been run in `node-red/` (pulls `node-red-contrib-postgresql`).
-- [ ] Stop FastAPI + ROS Bridge first (per the tab's docstring).
-- [ ] Click **Reset DB** inject → the postgresql node debug shows a result; no error fill.
-- [ ] `psql ... -c "SELECT count(*) FROM state_snapshots;"` → `0` (reset wiped telemetry).
-- [ ] Reseeded tables are back: `psql ... -c "SELECT * FROM robots;"` → `amr001`.
-- [ ] Edit the **Run custom SQL** inject payload to:
+- [x] Open `http://localhost:1880` → **DB Admin** tab is visible (5th tab).
+- [x] `npm install` has been run in `node-red/` (pulls `node-red-contrib-postgresql`).
+- [x] Stop FastAPI + ROS Bridge first (per the tab's docstring).
+- [x] Click **Reset DB** inject → the postgresql node debug shows a result; no error fill.
+- [x] `psql ... -c "SELECT count(*) FROM state_snapshots;"` → `0` (reset wiped telemetry).
+- [x] Reseeded tables are back: `psql ... -c "SELECT * FROM robots;"` → `amr001`.
+- [x] Edit the **Run custom SQL** inject payload to:
       `INSERT INTO maps (map_id, label) VALUES ('map-009','Test') ON CONFLICT DO NOTHING;`
-- [ ] Press inject → `GET /maps` (after FastAPI restart) lists `map-009`.
-- [ ] If npm dep is missing, the workspace shows red "missing type" — that's the
+- [x] Press inject → `GET /maps` (after FastAPI restart) lists `map-009`.
+- [x] If npm dep is missing, the workspace shows red "missing type" — that's the
       tell that `npm install` wasn't run.
 
-### Phase 0 backend prep — CORS (G18)
-- [ ] FastAPI started with default env → `curl.exe -H "Origin: http://localhost:5173" -I http://localhost:8000/system/status`
+### Phase 0 backend prep — CORS (G18)  `[auto: newman]` `[auto: pytest]` `[auto: e2e]`
+- [x] FastAPI started with default env → `curl.exe -H "Origin: http://localhost:5173" -I http://localhost:8000/system/status`
       returns `access-control-allow-origin: http://localhost:5173`.
-- [ ] Same request with `Origin: http://evil.example` → **no** `access-control-allow-origin` header.
+- [x] Same request with `Origin: http://evil.example` → **no** `access-control-allow-origin` header.
 - [ ] Restart FastAPI with `CORS_ORIGINS=http://localhost:9999` → only that origin
       is now allowed; the Vite dev server (`5173`) is blocked. Reset afterwards.
 
-### Phase 0 — GET /orders endpoint
+### Phase 0 — GET /orders endpoint  `[auto: newman]`
 > ✅ First four items verified by Newman run 2026-05-21 02:37.
 - [x] `curl.exe http://localhost:8000/orders` → `{"orders":[...], "count":N}`.
 - [x] `curl.exe "http://localhost:8000/orders?serial=amr001&limit=2"` → at most 2 rows, all for amr001.
 - [x] `curl.exe "http://localhost:8000/orders?serial=ghost"` → **404**.
 - [x] `curl.exe "http://localhost:8000/orders?limit=0"` → **422** (limit must be ≥ 1).
-- [ ] `curl.exe "http://localhost:8000/orders?limit=501"` → **422** (limit clamped to 500).
-- [ ] With `serial=amr001`, page through using `before=<ts>` — second call returns
+- [x] `curl.exe "http://localhost:8000/orders?limit=501"` → **422** (limit clamped to 500).
+- [x] With `serial=amr001`, page through using `before=<ts>` — second call returns
       strictly older rows; reaches an empty list once exhausted.
 - [ ] `node_count` matches `psql ... -c "SELECT count(*) FROM order_nodes WHERE order_pk=<id>;"`.
 
-### Phase 0 — Mosquitto WebSocket listener on :9001
+### Phase 0 — Mosquitto WebSocket listener on :9001  `[auto: ps]` `[auto: e2e]`
 - [ ] `mosquitto.conf` has the `listener 9001` + `protocol websockets` block.
 - [ ] Mosquitto logs (or `docker compose logs mosquitto`) show two listeners.
-- [ ] `netstat -an | findstr ":9001"` (or `ss -lnt | grep 9001` in WSL) shows
+- [x] `netstat -an | findstr ":9001"` (or `ss -lnt | grep 9001` in WSL) shows
       mosquitto listening.
 - [ ] Browser → DevTools → Network → WS tab: with the React app open, you see
       one WebSocket to `ws://localhost:9001/mqtt` in connected state. (`Frames`
@@ -368,14 +416,14 @@ RATE_LIMIT_PER_MINUTE=5
 - [ ] `npm run typecheck` exits 0.
 - [ ] `npm run build` produces `dist/` without errors.
 
-### AppShell + routing
-- [ ] Open `http://localhost:5173/` → AppBar with logo + "AMR Console", four
+### AppShell + routing  `[auto: e2e]`
+- [x] Open `http://localhost:5173/` → AppBar with logo + "AMR Console", four
       pills (API / MQTT / DB / ROS), LeftNav with Operate + Admin sections.
-- [ ] Click each LeftNav entry — URL updates; main pane swaps. The currently
+- [x] Click each LeftNav entry — URL updates; main pane swaps. The currently
       selected item is highlighted indigo.
-- [ ] Manually visit `/this-is-not-a-route` → "404 — Not found" page with a
+- [x] Manually visit `/this-is-not-a-route` → "404 — Not found" page with a
       back-to-dashboard link.
-- [ ] Hovering each pill shows a descriptive tooltip (e.g. "Mosquitto WebSocket: connected").
+- [x] Hovering each pill shows a descriptive tooltip (e.g. "Mosquitto WebSocket: connected").
 
 ### Health pills — live state transitions
 - [ ] All services running → API + MQTT + DB + ROS all green within 5 s.
@@ -387,14 +435,14 @@ RATE_LIMIT_PER_MINUTE=5
 - [ ] **[robot]** Stop ROS Bridge while a robot was online → after the broker's
       retention window, ROS pill flips red.
 
-### Health page
-- [ ] Navigate to **Health** in LeftNav → six rows (FastAPI, MQTT browser, MQTT
+### Health page  `[auto: e2e]`
+- [x] Navigate to **Health** in LeftNav → six rows (FastAPI, MQTT browser, MQTT
       backend, PostgreSQL, rosbridge fleet, Node-RED), each with the right pill
       and a descriptive subtitle.
-- [ ] The FastAPI row shows "Last response at HH:MM:SS"; refreshes every 5 s.
+- [x] The FastAPI row shows "Last response at HH:MM:SS"; refreshes every 5 s.
 
-### CORS (browser side)
-- [ ] DevTools → Console: no `blocked by CORS policy` errors after page loads.
+### CORS (browser side)  `[auto: e2e]`
+- [x] DevTools → Console: no `blocked by CORS policy` errors after page loads.
 - [ ] Network tab: requests to `localhost:8000/*` carry `Origin:
       http://localhost:5173` and get back `access-control-allow-origin` matching.
 
@@ -402,14 +450,14 @@ RATE_LIMIT_PER_MINUTE=5
 
 ## Phase 11 — Frontend v1 screens
 
-### Dashboard
-- [ ] `/` shows one tile per robot from `GET /fleet` (just `amr001` if you haven't
+### Dashboard  `[auto: e2e]` (static render + click-through)
+- [x] `/` shows one tile per robot from `GET /fleet` (just `amr001` if you haven't
       added more).
 - [ ] Each tile fields populate: connection pill, mode, battery, orderId,
       "last seen", map, rosbridge status. Empty fields show `—` (no `undefined`).
 - [ ] After a `state` MQTT message arrives, "last seen" resets to "0s ago" and
       ticks upward.
-- [ ] Click a tile → navigates to `/robots/<serial>`.
+- [x] Click a tile → navigates to `/robots/<serial>`.
 - [ ] No robots in fleet → "No robots in the fleet" hint with a pointer to
       Admin → Robots.
 
@@ -439,23 +487,23 @@ RATE_LIMIT_PER_MINUTE=5
 - [ ] Connection pill (top-right) reflects the retained `connection` topic
       (`ONLINE` / `OFFLINE` / `CONNECTIONBROKEN`).
 
-### Dispatch — Named mode
-- [ ] `/dispatch` → robot picker; pick `amr001`.
+### Dispatch — Named mode  `[auto: e2e]` (happy path)
+- [x] `/dispatch` → robot picker; pick `amr001`.
 - [ ] **Named** toggle selected by default.
 - [ ] Dropdown lists locations whose `map_id` matches the robot's `mapId`. Empty
       if no locations match.
-- [ ] Pick a location → it appears in the ordered list below the dropdown.
+- [x] Pick a location → it appears in the ordered list below the dropdown.
 - [ ] Add a second location → list grows; "remove" button works.
-- [ ] **Send order** → toast "Order created" (or similar); the ActiveOrderPanel
+- [x] **Send order** → toast "Order created" (or similar); the ActiveOrderPanel
       below updates to show the new orderId and pending nodes.
 - [ ] If named POST returns 4xx (e.g. wrong location id) → error text under the
       builder; no toast loop.
 
-### Dispatch — Manual mode
-- [ ] Toggle to **Manual** → empty row at x=0, y=0, θ=0.
+### Dispatch — Manual mode  `[auto: e2e]` (single-node happy path)
+- [x] Toggle to **Manual** → empty row at x=0, y=0, θ=0.
 - [ ] Edit numeric values; add a second node; remove returns to one row;
       remove button disabled at one row.
-- [ ] **Send order** → new orderId in the panel.
+- [x] **Send order** → new orderId in the panel.
 
 ### Active order panel
 - [ ] orderId shown in monospace; "N nodes remaining" reflects `state.nodeStates`.
@@ -489,17 +537,17 @@ RATE_LIMIT_PER_MINUTE=5
 
 ## Phase 12 — Frontend analytics + admin
 
-### Order History
-- [ ] `/orders` shows the most recent N orders, newest first.
-- [ ] Filter by robot → list narrows to that robot only.
+### Order History  `[auto: e2e]` (render + serial filter)
+- [x] `/orders` shows the most recent N orders, newest first.
+- [x] Filter by robot → list narrows to that robot only.
 - [ ] Change page size — list refetches.
 - [ ] Scroll to bottom, click **Load older** → older rows appended; cursor
       advances; eventually button says **End of history** and is disabled.
 - [ ] Each row shows: time (localised), robot, order_id (mono font), update,
       node count, header id.
 
-### OEE — empty state
-- [ ] `/oee` with no cycles → cards show `0` / `—`; "No cycles yet" in the chart
+### OEE — empty state  `[auto: e2e]`
+- [x] `/oee` with no cycles → cards show `0` / `—`; "No cycles yet" in the chart
       area; the cycles log shows the empty-grid hint.
 
 ### OEE — populated **[robot]**
@@ -518,14 +566,14 @@ RATE_LIMIT_PER_MINUTE=5
 - [ ] Two saves in quick succession → toasts queue (one shows after the previous
       closes), no overlap.
 
-### Admin — Maps
-- [ ] `/admin/maps` lists `map-001`, `map-002`.
-- [ ] **+ Add** → drawer; enter `map-test` / `Test Map` → toast "Map created";
+### Admin — Maps  `[auto: e2e]`
+- [x] `/admin/maps` lists `map-001`, `map-002`.
+- [x] **+ Add** → drawer; enter `map-test` / `Test Map` → toast "Map created";
       grid refetches; new row visible.
 - [ ] Edit `map-test` (pencil) → drawer; label disabled-fields show ID; change
       label; Save → toast updated; grid reflects new label.
-- [ ] Delete `map-test` (trash) → confirm dialog; confirm → toast deleted; row gone.
-- [ ] Try to delete `map-001` (used by `amr001`) → red toast
+- [x] Delete `map-test` (trash) → confirm dialog; confirm → toast deleted; row gone.
+- [x] Try to delete `map-001` (used by `amr001`) → red toast
       "Cannot delete: still in use" (HTTP 409). `map-001` still present.
 
 ### Admin — Named Locations
@@ -541,22 +589,22 @@ RATE_LIMIT_PER_MINUTE=5
 - [ ] Switch the form's map dropdown → the embedded canvas re-subscribes to that
       map's rosbridge (you may see a momentary "Waiting…" then the new grid).
 
-### Admin — Robots
-- [ ] `/admin/robots` lists current robots.
-- [ ] **+ Add** → drawer; serial `amr002`, URL `ws://localhost:9091`, pick a map.
+### Admin — Robots  `[auto: e2e]`
+- [x] `/admin/robots` lists current robots.
+- [x] **+ Add** → drawer; serial `amr002`, URL `ws://localhost:9091`, pick a map.
       Save → toast "Robot created — restart the ROS Bridge to pick it up".
-- [ ] `GET /fleet` now lists `amr002` (registry auto-reloaded).
+- [x] `GET /fleet` now lists `amr002` (registry auto-reloaded).
 - [ ] Edit `amr002` → ID field disabled; change URL; Save → toast.
-- [ ] Delete `amr002` (no telemetry yet) → succeeds.
-- [ ] Try to delete `amr001` (has telemetry) → red toast with 409; row stays.
+- [x] Delete `amr002` (no telemetry yet) → succeeds.
+- [x] Try to delete `amr001` (has telemetry) → red toast with 409; row stays.
 - [ ] **[robot]** After adding a robot, the new tile appears on Dashboard;
       MQTT topics for that serial start being subscribed to.
 
-### Admin — Fleet Config
-- [ ] `/admin/fleet` form pre-populated from current `/fleet`.
-- [ ] Save unchanged → toast "Fleet config updated — registry reloaded".
+### Admin — Fleet Config  `[auto: e2e]` (render + save no-op)
+- [x] `/admin/fleet` form pre-populated from current `/fleet`.
+- [x] Save unchanged → toast "Fleet config updated — registry reloaded".
 - [ ] Change `version` to `2.0.1` → save → toast; refresh page → new value sticks.
-- [ ] **Warning banner** reads correctly with the current `interface_name`,
+- [x] **Warning banner** reads correctly with the current `interface_name`,
       `major_version`, `manufacturer` interpolated in the example topic.
 - [ ] Restore original values when done.
 

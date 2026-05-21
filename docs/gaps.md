@@ -3,16 +3,17 @@
 Open items not yet addressed, consolidated for visibility. For what *is* working see
 [status.md](status.md). Resolved gaps are listed at the bottom.
 
-> Last updated: 2026-05-21. Severity is a rough triage (High = blocks core function,
-> Medium = limits usefulness, Low = polish / hardening). Gap IDs are stable — resolved
-> ones keep their number rather than being renumbered.
+> Last updated: 2026-05-21 (G22 + G23 surfaced by new test automation and resolved
+> same session). Severity is a rough triage (High = blocks core function,
+> Medium = limits usefulness, Low = polish / hardening). Gap IDs are stable —
+> resolved ones keep their number rather than being renumbered.
 
 ## At a glance
 
 | # | Gap | Area | Severity |
 |---|---|---|---|
 
-_All previously tracked gaps (G1–G21) are resolved. See the table below._
+_All previously tracked gaps (G1–G23) are resolved. See the table below._
 
 ---
 
@@ -41,6 +42,8 @@ _All previously tracked gaps (G1–G21) are resolved. See the table below._
 | G19 | Unbounded telemetry growth — no retention policy | 2026-05-18 |
 | G20 | `/ingest/*` returns HTTP 500 on malformed payloads | 2026-05-18 |
 | G21 | VDA5050 `headerId` / `orderId` counters reset on restart | 2026-05-18 |
+| G22 | Frontend named-order POST sent camelCase, FastAPI expected snake_case (422 on every Dispatch → Named send) | 2026-05-21 |
+| G23 | `GET/POST/PUT /robots/{serial}` returned snake_case while `GET /robots` (list) returned camelCase — API self-inconsistency | 2026-05-21 |
 
 G1–G3 — the ROS Bridge Service consumes `/move_base` feedback and the VDA5050
 `OrderStateMachine` auto-advances orders node-by-node. G12 — JSON-line logging in the
@@ -123,6 +126,26 @@ disables it) every 6 h — child tables go via `ON DELETE CASCADE`. Documented i
 are typed with Pydantic models (`app/schemas.py`) that pin the required top-level
 keys; FastAPI now returns a **422** naming the offending field. The variable-length
 VDA5050 arrays pass straight through via `extra="allow"`.
+
+**G23** — single-row robots endpoints returned snake_case rows. `GET /robots`
+went through `RobotRegistry.list()` which emits camelCase
+(`{serialNumber, rosbridgeUrl, mapId}`), but `GET /robots/{serial}`,
+`POST /robots`, and `PUT /robots/{serial}` returned the raw `db.fetch_robot()`
+row (`{serial_number, rosbridge_url, map_id}`). Surfaced by the Newman
+assertion `expected j.serialNumber to eql 'amr001'` failing against
+`undefined` (already noted in the manual checklist as a REMARK from
+2026-05-21 03:13). Fixed by adding a `_to_camel(row)` helper in
+`app/routers/robots.py` and applying it to the get/post/put responses;
+`db.py` stays SQL-shaped (snake_case) by convention.
+
+**G22** — `postNamedOrder` in `frontend/src/api/robots.ts` was sending
+`{ locationIds: [...] }` (camelCase) while FastAPI's `NamedOrderRequest`
+pydantic schema declares `location_ids` (snake_case). Every Dispatch → Named
+order in the React app returned **422 Unprocessable Entity**; the Manual
+mode path was unaffected because `OrderRequest` uses `nodes` on both sides.
+Surfaced by the Playwright E2E suite added 2026-05-21 (`dispatch.spec.ts`).
+Fixed by translating at the wire boundary in `postNamedOrder` (snake_case
+on the JSON, camelCase preserved on the TS interface for callers).
 
 **G21** — VDA5050 counters persist across restarts. `RobotRegistry` seeds its
 `headerId` (per topic) and `orderId` counters at startup from the database

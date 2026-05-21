@@ -82,22 +82,33 @@ all closed.
 
 ### Testing & CI
 
-- **Per-service unit tests.** ROS Bridge `node:test` suite (~15 tests),
-  FastAPI `pytest` suite (`tests/test_config.py`, `test_auth.py`,
-  `test_ratelimit.py`, `test_schemas.py`, `test_orders.py`, `test_cors.py`).
-  Both run in CI on every push.
-- **Newman API smoke suite** (`docs/postman/`) — 30 requests / 46 assertions
-  covering every endpoint family. Runs via `.\docs\postman\run-newman.ps1`;
-  HTML + JSON reports under `docs/postman/reports/`. Self-cleaning CRUD
-  blocks.
+See [`testing.md`](testing.md) for the full breakdown (tiers, how to run
+each, where reports land). Short version:
+
+- **Per-service unit tests** (Tier 1 — run in CI). ROS Bridge `node:test`
+  suite (~15 tests). FastAPI `pytest` suite covers config, auth, rate-limit,
+  schemas, orders, CORS, and **retention** (`tests/test_retention.py`,
+  added 2026-05-21 alongside the test-automation expansion).
+- **Newman API smoke suite** (Tier 2, `docs/postman/`) — **13 sections /
+  61 requests** covering every endpoint family plus negative cases, CORS
+  pos/neg, and `/orders` cursor pagination. Runs via
+  `.\docs\postman\run-newman.ps1`; reports under `docs/postman/reports/`.
+- **PowerShell integration scripts** (Tier 2, `scripts/test/`) — ingestion
+  pipeline (MQTT→DB), G19 retention prune SQL, G21 legacy-suffix safety,
+  Mosquitto WS listener, rapid-order distinctness. Wrapped by
+  `.\scripts\test\run-all.ps1` which also calls Newman + pytest + node:test.
+- **Playwright E2E** (Tier 2, `frontend/tests/e2e/`) — non-robot React
+  surface: AppShell, Health page live timestamp, Dashboard tile, Dispatch
+  named + manual happy paths, Admin Maps/Robots/Fleet CRUD incl. 409 toast,
+  Orders + OEE empty state, no-CORS-errors check. `cd frontend && npm run e2e`.
 - **GitHub Actions CI** (`.github/workflows/ci.yml`) — three jobs:
   - **ROS Bridge** — `npm ci`, `node --check`, `npm test`.
   - **FastAPI** — `pip install -r requirements*.txt`, `compileall`, `pytest`.
     `tests/conftest.py` stubs the four DB calls `RobotRegistry.__init__`
     makes, so router imports don't need a live Postgres.
   - **Node-RED** — `flows.json` JSON validation.
-  Frontend (`tsc`/build) and Newman are **not** in CI by design — local-only
-  for now.
+  Frontend (Playwright + `tsc`/build) and the Tier-2 integration suites are
+  **not** in CI yet — they need the live stack up. Local-only for now.
 
 ### Docker & ops
 
@@ -116,19 +127,29 @@ all closed.
   TypeScript compiles (`tsc -b`), Vite production build succeeds.
 - **Unit-tested:** ROS Bridge `node:test`, FastAPI `pytest` (both green in
   CI as of 2026-05-21).
-- **HTTP-tested:** Newman replays 30 requests against the running FastAPI
-  with 45/46 assertions passing on the latest run; the one failure is a
-  Newman assertion mismatch on `GET /robots/{serial}` shape (response is
-  missing `serialNumber` at top level — worth eyeballing the actual JSON).
+- **HTTP-tested:** Newman replays **61 requests / 66 assertions / 0 failed**
+  against the running FastAPI (13 sections — full CRUD round-trips +
+  negative cases + CORS pos/neg + `/orders` cursor pagination). The earlier
+  `GET /robots/{serial}` snake_case asymmetry is now **resolved** (G23 —
+  single-row robot endpoints return camelCase).
+- **Integration-tested:** PowerShell scripts under `scripts/test/` cover the
+  MQTT→DB ingestion pipeline, the G19 retention prune SQL, the G21 legacy-
+  suffix safety, and the Mosquitto :9001 WS listener.
+- **Browser-tested:** Playwright suite under `frontend/tests/e2e/` —
+  **24/24 passed, 0 skipped, 0 failed** at last run. Covers AppShell,
+  Health, Dashboard, Dispatch (named + manual), Admin CRUD
+  (Maps / Robots / Fleet), Orders, OEE, CORS. Surfaced **G22** during
+  development (frontend named-order camelCase vs FastAPI snake_case).
 - **Manually verified:** the [manual-test-checklist.md](manual-test-checklist.md)
-  Phases 0–7 are largely ticked by the user; Phases 8–13 (extreme cases +
-  frontend) are partially done.
+  carries `[auto: …]` tags inline. The leftover manual items (chaos / robot /
+  UI / ops) are re-grouped by service in
+  [manual-test-by-service.md](manual-test-by-service.md) for spot-checks.
 
 ---
 
 ## Not yet implemented (post-v1)
 
-All originally tracked gaps **G1–G21 are resolved.** Things that would be the
+All tracked gaps **G1–G23 are resolved.** Things that would be the
 natural next steps but aren't tracked as gaps:
 
 - **Frontend in CI** — `tsc --noEmit && vite build` job. ~15 min to add.

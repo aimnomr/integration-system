@@ -27,7 +27,7 @@ All project documentation lives under `docs/`. Start at
 | How services connect, message pathways | `docs/architecture.md` |
 | Prerequisites and how to run everything | `docs/setup.md` |
 | What is implemented | `docs/status.md` |
-| Gaps tracker (currently empty — G1–G21 resolved) | `docs/gaps.md` |
+| Gaps tracker (currently empty — G1–G23 resolved) | `docs/gaps.md` |
 | Handoff snapshot — recent work + current state | `docs/CONTINUATION.md` |
 | Why key design choices were made | `docs/decisions.md` |
 | Domain terms | `docs/glossary.md` |
@@ -35,8 +35,12 @@ All project documentation lives under `docs/`. Start at
 | Contracts — REST, MQTT, ROS, database | `docs/schema/` |
 | Documentation format standards | `docs/convention/` |
 | Forward-looking plans (e.g. VDA5050) | `docs/plans/` |
+| **How to verify the stack — automation + manual** | `docs/testing.md` |
 | Newman API smoke suite (collection + runner) | `docs/postman/` |
-| Long-form regression checklist | `docs/manual-test-checklist.md` |
+| PowerShell integration scripts | `scripts/test/` (+ `scripts/test/README.md`) |
+| Playwright E2E suite (frontend, non-robot) | `frontend/tests/e2e/` (+ `frontend/tests/README.md`) |
+| Long-form regression checklist (phase-ordered, with `[auto:]` tags) | `docs/manual-test-checklist.md` |
+| Leftover manual items grouped by service | `docs/manual-test-by-service.md` |
 | Reference notes from the previous single-robot UI | `docs/old-interface/` |
 | The React frontend itself | `frontend/` (see `frontend/README.md`) |
 

@@ -34,9 +34,12 @@ export interface NamedOrderRequest {
 }
 
 export function postNamedOrder(serial: string, body: NamedOrderRequest) {
+  // FastAPI's NamedOrderRequest pydantic schema uses snake_case (`location_ids`).
+  // The TS interface stays camelCase to match the rest of the codebase; we
+  // translate here at the wire boundary.
   return apiFetch<OrderResponse>(
     `/robots/${encodeURIComponent(serial)}/order/named`,
-    { method: 'POST', body },
+    { method: 'POST', body: { location_ids: body.locationIds } },
   );
 }
 

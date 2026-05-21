@@ -22,3 +22,16 @@ flows_cred.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Test artifacts
+# Playwright (frontend/tests/e2e) — html report, traces, screenshots, videos.
+# The browsers themselves live under %LOCALAPPDATA%\ms-playwright (global).
+playwright-report/
+test-results/
+playwright/.cache/
+
+# Newman HTML/JSON reports (docs/postman/run-newman.ps1 writes timestamped files)
+docs/postman/reports/
+
+# Throwaway log captures (e.g. `... | Tee-Object last-run.txt`)
+last-run.txt

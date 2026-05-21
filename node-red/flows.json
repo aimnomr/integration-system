@@ -38,6 +38,149 @@
         "info": "Database reset + ad-hoc SQL via the postgresql node (node-red-contrib-postgresql).\n\n* **Reset DB** reads `docs/schema/schema.sql` from disk and executes it against Postgres — drops + recreates all tables, then reseeds fleet_config / maps / robots / named_locations.\n* **Run custom SQL** sends the inject payload straight to Postgres, so you can edit SQL right in the inject node and fire it.\n\nConnection params live on the `db-pg-config` config node (host=localhost, port=5432, db=amr_integration, user=postgres, password=admin — matching docker-compose.yml). Stop FastAPI/ROS Bridge before resetting, or they may crash on the missing tables mid-drop.\n\nRequires the `node-red-contrib-postgresql` palette package — install via Manage palette, or `npm install node-red-contrib-postgresql` in the node-red folder."
     },
     {
+        "id": "a2695d583f185be8",
+        "type": "group",
+        "z": "tab-db-admin",
+        "style": {
+            "stroke": "#999999",
+            "stroke-opacity": "1",
+            "fill": "none",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "color": "#a4a4a4"
+        },
+        "nodes": [
+            "db-view-orders-inject",
+            "db-view-orders-pg",
+            "db-view-orders-dbg",
+            "db-view-order-nodes-inject",
+            "db-view-order-nodes-pg",
+            "db-view-order-nodes-dbg",
+            "db-view-order-edges-inject",
+            "db-view-order-edges-pg",
+            "db-view-order-edges-dbg"
+        ],
+        "x": 60,
+        "y": 298,
+        "w": 752,
+        "h": 199.7551020408166
+    },
+    {
+        "id": "3aa50e713dfa0e2b",
+        "type": "group",
+        "z": "tab-db-admin",
+        "style": {
+            "stroke": "#999999",
+            "stroke-opacity": "1",
+            "fill": "none",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "color": "#a4a4a4"
+        },
+        "nodes": [
+            "db-view-instant-action-messages-dbg",
+            "db-view-instant-action-messages-pg",
+            "db-view-instant-action-messages-inject",
+            "db-view-instant-actions-dbg",
+            "db-view-instant-actions-pg",
+            "db-view-instant-actions-inject"
+        ],
+        "x": 60,
+        "y": 520.7448979591836,
+        "w": 882,
+        "h": 137.51020408163276
+    },
+    {
+        "id": "49d43b6403461c17",
+        "type": "group",
+        "z": "tab-db-admin",
+        "style": {
+            "stroke": "#999999",
+            "stroke-opacity": "1",
+            "fill": "none",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "color": "#a4a4a4"
+        },
+        "nodes": [
+            "db-view-state-snapshots-inject",
+            "db-view-state-snapshots-pg",
+            "db-view-state-snapshots-dbg",
+            "db-view-state-node-states-inject",
+            "db-view-state-node-states-pg",
+            "db-view-state-node-states-dbg",
+            "db-view-state-action-states-inject",
+            "db-view-state-action-states-pg",
+            "db-view-state-action-states-dbg",
+            "db-view-state-errors-inject",
+            "db-view-state-errors-pg",
+            "db-view-state-errors-dbg"
+        ],
+        "x": 60,
+        "y": 678,
+        "w": 792,
+        "h": 254.65306122448942
+    },
+    {
+        "id": "1a05063bd9995b35",
+        "type": "group",
+        "z": "tab-db-admin",
+        "style": {
+            "stroke": "#999999",
+            "stroke-opacity": "1",
+            "fill": "none",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "color": "#a4a4a4"
+        },
+        "nodes": [
+            "db-view-connection-log-inject",
+            "db-view-connection-log-pg",
+            "db-view-connection-log-dbg",
+            "db-view-oee-cycles-inject",
+            "db-view-oee-cycles-pg",
+            "db-view-oee-cycles-dbg"
+        ],
+        "x": 60,
+        "y": 958,
+        "w": 762,
+        "h": 139.55102040816337
+    },
+    {
+        "id": "e3a60dadd01f56a8",
+        "type": "group",
+        "z": "tab-db-admin",
+        "style": {
+            "stroke": "#999999",
+            "stroke-opacity": "1",
+            "fill": "none",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "color": "#a4a4a4"
+        },
+        "nodes": [
+            "db-view-counts-dbg",
+            "db-view-counts-pg",
+            "db-view-counts-inject",
+            "db-custom-dbg",
+            "db-custom-pg",
+            "db-custom-inject",
+            "db-reset-a-dbg",
+            "db-reset-a-seed",
+            "db-reset-a-schema",
+            "db-reset-a-inject"
+        ],
+        "x": 60,
+        "y": 75.55102040816325,
+        "w": 872,
+        "h": 204.44897959183675
+    },
+    {
         "id": "broker-local",
         "type": "mqtt-broker",
         "name": "Local MQTT",
@@ -740,103 +883,10 @@
         "wires": []
     },
     {
-        "id": "db-cmt-reset",
-        "type": "comment",
-        "z": "tab-db-admin",
-        "name": "Reset DB to default (runs schema.sql)",
-        "info": "Drops + recreates all tables and reseeds fleet_config / maps / robots / named_locations. Idempotent — safe to run repeatedly.",
-        "x": 220,
-        "y": 60,
-        "wires": []
-    },
-    {
-        "id": "db-reset-inject",
-        "type": "inject",
-        "z": "tab-db-admin",
-        "name": "Reset DB",
-        "props": [],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "x": 130,
-        "y": 120,
-        "wires": [
-            [
-                "db-reset-read"
-            ]
-        ]
-    },
-    {
-        "id": "db-reset-read",
-        "type": "file in",
-        "z": "tab-db-admin",
-        "name": "read schema.sql",
-        "filename": "D:\\FYP\\integration-system\\docs\\schema\\schema.sql",
-        "filenameType": "str",
-        "format": "utf8",
-        "chunk": false,
-        "sendError": true,
-        "encoding": "utf8",
-        "allProps": false,
-        "x": 340,
-        "y": 120,
-        "wires": [
-            [
-                "db-reset-pg"
-            ]
-        ]
-    },
-    {
-        "id": "db-reset-pg",
-        "type": "postgresql",
-        "z": "tab-db-admin",
-        "name": "execute schema.sql",
-        "query": "{{{payload}}}",
-        "postgreSQLConfig": "db-pg-config",
-        "split": false,
-        "rowsPerMsg": 1,
-        "outputs": 1,
-        "x": 580,
-        "y": 120,
-        "wires": [
-            [
-                "db-reset-dbg"
-            ]
-        ]
-    },
-    {
-        "id": "db-reset-dbg",
-        "type": "debug",
-        "z": "tab-db-admin",
-        "name": "reset result",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": true,
-        "complete": "payload",
-        "targetType": "msg",
-        "statusVal": "payload",
-        "statusType": "auto",
-        "x": 810,
-        "y": 120,
-        "wires": []
-    },
-    {
-        "id": "db-cmt-custom",
-        "type": "comment",
-        "z": "tab-db-admin",
-        "name": "Run custom SQL (edit payload, then inject)",
-        "info": "Double-click the inject node and edit the SQL in its payload field. On inject, the payload is sent straight to Postgres via the postgresql node. Multiple statements separated by `;` are supported; only the result of the last statement is returned.",
-        "x": 240,
-        "y": 240,
-        "wires": []
-    },
-    {
         "id": "db-custom-inject",
         "type": "inject",
         "z": "tab-db-admin",
+        "g": "e3a60dadd01f56a8",
         "name": "Run custom SQL",
         "props": [
             {
@@ -848,10 +898,10 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "payload": "-- Edit this SQL, then press the inject button.-- Sent straight to Postgres via the postgresql node.---- Examples (uncomment to use):---- Add a new named location:-- INSERT INTO named_locations (id, map_id, label, x, y, theta)--     VALUES (5, 'map-001', 'Loading Bay', 1.500, 2.000, 0.0)--     ON CONFLICT (id) DO UPDATE--         SET map_id = EXCLUDED.map_id,--             label  = EXCLUDED.label,--             x      = EXCLUDED.x,--             y      = EXCLUDED.y,--             theta  = EXCLUDED.theta;---- Add a second robot:-- INSERT INTO robots (serial_number, rosbridge_url, map_id)--     VALUES ('amr002', 'ws://localhost:9091', 'map-001')--     ON CONFLICT (serial_number) DO NOTHING;---- Add a new map:-- INSERT INTO maps (map_id, label)--     VALUES ('map-003', 'Warehouse A')--     ON CONFLICT (map_id) DO NOTHING;---- Wipe telemetry only (keep fleet definition):-- TRUNCATE state_snapshots, connection_log, oee_cycles,--          orders, instant_action_messages RESTART IDENTITY CASCADE;SELECT 'replace me with real SQL' AS note;",
+        "payload": "INSERT INTO maps (map_id, label) VALUES ('map-009','Test') ON CONFLICT DO NOTHING;",
         "payloadType": "str",
-        "x": 150,
-        "y": 320,
+        "x": 186,
+        "y": 239,
         "wires": [
             [
                 "db-custom-pg"
@@ -862,14 +912,15 @@
         "id": "db-custom-pg",
         "type": "postgresql",
         "z": "tab-db-admin",
+        "g": "e3a60dadd01f56a8",
         "name": "execute SQL",
-        "query": "{{{payload}}}",
+        "query": "{{{msg.payload}}}",
         "postgreSQLConfig": "db-pg-config",
         "split": false,
         "rowsPerMsg": 1,
         "outputs": 1,
-        "x": 400,
-        "y": 320,
+        "x": 376,
+        "y": 239,
         "wires": [
             [
                 "db-custom-dbg"
@@ -880,6 +931,7 @@
         "id": "db-custom-dbg",
         "type": "debug",
         "z": "tab-db-admin",
+        "g": "e3a60dadd01f56a8",
         "name": "custom result",
         "active": true,
         "tosidebar": true,
@@ -889,8 +941,768 @@
         "targetType": "msg",
         "statusVal": "payload",
         "statusType": "auto",
-        "x": 620,
-        "y": 320,
+        "x": 816,
+        "y": 239,
+        "wires": []
+    },
+    {
+        "id": "db-reset-a-inject",
+        "type": "inject",
+        "z": "tab-db-admin",
+        "g": "e3a60dadd01f56a8",
+        "name": "Reset DB (A)",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 176,
+        "y": 116.55102040816325,
+        "wires": [
+            [
+                "db-reset-a-schema"
+            ]
+        ]
+    },
+    {
+        "id": "db-reset-a-schema",
+        "type": "postgresql",
+        "z": "tab-db-admin",
+        "g": "e3a60dadd01f56a8",
+        "name": "Reset Schema",
+        "query": "-- ============================================================\n-- AMR Integration System — database schema (VDA5050-aligned)\n-- Fully normalized: 1NF-strict, BCNF. 15 tables.\n-- Re-running this script DROPS and recreates all tables.\n--\n-- The database is the single source of truth — both FastAPI and the ROS Bridge\n-- read the fleet definition (fleet_config + robots) from here.\n--\n-- This file is the canonical, runnable copy of the schema in\n-- docs/schema/DATABASE_SCHEMA.md — keep the two in sync.\n--\n-- Apply:\n--   psql -U postgres -c \"CREATE DATABASE amr_integration;\"\n--   psql -U postgres -d amr_integration -f docs/schema/schema.sql\n-- ============================================================\n\n-- Drop children before parents (CASCADE also covers it).\nDROP TABLE IF EXISTS state_node_states       CASCADE;\nDROP TABLE IF EXISTS state_action_states     CASCADE;\nDROP TABLE IF EXISTS state_errors            CASCADE;\nDROP TABLE IF EXISTS state_snapshots         CASCADE;\nDROP TABLE IF EXISTS order_nodes             CASCADE;\nDROP TABLE IF EXISTS order_edges             CASCADE;\nDROP TABLE IF EXISTS orders                  CASCADE;\nDROP TABLE IF EXISTS instant_actions         CASCADE;\nDROP TABLE IF EXISTS instant_action_messages CASCADE;\nDROP TABLE IF EXISTS connection_log          CASCADE;\nDROP TABLE IF EXISTS oee_cycles              CASCADE;\nDROP TABLE IF EXISTS named_locations         CASCADE;\nDROP TABLE IF EXISTS robots                  CASCADE;\nDROP TABLE IF EXISTS maps                    CASCADE;\nDROP TABLE IF EXISTS fleet_config            CASCADE;\n\n-- Legacy table from the pre-normalization JSONB schema — dropped if present.\nDROP TABLE IF EXISTS order_log               CASCADE;\n\n-- ============================================================\n-- Reference tables\n-- ============================================================\n\n-- ------------------------------------------------------------\n-- 1. fleet_config — fleet-wide VDA5050 identity (single row).\n-- The CHECK (id = 1) constraint enforces exactly one row.\n-- ------------------------------------------------------------\nCREATE TABLE fleet_config (\n    id             INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),\n    interface_name TEXT NOT NULL,\n    major_version  TEXT NOT NULL,\n    version        TEXT NOT NULL,\n    manufacturer   TEXT NOT NULL\n);\n\n-- ------------------------------------------------------------\n-- 2. maps\n-- ------------------------------------------------------------\nCREATE TABLE maps (\n    map_id TEXT PRIMARY KEY,\n    label  TEXT NOT NULL\n);\n\n-- ------------------------------------------------------------\n-- 3. robots — the fleet roster (single source of truth)\n-- ------------------------------------------------------------\nCREATE TABLE robots (\n    serial_number TEXT PRIMARY KEY,\n    rosbridge_url TEXT NOT NULL,\n    map_id        TEXT NOT NULL REFERENCES maps (map_id)\n);\n\n-- ------------------------------------------------------------\n-- 4. named_locations — named navigation targets\n-- ------------------------------------------------------------\nCREATE TABLE named_locations (\n    id     INTEGER PRIMARY KEY,\n    map_id TEXT    NOT NULL REFERENCES maps (map_id),\n    label  TEXT    NOT NULL,\n    x      DOUBLE PRECISION NOT NULL,\n    y      DOUBLE PRECISION NOT NULL,\n    theta  DOUBLE PRECISION NOT NULL DEFAULT 0   -- heading, radians, map frame\n);\n\n-- ============================================================\n-- Orders — VDA5050 `order` message (header + nodes + edges)\n-- ============================================================\n\n-- ------------------------------------------------------------\n-- 5. orders — one row per `order` message (header / audit tap)\n-- ------------------------------------------------------------\nCREATE TABLE orders (\n    id              BIGSERIAL   PRIMARY KEY,\n    serial_number   TEXT        NOT NULL REFERENCES robots (serial_number),\n    ts              TIMESTAMPTZ NOT NULL,\n    header_id       INTEGER     NOT NULL,\n    order_id        TEXT        NOT NULL,\n    order_update_id INTEGER     NOT NULL\n);\nCREATE INDEX idx_orders_serial_ts ON orders (serial_number, ts DESC);\n\n-- ------------------------------------------------------------\n-- 6. order_nodes — child of orders; nodePosition flattened in\n-- ------------------------------------------------------------\nCREATE TABLE order_nodes (\n    id          BIGSERIAL PRIMARY KEY,\n    order_pk    BIGINT  NOT NULL REFERENCES orders (id) ON DELETE CASCADE,\n    node_id     TEXT    NOT NULL,\n    sequence_id INTEGER NOT NULL,\n    released    BOOLEAN NOT NULL,\n    pos_x       DOUBLE PRECISION,\n    pos_y       DOUBLE PRECISION,\n    theta       DOUBLE PRECISION,\n    map_id      TEXT\n);\nCREATE INDEX idx_order_nodes_order ON order_nodes (order_pk);\n\n-- ------------------------------------------------------------\n-- 7. order_edges — child of orders\n-- ------------------------------------------------------------\nCREATE TABLE order_edges (\n    id            BIGSERIAL PRIMARY KEY,\n    order_pk      BIGINT  NOT NULL REFERENCES orders (id) ON DELETE CASCADE,\n    edge_id       TEXT    NOT NULL,\n    sequence_id   INTEGER NOT NULL,\n    released      BOOLEAN NOT NULL,\n    start_node_id TEXT    NOT NULL,\n    end_node_id   TEXT    NOT NULL\n);\nCREATE INDEX idx_order_edges_order ON order_edges (order_pk);\n\n-- ============================================================\n-- Instant actions — VDA5050 `instantActions` message\n-- ============================================================\n\n-- ------------------------------------------------------------\n-- 8. instant_action_messages — one row per `instantActions` message\n-- ------------------------------------------------------------\nCREATE TABLE instant_action_messages (\n    id            BIGSERIAL   PRIMARY KEY,\n    serial_number TEXT        NOT NULL REFERENCES robots (serial_number),\n    ts            TIMESTAMPTZ NOT NULL,\n    header_id     INTEGER     NOT NULL\n);\nCREATE INDEX idx_instant_msg_serial_ts\n    ON instant_action_messages (serial_number, ts DESC);\n\n-- ------------------------------------------------------------\n-- 9. instant_actions — child of instant_action_messages\n-- ------------------------------------------------------------\nCREATE TABLE instant_actions (\n    id          BIGSERIAL PRIMARY KEY,\n    message_pk  BIGINT NOT NULL\n        REFERENCES instant_action_messages (id) ON DELETE CASCADE,\n    action_id     TEXT NOT NULL,\n    action_type   TEXT NOT NULL\n        CHECK (action_type IN ('cancelOrder', 'retryNode', 'skipNode')),\n    blocking_type TEXT NOT NULL\n        CHECK (blocking_type IN ('NONE', 'SOFT', 'HARD'))\n);\nCREATE INDEX idx_instant_actions_message ON instant_actions (message_pk);\n\n-- ============================================================\n-- State — VDA5050 `state` message (scalar header + child arrays)\n-- ============================================================\n\n-- ------------------------------------------------------------\n-- 10. state_snapshots — scalar fields of one `state` message\n-- ------------------------------------------------------------\nCREATE TABLE state_snapshots (\n    id                     BIGSERIAL   PRIMARY KEY,\n    serial_number          TEXT        NOT NULL REFERENCES robots (serial_number),\n    ts                     TIMESTAMPTZ NOT NULL,\n    header_id              INTEGER     NOT NULL,\n    order_id               TEXT,\n    order_update_id        INTEGER,\n    last_node_id           TEXT,\n    last_node_sequence_id  INTEGER,\n    pos_x                  DOUBLE PRECISION,\n    pos_y                  DOUBLE PRECISION,\n    theta                  DOUBLE PRECISION,\n    map_id                 TEXT,\n    position_initialized   BOOLEAN,\n    vel_vx                 DOUBLE PRECISION,\n    vel_vy                 DOUBLE PRECISION,\n    vel_omega              DOUBLE PRECISION,\n    driving                BOOLEAN,\n    operating_mode         TEXT,\n    e_stop                 TEXT,\n    field_violation        BOOLEAN\n);\nCREATE INDEX idx_state_serial_ts ON state_snapshots (serial_number, ts DESC);\n\n-- ------------------------------------------------------------\n-- 11. state_node_states — child of state_snapshots\n-- ------------------------------------------------------------\nCREATE TABLE state_node_states (\n    id          BIGSERIAL PRIMARY KEY,\n    snapshot_id BIGINT  NOT NULL REFERENCES state_snapshots (id) ON DELETE CASCADE,\n    node_id     TEXT    NOT NULL,\n    sequence_id INTEGER NOT NULL,\n    released    BOOLEAN NOT NULL\n);\nCREATE INDEX idx_state_node_states_snapshot ON state_node_states (snapshot_id);\n\n-- ------------------------------------------------------------\n-- 12. state_action_states — child of state_snapshots\n-- ------------------------------------------------------------\nCREATE TABLE state_action_states (\n    id            BIGSERIAL PRIMARY KEY,\n    snapshot_id   BIGINT NOT NULL REFERENCES state_snapshots (id) ON DELETE CASCADE,\n    action_id     TEXT NOT NULL,\n    action_type   TEXT NOT NULL,\n    action_status TEXT NOT NULL\n);\nCREATE INDEX idx_state_action_states_snapshot ON state_action_states (snapshot_id);\n\n-- ------------------------------------------------------------\n-- 13. state_errors — child of state_snapshots\n-- ------------------------------------------------------------\nCREATE TABLE state_errors (\n    id                BIGSERIAL PRIMARY KEY,\n    snapshot_id       BIGINT NOT NULL REFERENCES state_snapshots (id) ON DELETE CASCADE,\n    error_type        TEXT NOT NULL,\n    error_level       TEXT,\n    error_description TEXT\n);\nCREATE INDEX idx_state_errors_snapshot ON state_errors (snapshot_id);\n\n-- ============================================================\n-- Connection + OEE\n-- ============================================================\n\n-- ------------------------------------------------------------\n-- 14. connection_log — VDA5050 `connection` — robot liveness\n-- ------------------------------------------------------------\nCREATE TABLE connection_log (\n    id               BIGSERIAL   PRIMARY KEY,\n    serial_number    TEXT        NOT NULL REFERENCES robots (serial_number),\n    ts               TIMESTAMPTZ NOT NULL,\n    header_id        INTEGER     NOT NULL,\n    connection_state TEXT        NOT NULL\n        CHECK (connection_state IN ('ONLINE', 'OFFLINE', 'CONNECTIONBROKEN'))\n);\nCREATE INDEX idx_connection_serial_ts ON connection_log (serial_number, ts DESC);\n\n-- ------------------------------------------------------------\n-- 15. oee_cycles — derived trip cycles. duration_s is GENERATED\n-- (keeps the table in BCNF — no free-standing derived column).\n-- ------------------------------------------------------------\nCREATE TABLE oee_cycles (\n    id            BIGSERIAL   PRIMARY KEY,\n    serial_number TEXT        NOT NULL REFERENCES robots (serial_number),\n    ts            TIMESTAMPTZ NOT NULL DEFAULT now(),\n    order_id      TEXT        NOT NULL,\n    start_time    TIMESTAMPTZ NOT NULL,\n    end_time      TIMESTAMPTZ NOT NULL,\n    duration_s    DOUBLE PRECISION\n        GENERATED ALWAYS AS (EXTRACT(EPOCH FROM (end_time - start_time))) STORED,\n    result        TEXT        NOT NULL CHECK (result IN ('SUCCEEDED', 'ABORTED'))\n);\nCREATE INDEX idx_oee_serial_ts ON oee_cycles (serial_number, ts DESC);\n\n-- ============================================================\n-- Seed data\n-- ============================================================\n",
+        "postgreSQLConfig": "db-pg-config",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 386,
+        "y": 116.55102040816325,
+        "wires": [
+            [
+                "db-reset-a-seed"
+            ]
+        ]
+    },
+    {
+        "id": "db-reset-a-seed",
+        "type": "postgresql",
+        "z": "tab-db-admin",
+        "g": "e3a60dadd01f56a8",
+        "name": "Setup Tables",
+        "query": "INSERT INTO fleet_config (id, interface_name, major_version, version, manufacturer)\n    VALUES (1, 'amr', 'v2', '2.0.0', 'moverobotic');\n\n-- map_id follows the format map-NNN (zero-padded 3 digits) so maps stay filterable\n-- (WHERE map_id LIKE 'map-%') and sortable. label is the human-readable name.\nINSERT INTO maps (map_id, label) VALUES\n    ('map-001', 'Default Sim World'),\n    ('map-002', 'Office CPR');\n\nINSERT INTO robots (serial_number, rosbridge_url, map_id) VALUES\n    ('amr001', 'ws://localhost:9090', 'map-001');\n\n-- theta is radians (the legacy angle.z values were degrees — converted here).\n-- These named locations belong to map-001 (Default Sim World).\nINSERT INTO named_locations (id, map_id, label, x, y, theta) VALUES\n    (1, 'map-001', 'Charging Station',  3.094,  1.412, -2.21568),\n    (2, 'map-001', 'Entrance',         -1.953,  2.467, -0.59145),\n    (3, 'map-001', 'Storage Room',     -2.690, -1.583,  2.48120),\n    (4, 'map-001', 'Home',              0.000,  0.000,  0.00000);\n",
+        "postgreSQLConfig": "db-pg-config",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 596,
+        "y": 116.55102040816325,
+        "wires": [
+            [
+                "db-reset-a-dbg"
+            ]
+        ]
+    },
+    {
+        "id": "db-reset-a-dbg",
+        "type": "debug",
+        "z": "tab-db-admin",
+        "g": "e3a60dadd01f56a8",
+        "name": "reset A result",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload",
+        "statusType": "auto",
+        "x": 816,
+        "y": 116.55102040816325,
+        "wires": []
+    },
+    {
+        "id": "db-view-counts-inject",
+        "type": "inject",
+        "z": "tab-db-admin",
+        "g": "e3a60dadd01f56a8",
+        "name": "Row Counts",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 176,
+        "y": 179,
+        "wires": [
+            [
+                "db-view-counts-pg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-counts-pg",
+        "type": "postgresql",
+        "z": "tab-db-admin",
+        "g": "e3a60dadd01f56a8",
+        "name": "row counts (all tables)",
+        "query": "SELECT 'fleet_config' AS tbl, COUNT(*)::bigint AS rows FROM fleet_config\nUNION ALL\nSELECT 'maps' AS tbl, COUNT(*)::bigint AS rows FROM maps\nUNION ALL\nSELECT 'robots' AS tbl, COUNT(*)::bigint AS rows FROM robots\nUNION ALL\nSELECT 'named_locations' AS tbl, COUNT(*)::bigint AS rows FROM named_locations\nUNION ALL\nSELECT 'orders' AS tbl, COUNT(*)::bigint AS rows FROM orders\nUNION ALL\nSELECT 'order_nodes' AS tbl, COUNT(*)::bigint AS rows FROM order_nodes\nUNION ALL\nSELECT 'order_edges' AS tbl, COUNT(*)::bigint AS rows FROM order_edges\nUNION ALL\nSELECT 'instant_action_messages' AS tbl, COUNT(*)::bigint AS rows FROM instant_action_messages\nUNION ALL\nSELECT 'instant_actions' AS tbl, COUNT(*)::bigint AS rows FROM instant_actions\nUNION ALL\nSELECT 'state_snapshots' AS tbl, COUNT(*)::bigint AS rows FROM state_snapshots\nUNION ALL\nSELECT 'state_node_states' AS tbl, COUNT(*)::bigint AS rows FROM state_node_states\nUNION ALL\nSELECT 'state_action_states' AS tbl, COUNT(*)::bigint AS rows FROM state_action_states\nUNION ALL\nSELECT 'state_errors' AS tbl, COUNT(*)::bigint AS rows FROM state_errors\nUNION ALL\nSELECT 'connection_log' AS tbl, COUNT(*)::bigint AS rows FROM connection_log\nUNION ALL\nSELECT 'oee_cycles' AS tbl, COUNT(*)::bigint AS rows FROM oee_cycles;",
+        "postgreSQLConfig": "db-pg-config",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 406,
+        "y": 179,
+        "wires": [
+            [
+                "db-view-counts-dbg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-counts-dbg",
+        "type": "debug",
+        "z": "tab-db-admin",
+        "g": "e3a60dadd01f56a8",
+        "name": "counts",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "msg",
+        "x": 836,
+        "y": 179,
+        "wires": []
+    },
+    {
+        "id": "db-view-orders-inject",
+        "type": "inject",
+        "z": "tab-db-admin",
+        "g": "a2695d583f185be8",
+        "name": "View orders",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 176,
+        "y": 339,
+        "wires": [
+            [
+                "db-view-orders-pg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-orders-pg",
+        "type": "postgresql",
+        "z": "tab-db-admin",
+        "g": "a2695d583f185be8",
+        "name": "orders",
+        "query": "SELECT * FROM orders ORDER BY ts DESC LIMIT 20;",
+        "postgreSQLConfig": "db-pg-config",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 416,
+        "y": 339,
+        "wires": [
+            [
+                "db-view-orders-dbg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-orders-dbg",
+        "type": "debug",
+        "z": "tab-db-admin",
+        "g": "a2695d583f185be8",
+        "name": "orders rows",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload",
+        "statusType": "auto",
+        "x": 696,
+        "y": 339,
+        "wires": []
+    },
+    {
+        "id": "db-view-order-nodes-inject",
+        "type": "inject",
+        "z": "tab-db-admin",
+        "g": "a2695d583f185be8",
+        "name": "View order_nodes",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 196,
+        "y": 399.20408163265324,
+        "wires": [
+            [
+                "db-view-order-nodes-pg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-order-nodes-pg",
+        "type": "postgresql",
+        "z": "tab-db-admin",
+        "g": "a2695d583f185be8",
+        "name": "order_nodes",
+        "query": "SELECT * FROM order_nodes ORDER BY id DESC LIMIT 20;",
+        "postgreSQLConfig": "db-pg-config",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 436,
+        "y": 399.20408163265324,
+        "wires": [
+            [
+                "db-view-order-nodes-dbg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-order-nodes-dbg",
+        "type": "debug",
+        "z": "tab-db-admin",
+        "g": "a2695d583f185be8",
+        "name": "order_nodes rows",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload",
+        "statusType": "auto",
+        "x": 676,
+        "y": 399.20408163265324,
+        "wires": []
+    },
+    {
+        "id": "db-view-order-edges-inject",
+        "type": "inject",
+        "z": "tab-db-admin",
+        "g": "a2695d583f185be8",
+        "name": "View order_edges",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 196,
+        "y": 456.7551020408166,
+        "wires": [
+            [
+                "db-view-order-edges-pg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-order-edges-pg",
+        "type": "postgresql",
+        "z": "tab-db-admin",
+        "g": "a2695d583f185be8",
+        "name": "order_edges",
+        "query": "SELECT * FROM order_edges ORDER BY id DESC LIMIT 20;",
+        "postgreSQLConfig": "db-pg-config",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 436,
+        "y": 456.7551020408166,
+        "wires": [
+            [
+                "db-view-order-edges-dbg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-order-edges-dbg",
+        "type": "debug",
+        "z": "tab-db-admin",
+        "g": "a2695d583f185be8",
+        "name": "order_edges rows",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload",
+        "statusType": "auto",
+        "x": 676,
+        "y": 456.7551020408166,
+        "wires": []
+    },
+    {
+        "id": "db-view-instant-action-messages-inject",
+        "type": "inject",
+        "z": "tab-db-admin",
+        "g": "3aa50e713dfa0e2b",
+        "name": "View instant_action_messages",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 236,
+        "y": 561.7448979591836,
+        "wires": [
+            [
+                "db-view-instant-action-messages-pg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-instant-action-messages-pg",
+        "type": "postgresql",
+        "z": "tab-db-admin",
+        "g": "3aa50e713dfa0e2b",
+        "name": "instant_action_messages",
+        "query": "SELECT * FROM instant_action_messages ORDER BY ts DESC LIMIT 20;",
+        "postgreSQLConfig": "db-pg-config",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 510,
+        "y": 561.7448979591836,
+        "wires": [
+            [
+                "db-view-instant-action-messages-dbg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-instant-action-messages-dbg",
+        "type": "debug",
+        "z": "tab-db-admin",
+        "g": "3aa50e713dfa0e2b",
+        "name": "instant_action_messages rows",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload",
+        "statusType": "auto",
+        "x": 766,
+        "y": 561.7448979591836,
+        "wires": []
+    },
+    {
+        "id": "db-view-instant-actions-inject",
+        "type": "inject",
+        "z": "tab-db-admin",
+        "g": "3aa50e713dfa0e2b",
+        "name": "View instant_actions",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 196,
+        "y": 617.2551020408164,
+        "wires": [
+            [
+                "db-view-instant-actions-pg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-instant-actions-pg",
+        "type": "postgresql",
+        "z": "tab-db-admin",
+        "g": "3aa50e713dfa0e2b",
+        "name": "instant_actions",
+        "query": "SELECT * FROM instant_actions ORDER BY id DESC LIMIT 20;",
+        "postgreSQLConfig": "db-pg-config",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 480,
+        "y": 617.2551020408164,
+        "wires": [
+            [
+                "db-view-instant-actions-dbg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-instant-actions-dbg",
+        "type": "debug",
+        "z": "tab-db-admin",
+        "g": "3aa50e713dfa0e2b",
+        "name": "instant_actions rows",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload",
+        "statusType": "auto",
+        "x": 796,
+        "y": 617.2551020408164,
+        "wires": []
+    },
+    {
+        "id": "db-view-state-snapshots-inject",
+        "type": "inject",
+        "z": "tab-db-admin",
+        "g": "49d43b6403461c17",
+        "name": "View state_snapshots",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 206,
+        "y": 719,
+        "wires": [
+            [
+                "db-view-state-snapshots-pg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-state-snapshots-pg",
+        "type": "postgresql",
+        "z": "tab-db-admin",
+        "g": "49d43b6403461c17",
+        "name": "state_snapshots",
+        "query": "SELECT * FROM state_snapshots ORDER BY ts DESC LIMIT 20;",
+        "postgreSQLConfig": "db-pg-config",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 446,
+        "y": 719,
+        "wires": [
+            [
+                "db-view-state-snapshots-dbg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-state-snapshots-dbg",
+        "type": "debug",
+        "z": "tab-db-admin",
+        "g": "49d43b6403461c17",
+        "name": "state_snapshots rows",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload",
+        "statusType": "auto",
+        "x": 706,
+        "y": 719,
+        "wires": []
+    },
+    {
+        "id": "db-view-state-node-states-inject",
+        "type": "inject",
+        "z": "tab-db-admin",
+        "g": "49d43b6403461c17",
+        "name": "View state_node_states",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 206,
+        "y": 776.5510204081631,
+        "wires": [
+            [
+                "db-view-state-node-states-pg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-state-node-states-pg",
+        "type": "postgresql",
+        "z": "tab-db-admin",
+        "g": "49d43b6403461c17",
+        "name": "state_node_states",
+        "query": "SELECT * FROM state_node_states ORDER BY id DESC LIMIT 20;",
+        "postgreSQLConfig": "db-pg-config",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 456,
+        "y": 776.5510204081631,
+        "wires": [
+            [
+                "db-view-state-node-states-dbg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-state-node-states-dbg",
+        "type": "debug",
+        "z": "tab-db-admin",
+        "g": "49d43b6403461c17",
+        "name": "state_node_states rows",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload",
+        "statusType": "auto",
+        "x": 696,
+        "y": 776.5510204081631,
+        "wires": []
+    },
+    {
+        "id": "db-view-state-action-states-inject",
+        "type": "inject",
+        "z": "tab-db-admin",
+        "g": "49d43b6403461c17",
+        "name": "View state_action_states",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 216,
+        "y": 834.1020408163263,
+        "wires": [
+            [
+                "db-view-state-action-states-pg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-state-action-states-pg",
+        "type": "postgresql",
+        "z": "tab-db-admin",
+        "g": "49d43b6403461c17",
+        "name": "state_action_states",
+        "query": "SELECT * FROM state_action_states ORDER BY id DESC LIMIT 20;",
+        "postgreSQLConfig": "db-pg-config",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 456,
+        "y": 834.1020408163263,
+        "wires": [
+            [
+                "db-view-state-action-states-dbg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-state-action-states-dbg",
+        "type": "debug",
+        "z": "tab-db-admin",
+        "g": "49d43b6403461c17",
+        "name": "state_action_states rows",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload",
+        "statusType": "auto",
+        "x": 696,
+        "y": 834.1020408163263,
+        "wires": []
+    },
+    {
+        "id": "db-view-state-errors-inject",
+        "type": "inject",
+        "z": "tab-db-admin",
+        "g": "49d43b6403461c17",
+        "name": "View state_errors",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 186,
+        "y": 891.6530612244894,
+        "wires": [
+            [
+                "db-view-state-errors-pg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-state-errors-pg",
+        "type": "postgresql",
+        "z": "tab-db-admin",
+        "g": "49d43b6403461c17",
+        "name": "state_errors",
+        "query": "SELECT * FROM state_errors ORDER BY id DESC LIMIT 20;",
+        "postgreSQLConfig": "db-pg-config",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 436,
+        "y": 891.6530612244894,
+        "wires": [
+            [
+                "db-view-state-errors-dbg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-state-errors-dbg",
+        "type": "debug",
+        "z": "tab-db-admin",
+        "g": "49d43b6403461c17",
+        "name": "state_errors rows",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload",
+        "statusType": "auto",
+        "x": 716,
+        "y": 891.6530612244894,
+        "wires": []
+    },
+    {
+        "id": "db-view-connection-log-inject",
+        "type": "inject",
+        "z": "tab-db-admin",
+        "g": "1a05063bd9995b35",
+        "name": "View connection_log",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 196,
+        "y": 999,
+        "wires": [
+            [
+                "db-view-connection-log-pg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-connection-log-pg",
+        "type": "postgresql",
+        "z": "tab-db-admin",
+        "g": "1a05063bd9995b35",
+        "name": "connection_log",
+        "query": "SELECT * FROM connection_log ORDER BY ts DESC LIMIT 20;",
+        "postgreSQLConfig": "db-pg-config",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 436,
+        "y": 999,
+        "wires": [
+            [
+                "db-view-connection-log-dbg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-connection-log-dbg",
+        "type": "debug",
+        "z": "tab-db-admin",
+        "g": "1a05063bd9995b35",
+        "name": "connection_log rows",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload",
+        "statusType": "auto",
+        "x": 676,
+        "y": 999,
+        "wires": []
+    },
+    {
+        "id": "db-view-oee-cycles-inject",
+        "type": "inject",
+        "z": "tab-db-admin",
+        "g": "1a05063bd9995b35",
+        "name": "View oee_cycles",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 186,
+        "y": 1056.5510204081634,
+        "wires": [
+            [
+                "db-view-oee-cycles-pg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-oee-cycles-pg",
+        "type": "postgresql",
+        "z": "tab-db-admin",
+        "g": "1a05063bd9995b35",
+        "name": "oee_cycles",
+        "query": "SELECT * FROM oee_cycles ORDER BY ts DESC LIMIT 20;",
+        "postgreSQLConfig": "db-pg-config",
+        "split": false,
+        "rowsPerMsg": 1,
+        "outputs": 1,
+        "x": 426,
+        "y": 1056.5510204081634,
+        "wires": [
+            [
+                "db-view-oee-cycles-dbg"
+            ]
+        ]
+    },
+    {
+        "id": "db-view-oee-cycles-dbg",
+        "type": "debug",
+        "z": "tab-db-admin",
+        "g": "1a05063bd9995b35",
+        "name": "oee_cycles rows",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload",
+        "statusType": "auto",
+        "x": 686,
+        "y": 1056.5510204081634,
         "wires": []
     }
 ]

@@ -593,12 +593,265 @@
             "  pm.expect(JSON.stringify(pm.response.json())).to.include('serialNumber');",
             "});"
           ]}}]
+        },
+        {
+          "name": "POST /ingest/connection — bogus connectionState (422 expected)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"headerId\": 1,\n  \"timestamp\": \"2026-05-18T12:00:00Z\",\n  \"serialNumber\": \"amr001\",\n  \"connectionState\": \"BOGUS\"\n}" },
+            "url": { "raw": "{{baseUrl}}/ingest/connection", "host": ["{{baseUrl}}"], "path": ["ingest", "connection"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('422 Unprocessable Entity', () => pm.response.to.have.status(422));"
+          ]}}]
+        },
+        {
+          "name": "POST /ingest/state — full valid body (200 expected)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"headerId\": 1,\n  \"timestamp\": \"2026-05-18T12:00:00Z\",\n  \"serialNumber\": \"{{seedSerial}}\",\n  \"orderId\": \"\",\n  \"orderUpdateId\": 0,\n  \"lastNodeId\": \"\",\n  \"lastNodeSequenceId\": 0,\n  \"nodeStates\": [],\n  \"edgeStates\": [],\n  \"actionStates\": [],\n  \"agvPosition\": { \"x\": 1.0, \"y\": 2.0, \"theta\": 0, \"mapId\": \"map-001\", \"positionInitialized\": true },\n  \"velocity\": { \"vx\": 0, \"vy\": 0, \"omega\": 0 },\n  \"driving\": false,\n  \"operatingMode\": \"AUTOMATIC\",\n  \"errors\": [],\n  \"safetyState\": { \"eStop\": \"NONE\", \"fieldViolation\": false }\n}" },
+            "url": { "raw": "{{baseUrl}}/ingest/state", "host": ["{{baseUrl}}"], "path": ["ingest", "state"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('status ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "11. Negative cases (Phase 8 — bad input & 404s)",
+      "item": [
+        {
+          "name": "POST /robots/{seed}/order — missing y (422 expected)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"nodes\": [{ \"x\": 1 }]\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/robots/{{seedSerial}}/order",
+              "host": ["{{baseUrl}}"], "path": ["robots", "{{seedSerial}}", "order"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('422 Unprocessable Entity', () => pm.response.to.have.status(422));"
+          ]}}]
+        },
+        {
+          "name": "POST /robots/UNKNOWN/order (404 expected)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"nodes\": [{ \"x\": 0, \"y\": 0, \"theta\": 0 }]\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/robots/UNKNOWN/order",
+              "host": ["{{baseUrl}}"], "path": ["robots", "UNKNOWN", "order"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+          ]}}]
+        },
+        {
+          "name": "POST /robots/{seed}/order/named — unknown location (404 expected)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"location_ids\": [9999]\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/robots/{{seedSerial}}/order/named",
+              "host": ["{{baseUrl}}"], "path": ["robots", "{{seedSerial}}", "order", "named"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+          ]}}]
+        },
+        {
+          "name": "POST /robots/{seed}/instant-actions — bogus type (422 expected)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"action_type\": \"fly\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/robots/{{seedSerial}}/instant-actions",
+              "host": ["{{baseUrl}}"], "path": ["robots", "{{seedSerial}}", "instant-actions"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('422 Unprocessable Entity', () => pm.response.to.have.status(422));"
+          ]}}]
+        },
+        {
+          "name": "POST /robots — bad map_id (422 expected)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"serial_number\": \"amr-bad\",\n  \"rosbridge_url\": \"ws://localhost:9099\",\n  \"map_id\": \"map-404\"\n}" },
+            "url": { "raw": "{{baseUrl}}/robots", "host": ["{{baseUrl}}"], "path": ["robots"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('422 Unprocessable Entity', () => pm.response.to.have.status(422));"
+          ]}}]
+        },
+        {
+          "name": "POST /maps — duplicate id (409 expected)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"map_id\": \"map-001\",\n  \"label\": \"Should clash\"\n}" },
+            "url": { "raw": "{{baseUrl}}/maps", "host": ["{{baseUrl}}"], "path": ["maps"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('409 Conflict (duplicate map_id)', () => pm.response.to.have.status(409));"
+          ]}}]
+        },
+        {
+          "name": "GET /maps/nope (404 expected)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/maps/nope", "host": ["{{baseUrl}}"], "path": ["maps", "nope"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+          ]}}]
+        },
+        {
+          "name": "PUT /maps/nope (404 expected)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"label\": \"ghost\"\n}" },
+            "url": { "raw": "{{baseUrl}}/maps/nope", "host": ["{{baseUrl}}"], "path": ["maps", "nope"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+          ]}}]
+        },
+        {
+          "name": "DELETE /maps/nope (404 expected)",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/maps/nope", "host": ["{{baseUrl}}"], "path": ["maps", "nope"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+          ]}}]
+        },
+        {
+          "name": "GET /orders?limit=501 (422 expected — clamp)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/orders?limit=501",
+              "host": ["{{baseUrl}}"], "path": ["orders"],
+              "query": [{ "key": "limit", "value": "501" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('422 Unprocessable Entity', () => pm.response.to.have.status(422));"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "12. CORS (Phase 9 — G18)",
+      "item": [
+        {
+          "name": "GET /system/status with allowed Origin",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Origin", "value": "http://localhost:5173" }],
+            "url": { "raw": "{{baseUrl}}/system/status", "host": ["{{baseUrl}}"], "path": ["system", "status"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const acao = pm.response.headers.get('access-control-allow-origin');",
+            "pm.test('CORS allow-origin matches Vite dev server', () => pm.expect(acao).to.eql('http://localhost:5173'));"
+          ]}}]
+        },
+        {
+          "name": "GET /system/status with disallowed Origin",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Origin", "value": "http://evil.example" }],
+            "url": { "raw": "{{baseUrl}}/system/status", "host": ["{{baseUrl}}"], "path": ["system", "status"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK (CORS rejects in browser, not server)', () => pm.response.to.have.status(200));",
+            "const acao = pm.response.headers.get('access-control-allow-origin');",
+            "pm.test('no access-control-allow-origin for evil.example', () => pm.expect(acao).to.satisfy(v => v === undefined || v === null || v === ''));"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "13. Order history pagination (cursor)",
+      "item": [
+        {
+          "name": "GET /orders?serial={seed}&limit=1 — capture cursor",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/orders?serial={{seedSerial}}&limit=1",
+              "host": ["{{baseUrl}}"], "path": ["orders"],
+              "query": [
+                { "key": "serial", "value": "{{seedSerial}}" },
+                { "key": "limit",  "value": "1" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const j = pm.response.json();",
+            "if (j.orders.length === 1) {",
+            "  const ts = j.orders[0].ts;",
+            "  // The `+` in a tz offset (e.g. `+08:00`) is read as space in URL",
+            "  // query strings, so percent-encode the cursor before reusing it.",
+            "  pm.collectionVariables.set('cursorTs', ts);",
+            "  pm.collectionVariables.set('cursorTsEncoded', encodeURIComponent(ts));",
+            "  pm.collectionVariables.set('hasCursor', 'yes');",
+            "} else {",
+            "  pm.collectionVariables.set('hasCursor', 'no');",
+            "}"
+          ]}}]
+        },
+        {
+          "name": "GET /orders?serial={seed}&before={cursorTs} — older rows",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/orders?serial={{seedSerial}}&before={{cursorTsEncoded}}",
+              "host": ["{{baseUrl}}"], "path": ["orders"],
+              "query": [
+                { "key": "serial", "value": "{{seedSerial}}" },
+                { "key": "before", "value": "{{cursorTsEncoded}}" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "if (pm.collectionVariables.get('hasCursor') !== 'yes') {",
+            "  pm.test.skip('no orders to page through');",
+            "  return;",
+            "}",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const j = pm.response.json();",
+            "const cursor = pm.collectionVariables.get('cursorTs');",
+            "pm.test('all returned rows are strictly older than cursor', () => {",
+            "  j.orders.forEach(o => pm.expect(new Date(o.ts).getTime()).to.be.lessThan(new Date(cursor).getTime()));",
+            "});"
+          ]}}]
         }
       ]
     }
   ],
   "variable": [
     { "key": "baseUrl",    "value": "http://localhost:8000" },
-    { "key": "seedSerial", "value": "amr001" }
+    { "key": "seedSerial", "value": "amr001" },
+    { "key": "cursorTs",        "value": "" },
+    { "key": "cursorTsEncoded", "value": "" },
+    { "key": "hasCursor",       "value": "no" }
   ]
 }

@@ -69,7 +69,7 @@ running the services manually, as below, is the alternative for development.
 
 ### Tests
 
-Per-service test suites exist (G13):
+Per-service unit suites (CI runs both on every push):
 
 ```bash
 # ROS Bridge Service — node:test, no extra install
@@ -82,7 +82,24 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-`.github/workflows/ci.yml` runs both suites plus syntax checks on every push / PR.
+Integration suites (full stack must be up first):
+
+```powershell
+# Newman backend smoke (HTTP only)
+.\docs\postman\run-newman.ps1
+
+# PowerShell integration scripts (MQTT pipeline, retention, misc)
+.\scripts\test\run-all.ps1            # wraps Newman + pytest + node:test too
+
+# Frontend E2E (Playwright — chromium only)
+cd frontend
+npm install
+npx playwright install chromium       # one-time, ~150 MB cached globally
+npm run e2e
+```
+
+Full breakdown — tiers, what each suite covers, and where reports land — in
+[`testing.md`](testing.md).
 
 ---
 
