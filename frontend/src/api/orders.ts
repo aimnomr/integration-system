@@ -5,6 +5,7 @@ export interface ListOrdersQuery {
   serial?: string;
   limit?: number;
   before?: string;
+  [key: string]: string | number | undefined;
 }
 
 export function listOrders(q: ListOrdersQuery = {}, signal?: AbortSignal) {

@@ -66,11 +66,11 @@ export default function AdminLocations() {
       renderCell: (p) => <span className="font-mono">{p.value}</span> },
     { field: 'label',  headerName: 'Label', flex: 1 },
     { field: 'x',      headerName: 'x',     width: 90, type: 'number',
-      valueFormatter: (v) => typeof v === 'number' ? v.toFixed(3) : '—' },
+      valueFormatter: (_v, row) => typeof row.x === 'number' ? row.x.toFixed(3) : '—' },
     { field: 'y',      headerName: 'y',     width: 90, type: 'number',
-      valueFormatter: (v) => typeof v === 'number' ? v.toFixed(3) : '—' },
+      valueFormatter: (_v, row) => typeof row.y === 'number' ? row.y.toFixed(3) : '—' },
     { field: 'theta',  headerName: 'θ',     width: 90, type: 'number',
-      valueFormatter: (v) => typeof v === 'number' ? v.toFixed(3) : '—' },
+      valueFormatter: (_v, row) => typeof row.theta === 'number' ? row.theta.toFixed(3) : '—' },
     {
       field: '_actions', headerName: '', width: 110, sortable: false, filterable: false,
       renderCell: (p) => (

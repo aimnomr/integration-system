@@ -13,7 +13,7 @@ const CYCLE_COLS: GridColDef<OeeCycle>[] = [
   { field: 'order_id',   headerName: 'Order',    flex: 1.2,
     renderCell: (p) => <span className="font-mono text-xs">{p.value}</span> },
   { field: 'duration_s', headerName: 'Duration (s)', width: 130, type: 'number',
-    valueFormatter: (v) => (typeof v === 'number' ? v.toFixed(1) : '—') },
+    valueFormatter: (_v, row) => (typeof row.duration_s === 'number' ? row.duration_s.toFixed(1) : '—') },
   { field: 'result',     headerName: 'Result',   width: 120,
     renderCell: (p) => (
       <span className={p.value === 'SUCCEEDED' ? 'text-green-400' : 'text-red-400'}>

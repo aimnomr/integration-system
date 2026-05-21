@@ -147,7 +147,7 @@ PostgreSQL) works end-to-end without needing a robot.
    ```
 4. Now run the four assertions below.
 
-- [ ] **In Node-RED** (<http://localhost:1880>) → **Telemetry Ingestion** tab:
+- [x] **In Node-RED** (<http://localhost:1880>) → **Telemetry Ingestion** tab:
       the `validateState` node briefly shows a green status; the
       `state persisted` debug pane prints `{"status":"ok"}`.
       _(Visual UI check — automation can't see the debug pane, but the
@@ -160,7 +160,7 @@ PostgreSQL) works end-to-end without needing a robot.
       mosquitto_pub -h localhost -t "amr/v2/moverobotic/amr001/connection" -f conn.json
       ```
       Then `psql ... -c "SELECT count(*) FROM connection_log;"` increased.
-- [ ] **[robot]** With a real robot publishing, the same rows appear
+- [x] **[robot]** With a real robot publishing, the same rows appear
       automatically — no need to run `mosquitto_pub` manually.
 
 ---
@@ -246,18 +246,22 @@ plant a deliberately-old row, then restart FastAPI and check it's gone.
    like `telemetry pruned {"deleted":{...}}`.
 5. Now run the assertions:
 
-- [ ] FastAPI log printed a `telemetry pruned` line within ~6 hours of startup.
+- [x] FastAPI log printed a `telemetry pruned` line within ~6 hours of startup.
       (The background task fires at boot + every 6 h after; the boot one is
       the one you see now.) _(Log-message check — manual; the prune SQL
       itself is verified by `test-retention.ps1`.)_
-- [x] `psql ... -c "SELECT count(*) FROM state_snapshots WHERE header_id=999;"`
-      → `0`. The 90-day-old row is gone.
+- [ ] `psql ... -c "SELECT count(*) FROM state_snapshots WHERE header_id=999;"`
+      → `0`. The 90-day-old row is gone. {Selected to check, but still there. Telemetry retention is set to 1. amr_integration=# SELECT serial_number as sn, ts, header_id as id FROM state_snapshots WHERE header_id=999;
+   sn   |             ts             | id
+--------+----------------------------+-----
+ amr001 | 2026-05-21 12:47:53.744+08 | 999
+(1 row)}
 - [x] `psql ... -c "SELECT count(*) FROM state_snapshots WHERE ts > now() - interval '1 day';"`
       → unchanged from before the restart. Recent rows untouched.
 - [x] Restart FastAPI again with `TELEMETRY_RETENTION_DAYS=0` — the startup
       log does **not** print `telemetry retention enabled`; the prune task
       doesn't start. _(Covered by `tests/test_retention.py::test_retention_loop_disabled_when_days_zero`.)_
-- [ ] Reset `TELEMETRY_RETENTION_DAYS` back to `30` (or remove it) after testing.
+- [x] Reset `TELEMETRY_RETENTION_DAYS` back to `30` (or remove it) after testing.
 
 ---
 
@@ -288,7 +292,7 @@ RATE_LIMIT_PER_MINUTE=5
       ```
       (Reuse `state.json` from Phase 4 step 2 — that's the "full valid body".)
 - [x] Fire 7 requests quickly → the 6th/7th return **429** with a `Retry-After` header.
-- [ ] **[robot] How to test:** you don't make this call yourself — the **ROS
+- [x] **[robot] How to test:** you don't make this call yourself — the **ROS
       Bridge Service** does it automatically at startup. With `API_KEY=test-key`
       set on FastAPI:
         1. Edit `ros-bridge-service/.env`, add `API_KEY=test-key`.
@@ -296,7 +300,7 @@ RATE_LIMIT_PER_MINUTE=5
         3. Look at its startup log — you should see `Fleet loaded:` (success)
            rather than `401`. If the keys mismatch the bridge logs the 401 and
            exits.
-- [ ] **Cleanup:** remove `API_KEY` and reset `RATE_LIMIT_PER_MINUTE=120` (or
+- [x] **Cleanup:** remove `API_KEY` and reset `RATE_LIMIT_PER_MINUTE=120` (or
       delete the lines) in both `.env` files; restart both services. Otherwise
       every subsequent test that doesn't send the key will fail with 401.
 
@@ -320,18 +324,18 @@ RATE_LIMIT_PER_MINUTE=5
 - [x] `GET /maps/nope`, `PUT /maps/nope`, `DELETE /maps/nope` → **404** each.
 
 ### Database loss (runtime)
-- [ ] With FastAPI running, **stop PostgreSQL**.
-- [ ] `GET /robots/amr001/state` → **503** `Database unavailable: ...`.
-- [ ] `GET /system/status` → `database` reports `unavailable` (no crash).
-- [ ] `POST /robots/amr001/order` → still **200** (publishes to MQTT; doesn't need DB).
-- [ ] Restart PostgreSQL → reads return **200** again (pool rebuilds on next call).
-- [ ] Note: FastAPI will **not start** with PostgreSQL down — the fleet is loaded
+- [x] With FastAPI running, **stop PostgreSQL**.
+- [ ] `GET /robots/amr001/state` → **503** `Database unavailable: ...`. {500 : Internal Server Error}
+- [ ] `GET /system/status` → `database` reports `unavailable` (no crash). {500 : Internal Server Error}
+- [x] `POST /robots/amr001/order` → still **200** (publishes to MQTT; doesn't need DB). 
+- [x] Restart PostgreSQL → reads return **200** again (pool rebuilds on next call).
+- [x] Note: FastAPI will **not start** with PostgreSQL down — the fleet is loaded
       from the DB at boot. Start order stays Postgres → FastAPI.
 
 ### Broker / connectivity loss
-- [ ] Stop Mosquitto → `GET /system/status` `mosquitto` reports `disconnected`.
-- [ ] Restart Mosquitto → FastAPI, Node-RED, ROS Bridge reconnect automatically.
-- [ ] **[robot]** Kill the ROS Bridge process → its retained `connection` topic
+- [x] Stop Mosquitto → `GET /system/status` `mosquitto` reports `disconnected`.
+- [x] Restart Mosquitto → FastAPI, Node-RED, ROS Bridge reconnect automatically.
+- [x] **[robot]** Kill the ROS Bridge process → its retained `connection` topic
       flips to `CONNECTIONBROKEN` (Last-Will); `/system/status` `roslib` reflects it.
 
 ### Malformed MQTT / Node-RED  `[auto: ps]`
@@ -341,8 +345,8 @@ RATE_LIMIT_PER_MINUTE=5
 
 ### Ordering / concurrency  `[auto: ps]`
 - [x] Submit 5 orders rapidly → 5 distinct `orderId` suffixes, no duplicates.
-- [ ] **[robot]** Submit a new order while one is mid-execution → behaviour is
-      defined (new order replaces current); confirm it matches expectation.
+- [x] **[robot]** Submit a new order while one is mid-execution → behaviour is
+      defined (new order replaces current); confirm it matches expectation. {Directly goes to exec the next order. Abandoning the current order}
 
 ---
 
@@ -356,8 +360,8 @@ RATE_LIMIT_PER_MINUTE=5
       `psql ... -c "INSERT INTO orders (serial_number, ts, header_id, order_id, order_update_id) VALUES ('amr001', now(), 1, 'amr001-order-goal', 0);"`
 - [ ] Stop FastAPI; restart it. _(Manual restart; SQL safety verified by
       `test-misc.ps1` running the registry-seed aggregation query
-      against a planted legacy row.)_
-- [ ] FastAPI **starts without traceback** (was `psycopg2.errors.InvalidTextRepresentation` before).
+      against a planted legacy row.)_ {Quite unsure with what is needed here. Need to test using test-misc? Or just manual restart}
+- [x] FastAPI **starts without traceback** (was `psycopg2.errors.InvalidTextRepresentation` before).
       _(Manual; the regex filter in `fetch_max_order_suffixes` is exercised
       via the SQL re-run in `test-misc.ps1`.)_
 - [x] `GET /robots/amr001/state` works; counters keep ticking.
@@ -380,8 +384,8 @@ RATE_LIMIT_PER_MINUTE=5
 - [x] FastAPI started with default env → `curl.exe -H "Origin: http://localhost:5173" -I http://localhost:8000/system/status`
       returns `access-control-allow-origin: http://localhost:5173`.
 - [x] Same request with `Origin: http://evil.example` → **no** `access-control-allow-origin` header.
-- [ ] Restart FastAPI with `CORS_ORIGINS=http://localhost:9999` → only that origin
-      is now allowed; the Vite dev server (`5173`) is blocked. Reset afterwards.
+- [x] Restart FastAPI with `CORS_ORIGINS=http://localhost:9999` → only that origin
+      is now allowed; the Vite dev server (`5173`) is blocked. Reset afterwards. {API stays dead to the interface}
 
 ### Phase 0 — GET /orders endpoint  `[auto: newman]`
 > ✅ First four items verified by Newman run 2026-05-21 02:37.
@@ -392,9 +396,9 @@ RATE_LIMIT_PER_MINUTE=5
 - [x] `curl.exe "http://localhost:8000/orders?limit=501"` → **422** (limit clamped to 500).
 - [x] With `serial=amr001`, page through using `before=<ts>` — second call returns
       strictly older rows; reaches an empty list once exhausted.
-- [ ] `node_count` matches `psql ... -c "SELECT count(*) FROM order_nodes WHERE order_pk=<id>;"`.
+- [ ] `node_count` matches `psql ... -c "SELECT count(*) FROM order_nodes WHERE order_pk=<id>;"`. {Not sure what is asked here}
 
-### Phase 0 — Mosquitto WebSocket listener on :9001  `[auto: ps]` `[auto: e2e]`
+### Phase 0 — Mosquitto WebSocket listener on :9001  `[auto: ps]` `[auto: e2e]` {Not sure what is asked here}
 - [ ] `mosquitto.conf` has the `listener 9001` + `protocol websockets` block.
 - [ ] Mosquitto logs (or `docker compose logs mosquitto`) show two listeners.
 - [x] `netstat -an | findstr ":9001"` (or `ss -lnt | grep 9001` in WSL) shows
@@ -408,13 +412,13 @@ RATE_LIMIT_PER_MINUTE=5
 ## Phase 10 — Frontend smoke (scaffold + connectivity)
 
 ### Build & dev server
-- [ ] `cd frontend && npm install` completes without errors.
+- [x] `cd frontend && npm install` completes without errors. {No errors just npm warn}
       (If MUI / TS peer-dep warnings: `npm install --legacy-peer-deps`.)
-- [ ] `npm run dev` prints `Local: http://localhost:5173/`; no compile errors.
+- [x] `npm run dev` prints `Local: http://localhost:5173/`; no compile errors.
 - [ ] If `optimizeDeps` complaint on first run: delete `node_modules/.vite/`,
-      re-run `npm run dev`.
-- [ ] `npm run typecheck` exits 0.
-- [ ] `npm run build` produces `dist/` without errors.
+      re-run `npm run dev`. {No complaints}
+- [x] `npm run typecheck` exits 0. {Found 7 errors, placed into frontend/typecheck.txt}
+- [x] `npm run build` produces `dist/` without errors. {Only some warnings}
 
 ### AppShell + routing  `[auto: e2e]`
 - [x] Open `http://localhost:5173/` → AppBar with logo + "AMR Console", four
@@ -426,13 +430,13 @@ RATE_LIMIT_PER_MINUTE=5
 - [x] Hovering each pill shows a descriptive tooltip (e.g. "Mosquitto WebSocket: connected").
 
 ### Health pills — live state transitions
-- [ ] All services running → API + MQTT + DB + ROS all green within 5 s.
+- [x] All services running → API + MQTT + DB + ROS all green within 5 s.
 - [ ] Stop FastAPI → within 5 s: API red, DB red, ROS red. MQTT stays green
-      (different connection).
-- [ ] Restart FastAPI → all three flip back to green.
-- [ ] Stop Mosquitto → MQTT pill cycles yellow ("reconnecting") then red ("offline").
-- [ ] Restart Mosquitto → MQTT goes yellow then green; browser auto-reconnects.
-- [ ] **[robot]** Stop ROS Bridge while a robot was online → after the broker's
+      (different connection). {Only API turns red, others stays green. On refresh others turn idle and api turns red and mqtt stays green}
+- [x] Restart FastAPI → all three flip back to green.
+- [x] Stop Mosquitto → MQTT pill cycles yellow ("reconnecting") then red ("offline").
+- [x] Restart Mosquitto → MQTT goes yellow then green; browser auto-reconnects.
+- [x] **[robot]** Stop ROS Bridge while a robot was online → after the broker's
       retention window, ROS pill flips red.
 
 ### Health page  `[auto: e2e]`
@@ -444,7 +448,7 @@ RATE_LIMIT_PER_MINUTE=5
 ### CORS (browser side)  `[auto: e2e]`
 - [x] DevTools → Console: no `blocked by CORS policy` errors after page loads.
 - [ ] Network tab: requests to `localhost:8000/*` carry `Origin:
-      http://localhost:5173` and get back `access-control-allow-origin` matching.
+      http://localhost:5173` and get back `access-control-allow-origin` matching. {Not sure what is asked here}
 
 ---
 
@@ -453,31 +457,31 @@ RATE_LIMIT_PER_MINUTE=5
 ### Dashboard  `[auto: e2e]` (static render + click-through)
 - [x] `/` shows one tile per robot from `GET /fleet` (just `amr001` if you haven't
       added more).
-- [ ] Each tile fields populate: connection pill, mode, battery, orderId,
+- [x] Each tile fields populate: connection pill, mode, battery, orderId,
       "last seen", map, rosbridge status. Empty fields show `—` (no `undefined`).
 - [ ] After a `state` MQTT message arrives, "last seen" resets to "0s ago" and
-      ticks upward.
+      ticks upward. {Stays 0, bug or because of repeated reset on message arrival}
 - [x] Click a tile → navigates to `/robots/<serial>`.
 - [ ] No robots in fleet → "No robots in the fleet" hint with a pointer to
-      Admin → Robots.
+      Admin → Robots. {Not sure what is asked here}
 
 ### Robot Detail — Map
-- [ ] `/robots/amr001` shows the MapCanvas on the left.
+- [x] `/robots/amr001` shows the MapCanvas on the left.
 - [ ] **[robot]** Without anyone publishing `/reference/map`: canvas shows
-      "Waiting for /reference/map…"; no crash.
+      "Waiting for /reference/map…"; no crash. {Not sure how to emulate this}
 - [ ] **[robot]** Once map is publishing: occupancy grid renders (free white,
-      occupied dark, unknown grey). Aspect ratio preserved.
-- [ ] **[robot]** Resize the window — the canvas resizes with it (no stretching).
-- [ ] **[robot]** Robot arrow appears at the AMCL pose; rotates with yaw.
-- [ ] **[robot]** Top-right overlay reads `pose: AMCL`.
-- [ ] **[robot]** Stop the AMCL publisher (e.g. `rosnode kill /amcl`) for >2 s →
+      occupied dark, unknown grey). Aspect ratio preserved. {Current map is square, not yet tested with random map size}
+- [x] **[robot]** Resize the window — the canvas resizes with it (no stretching). {Resizes as expected}
+- [x] **[robot]** Robot arrow appears at the AMCL pose; rotates with yaw.
+- [x] **[robot]** Top-right overlay reads `pose: AMCL`.
+- [x] **[robot]** Stop the AMCL publisher (e.g. `rosnode kill /amcl`) for >2 s →
       overlay flips to `pose: EKF (fallback)`; arrow turns amber.
-- [ ] **[robot]** Resume AMCL → overlay returns to AMCL after the next message;
+- [x] **[robot]** Resume AMCL → overlay returns to AMCL after the next message;
       arrow back to blue.
-- [ ] **[robot]** `/move_base_node/DWAPlannerROS/global_plan` published → sky-blue
+- [x] **[robot]** `/move_base_node/DWAPlannerROS/global_plan` published → sky-blue
       polyline appears on the map.
-- [ ] **[robot]** `/move_base_node/DWAPlannerROS/local_plan` → red polyline.
-- [ ] Named locations on the robot's map appear as violet pins with labels.
+- [x] **[robot]** `/move_base_node/DWAPlannerROS/local_plan` → red polyline.
+- [x] Named locations on the robot's map appear as violet pins with labels. {Pins are there, but labels are not visible due to color similarity with background. Make it violet too or change to other than bright colors}
 
 ### Robot Detail — Side panel
 - [ ] **State** tab shows the VDA5050 field readout updating in real time.
