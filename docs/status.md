@@ -1,6 +1,6 @@
 # Implementation Status
 
-> **This is a point-in-time snapshot and decays.** Last updated: 2026-05-21.
+> **This is a point-in-time snapshot and decays.** Last updated: 2026-05-22.
 > When in doubt, the code is authoritative.
 
 ---
@@ -11,7 +11,11 @@ The system speaks **VDA5050** end to end and is fronted by a feature-complete
 React UI. The VDA5050 migration (Phases 0–7, see
 [plans/vda5050-migration.md](plans/vda5050-migration.md)) is complete; the
 post-migration audit gaps (G15–G21) and the frontend-blocking gap (G18) are
-all closed.
+all closed. The 2026-05-22 manual-checklist walkthrough surfaced four new
+gaps — **G24–G27** — all medium / low severity (DB-down 500-not-503 from
+the state and system-status routes, two frontend liveness/polish issues, and
+unreadable map pin labels). See [gaps.md](gaps.md) and
+[manual-test-remarks.md](manual-test-remarks.md) for detail.
 
 ### Backend
 
@@ -124,7 +128,9 @@ each, where reports land). Short version:
 
 - **Statically verified end-to-end:** all backend Python (`py_compile`),
   ROS Bridge JS (`node --check`), `flows.json` JSON shape, frontend
-  TypeScript compiles (`tsc -b`), Vite production build succeeds.
+  TypeScript type-checks cleanly (`tsc -b --noEmit` exits 0 as of
+  2026-05-22 — 8 prior errors fixed; see CONTINUATION.md), Vite production
+  build succeeds (only a chunk-size > 500 kB perf warning).
 - **Unit-tested:** ROS Bridge `node:test`, FastAPI `pytest` (both green in
   CI as of 2026-05-21).
 - **HTTP-tested:** Newman replays **61 requests / 66 assertions / 0 failed**
@@ -149,8 +155,11 @@ each, where reports land). Short version:
 
 ## Not yet implemented (post-v1)
 
-All tracked gaps **G1–G23 are resolved.** Things that would be the
-natural next steps but aren't tracked as gaps:
+Tracked gaps **G1–G23 are resolved; G24–G27 are open** (see
+[gaps.md](gaps.md) for severity + repro and
+[manual-test-remarks.md](manual-test-remarks.md) for the walkthrough
+context). Things that would be the natural next steps but aren't tracked
+as gaps:
 
 - **Frontend in CI** — `tsc --noEmit && vite build` job. ~15 min to add.
 - **Newman in CI** — boot the stack via `docker compose`, run the collection,

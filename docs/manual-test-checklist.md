@@ -417,7 +417,7 @@ RATE_LIMIT_PER_MINUTE=5
 - [x] `npm run dev` prints `Local: http://localhost:5173/`; no compile errors.
 - [ ] If `optimizeDeps` complaint on first run: delete `node_modules/.vite/`,
       re-run `npm run dev`. {No complaints}
-- [x] `npm run typecheck` exits 0. {Found 7 errors, placed into frontend/typecheck.txt}
+- [x] `npm run typecheck` exits 0. {Originally found 8 errors (captured in frontend/typecheck.txt 2026-05-21); fixed in session 2026-05-22 — see CONTINUATION.md entry "Frontend typecheck zero-errored…". `tsc -b --noEmit` now exits 0 cleanly.}
 - [x] `npm run build` produces `dist/` without errors. {Only some warnings}
 
 ### AppShell + routing  `[auto: e2e]`

@@ -3,17 +3,24 @@
 Open items not yet addressed, consolidated for visibility. For what *is* working see
 [status.md](status.md). Resolved gaps are listed at the bottom.
 
-> Last updated: 2026-05-21 (G22 + G23 surfaced by new test automation and resolved
-> same session). Severity is a rough triage (High = blocks core function,
-> Medium = limits usefulness, Low = polish / hardening). Gap IDs are stable —
-> resolved ones keep their number rather than being renumbered.
+> Last updated: 2026-05-22 (G24–G27 surfaced by the manual-checklist walkthrough
+> on 2026-05-22; consolidated remarks in `manual-test-remarks.md`).
+> Severity is a rough triage (High = blocks core function, Medium = limits
+> usefulness, Low = polish / hardening). Gap IDs are stable — resolved ones
+> keep their number rather than being renumbered.
 
 ## At a glance
 
 | # | Gap | Area | Severity |
 |---|---|---|---|
+| G24 | DB-down returns HTTP 500 instead of 503 from `GET /robots/{serial}/state` and `GET /system/status` | FastAPI | Medium |
+| G25 | Health pills don't degrade live when `/system/status` poll fails — DB / ROS stay green until refresh | Frontend | Medium |
+| G26 | Dashboard tile "last seen" timer stuck at `0s ago`; doesn't tick upward | Frontend | Low |
+| G27 | Named-location pin labels invisible vs the dark MapCanvas background | Frontend | Low |
 
-_All previously tracked gaps (G1–G23) are resolved. See the table below._
+See [manual-test-remarks.md](manual-test-remarks.md) for the full walkthrough
+notes that surfaced these — including items that looked like bugs but turned
+out to be expected behaviour or test-setup issues.
 
 ---
 

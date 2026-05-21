@@ -2,7 +2,7 @@
 
 > A point-in-time handoff snapshot so work can resume without re-deriving context.
 > **This decays** — trust the code and the canonical docs over this page.
-> Last updated: 2026-05-21 (test-automation suite fully green: Newman 66/66, pytest 36/36, node:test 19/19, Playwright 24/24, three PowerShell integration scripts).
+> Last updated: 2026-05-22 (frontend typecheck fixed; manual-checklist walkthrough surfaced four real bugs — G24–G27 — and a batch of clarifications consolidated in `manual-test-remarks.md`).
 
 ---
 
@@ -39,6 +39,67 @@ Phase 9–13 cover the new frontend and Phase-0 backend work.
 ---
 
 ## Recently completed (most recent first)
+
+**Frontend typecheck zero-errored + stray .js cleanup (2026-05-22, uncommitted).**
+The frontend `npm run typecheck` had been failing with 8 errors; `npm run build`
+worked but `tsc -b` (the typecheck phase of build) was also emitting compiled
+`.js` files next to every `.ts` source in `frontend/src/`. Both issues addressed
+in one pass.
+
+- **8 typecheck errors fixed** across four files:
+  - `frontend/src/api/orders.ts` — `ListOrdersQuery` got an index signature so
+    it satisfies `apiFetch`'s `Record<string, …>` query type.
+  - `frontend/src/vite-env.d.ts` — **new file** with the standard
+    `/// <reference types="vite/client" />` directive. This typed
+    `import.meta.env` for `branding.ts` + `config.ts` (the 2 `TS2339` errors).
+  - `frontend/src/pages/admin/Locations.tsx` + `frontend/src/pages/OEE.tsx` —
+    four `valueFormatter` callbacks rewritten to read from the `row` arg
+    instead of `value`. MUI X Data Grid v7's `GridValueFormatter` types
+    `value` as `never` when the column's `V` generic isn't inferred, which
+    was the cause of the four `'never'` errors.
+  - Verified: `npx tsc -b --noEmit` exits 0. `npm run build` still produces
+    `dist/` cleanly (only the chunk-size > 500 kB warning, which is a perf
+    hint, not an error).
+- **50 stray `.js` files removed** from `frontend/`:
+  - 49 `.js` files under `frontend/src/` (every one had a `.ts`/`.tsx` sibling)
+  - `frontend/vite.config.js` (orphan of `vite.config.ts`)
+  - `frontend/tsconfig.tsbuildinfo` (tsc incremental cache)
+  - These were emitted by `tsc -b` in the build script because `tsconfig.json`
+    doesn't set `"noEmit": true` (only the `typecheck` script passes
+    `--noEmit` inline). They'll regenerate on the next `npm run build` until
+    `noEmit` is added to the config — left for a follow-up since the user
+    said cleanup only this session.
+- **Gitignore safety net.** Added `typecheck.txt` + `build-output.txt` to
+  `frontend/.gitignore` under a new "Throwaway captures" section so future
+  log dumps don't get accidentally committed.
+
+**Manual-checklist walkthrough — 4 new gaps + test clarifications (2026-05-22).**
+The user worked through `docs/manual-test-checklist.md` end-to-end and added
+inline `{…}` remarks to ~20 items. Surfaced four real bugs and a batch of
+ambiguous-prompt clarifications. New gaps:
+
+- **G24** — `GET /robots/{serial}/state` and `GET /system/status` return
+  **HTTP 500** instead of `503 Database unavailable: …` when Postgres is
+  down. The `DatabaseUnavailable` fallback in `app/db.py` is in place but the
+  router(s) aren't catching it. Found during Phase 8 chaos test.
+- **G25** — Health pills don't update in real time when FastAPI goes down.
+  Only the **API** pill flips red; **DB** and **ROS** stay green until the
+  page is refreshed (then API red, others idle). They're derived from
+  `/system/status` (5 s poll) — on a failed poll the derived pills should
+  also degrade, but they don't.
+- **G26** — Dashboard tile "last seen" timer stays stuck at `0s ago` rather
+  than ticking upward as time passes since the last `state` MQTT message.
+  Suspected: the elapsed-time formatter doesn't have a `setInterval` driver,
+  or the `lastSeen` state is reset on every render.
+- **G27** — Named-location pin **labels** on `MapCanvas` are barely visible
+  against the dark slate background (color similarity). Pin markers
+  themselves render fine.
+
+A new doc `docs/manual-test-remarks.md` consolidates every item with a remark
+(answered "what was asked", "what was observed", "next step"). Several items
+that looked like bugs were actually expected behaviour (e.g. mid-order
+replacement) or user-side test setup issues (e.g. the G19 retention test
+plant timestamp didn't end up 90 d old, so prune correctly left it alone).
 
 **Test-automation suite fully green (2026-05-21, uncommitted).**
 Both `.\scripts\test\run-all.ps1` and `npm run e2e` end-to-end passing on a

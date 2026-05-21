@@ -52,6 +52,7 @@ reference data).
 | [testing.md](testing.md) | What to run to verify the stack — automation + manual |
 | [manual-test-checklist.md](manual-test-checklist.md) | Long-form regression checklist (phase-ordered, with `[auto:]` tags) |
 | [manual-test-by-service.md](manual-test-by-service.md) | The leftover manual items re-grouped by service (random spot-checks) |
+| [manual-test-remarks.md](manual-test-remarks.md) | Consolidated remarks from past walkthroughs — items flagged "unsure", "stuck", or "bug" with clarifications + gap pointers |
 | [old-interface/](old-interface/) | Reference notes from the previous single-robot UI |
 
 New here? Read this page → [architecture.md](architecture.md) → [setup.md](setup.md).
