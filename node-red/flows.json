@@ -248,7 +248,7 @@
         "rap": true,
         "rh": 0,
         "inputs": 0,
-        "x": 150,
+        "x": 140,
         "y": 100,
         "wires": [
             [
@@ -268,7 +268,7 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 380,
+        "x": 370,
         "y": 100,
         "wires": [
             [

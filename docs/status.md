@@ -90,9 +90,11 @@ See [`testing.md`](testing.md) for the full breakdown (tiers, how to run
 each, where reports land). Short version:
 
 - **Per-service unit tests** (Tier 1 — run in CI). ROS Bridge `node:test`
-  suite (~15 tests). FastAPI `pytest` suite covers config, auth, rate-limit,
-  schemas, orders, CORS, and **retention** (`tests/test_retention.py`,
-  added 2026-05-21 alongside the test-automation expansion).
+  suite (~15 tests). FastAPI `pytest` suite (**41 tests** as of
+  2026-05-22) covers config, auth, rate-limit, schemas, orders, CORS,
+  **retention** (`tests/test_retention.py`, added 2026-05-21 alongside
+  the test-automation expansion), and **DB-down 503 contract**
+  (`tests/test_db_unavailable.py`, added 2026-05-22 with the G24 fix).
 - **Newman API smoke suite** (Tier 2, `docs/postman/`) — **13 sections /
   61 requests** covering every endpoint family plus negative cases, CORS
   pos/neg, and `/orders` cursor pagination. Runs via
@@ -161,14 +163,17 @@ each, where reports land). Short version:
 
 ## Not yet implemented (post-v1)
 
-Tracked gaps **G1–G23 + G28 + G29 are resolved; G24–G27 + G30–G33 are open**
-(see [gaps.md](gaps.md) for severity + repro and
+Tracked gaps **G1–G25 + G28 + G29 are resolved; G26 + G27 + G30–G39 are
+open** (see [gaps.md](gaps.md) for severity + repro and
 [manual-test-remarks.md](manual-test-remarks.md) for the walkthrough
-context behind G24–G27). G30–G33 are the previously "untracked next
-steps" now promoted into the gaps tracker:
+context behind G24–G27 and G34–G39). The open set breaks down as:
 
-- **G30** — Frontend Dockerfile + `docker-compose.yml` service.
-- **G31** — `GET /orders/{id}` detail endpoint for Order History drill-down.
-- **G32** — MQTT auth + TLS on both broker listeners.
-- **G33** — `"noEmit": true` in `frontend/tsconfig.json` to stop stray `.js`
-  emission on `npm run build`.
+- **Frontend polish (manual walkthrough):** G26 (last-seen timer), G27
+  (pin label contrast), G34 (instant-action toast `[object Object]`),
+  G35 (Admin DataGrid triple-dot unreachable), G36 (numeric input "02"),
+  G37 (instant-action buttons clickable after completion), G38 (negative
+  coords rejected), G39 (connection pill on sim shutdown — needs
+  investigation).
+- **Infrastructure / hardening (untracked → tracked):** G30 (frontend
+  Dockerfile + compose service), G31 (`GET /orders/{id}` detail endpoint),
+  G32 (MQTT auth + TLS), G33 (`noEmit: true` in `frontend/tsconfig.json`).

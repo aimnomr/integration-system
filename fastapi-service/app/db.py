@@ -63,6 +63,29 @@ def _get_pool():
         return _pool
 
 
+def _invalidate_pool() -> None:
+    """Close and forget the pool so the next call rebuilds it. Called when a
+    pooled connection turns out to be dead — without this, every subsequent
+    request would re-borrow the same stale connection and keep 500-ing."""
+    global _pool
+    with _pool_lock:
+        if _pool is None:
+            return
+        try:
+            _pool.closeall()
+        except Exception:
+            pass
+        _pool = None
+
+
+def _connection_exc_types() -> tuple:
+    """Tuple of psycopg2 exception classes that mean 'database is unreachable'
+    (as opposed to a SQL or programming error). Resolved lazily because
+    psycopg2 may not be installed in every environment."""
+    import psycopg2
+    return (psycopg2.OperationalError, psycopg2.InterfaceError)
+
+
 def _pg_message(exc) -> str:
     """The clean primary message of a psycopg2 error, without the SQL dump."""
     try:
@@ -71,24 +94,48 @@ def _pg_message(exc) -> str:
         return str(exc).strip()
 
 
+def _to_unavailable(exc) -> "DatabaseUnavailable":
+    """Build a DatabaseUnavailable from a psycopg2 connection error AND
+    invalidate the cached pool so the next call rebuilds it (G24).
+
+    Without invalidation, a pooled connection that died with the database
+    would keep being handed back to callers, so every request would 500 even
+    after Postgres recovered."""
+    _invalidate_pool()
+    return DatabaseUnavailable(_pg_message(exc))
+
+
 @contextmanager
 def _transaction():
     """A single pooled connection committed as one unit — used by the
     multi-table writes so a snapshot and its child rows land atomically. A
-    connection that cannot be cleaned up is dropped rather than handed back."""
+    connection that cannot be cleaned up is dropped rather than handed back.
+
+    Connection-level psycopg2 errors are translated into DatabaseUnavailable
+    (G24) so the routers' `except DatabaseUnavailable` blocks fire — without
+    this the pool happily hands out stale connections after Postgres restarts
+    and every request 500s instead of 503-ing."""
     pool = _get_pool()
     conn = pool.getconn()
     broken = False
     try:
-        with conn.cursor() as cur:
-            yield cur
-        conn.commit()
-    except Exception:
         try:
-            conn.rollback()
-        except Exception:
+            with conn.cursor() as cur:
+                yield cur
+            conn.commit()
+        except _connection_exc_types() as exc:
             broken = True
-        raise
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            raise _to_unavailable(exc) from exc
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                broken = True
+            raise
     finally:
         pool.putconn(conn, close=broken)
 
@@ -99,14 +146,21 @@ def _query(sql: str, params: tuple = ()) -> list[dict]:
     import psycopg2.extras
 
     pool = _get_pool()
-    conn = pool.getconn()
+    try:
+        conn = pool.getconn()
+    except _connection_exc_types() as exc:
+        raise _to_unavailable(exc) from exc
     broken = False
     try:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, params)
-            if cur.description is None:
-                return []
-            return [dict(row) for row in cur.fetchall()]
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(sql, params)
+                if cur.description is None:
+                    return []
+                return [dict(row) for row in cur.fetchall()]
+        except _connection_exc_types() as exc:
+            broken = True
+            raise _to_unavailable(exc) from exc
     finally:
         try:
             conn.rollback()
@@ -117,18 +171,29 @@ def _query(sql: str, params: tuple = ()) -> list[dict]:
 
 def _execute(sql: str, params: tuple = ()) -> None:
     pool = _get_pool()
-    conn = pool.getconn()
+    try:
+        conn = pool.getconn()
+    except _connection_exc_types() as exc:
+        raise _to_unavailable(exc) from exc
     broken = False
     try:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-        conn.commit()
-    except Exception:
         try:
-            conn.rollback()
-        except Exception:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+            conn.commit()
+        except _connection_exc_types() as exc:
             broken = True
-        raise
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            raise _to_unavailable(exc) from exc
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                broken = True
+            raise
     finally:
         pool.putconn(conn, close=broken)
 
@@ -136,39 +201,58 @@ def _execute(sql: str, params: tuple = ()) -> None:
 def _execute_returning(sql: str, params: tuple = ()) -> list[dict]:
     """Run a write with a RETURNING clause, commit, and return the rows.
     Postgres integrity violations are translated into IntegrityConflict so the
-    CRUD routers can map them to HTTP 409."""
+    CRUD routers can map them to HTTP 409; connection-level failures become
+    DatabaseUnavailable so they become HTTP 503 instead of 500 (G24)."""
     import psycopg2
     import psycopg2.extras
 
     pool = _get_pool()
-    conn = pool.getconn()
+    try:
+        conn = pool.getconn()
+    except _connection_exc_types() as exc:
+        raise _to_unavailable(exc) from exc
     broken = False
     try:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, params)
-            rows = [] if cur.description is None else [dict(r) for r in cur.fetchall()]
-        conn.commit()
-        return rows
-    except psycopg2.IntegrityError as exc:
-        conn.rollback()
-        raise IntegrityConflict(_pg_message(exc)) from exc
-    except Exception:
         try:
-            conn.rollback()
-        except Exception:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(sql, params)
+                rows = [] if cur.description is None else [dict(r) for r in cur.fetchall()]
+            conn.commit()
+            return rows
+        except psycopg2.IntegrityError as exc:
+            try:
+                conn.rollback()
+            except Exception:
+                broken = True
+            raise IntegrityConflict(_pg_message(exc)) from exc
+        except _connection_exc_types() as exc:
             broken = True
-        raise
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            raise _to_unavailable(exc) from exc
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                broken = True
+            raise
     finally:
         pool.putconn(conn, close=broken)
 
 
 def ping() -> bool:
-    """True if the database is reachable."""
+    """True if the database is reachable.
+
+    Runs `SELECT 1` rather than just borrowing a connection — a pooled
+    connection can survive a Postgres restart in the pool's bookkeeping
+    while being dead on the wire, so `pool.getconn()` succeeds but the next
+    query throws (G24). Probing with a real query is the only way to be sure.
+    """
     try:
-        pool = _get_pool()
-        conn = pool.getconn()
-        pool.putconn(conn)
-        return True
+        rows = _query("SELECT 1 AS ok")
+        return bool(rows) and rows[0].get("ok") == 1
     except DatabaseUnavailable:
         return False
 
@@ -359,42 +443,49 @@ def fetch_latest_state(serial: str) -> dict | None:
     import psycopg2.extras
 
     pool = _get_pool()
-    conn = pool.getconn()
+    try:
+        conn = pool.getconn()
+    except _connection_exc_types() as exc:
+        raise _to_unavailable(exc) from exc
     broken = False
     try:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(
-                "SELECT * FROM state_snapshots WHERE serial_number = %s "
-                "ORDER BY ts DESC LIMIT 1",
-                (serial,),
-            )
-            snap = cur.fetchone()
-            if snap is None:
-                return None
-            snap = dict(snap)
-            sid = snap["id"]
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT * FROM state_snapshots WHERE serial_number = %s "
+                    "ORDER BY ts DESC LIMIT 1",
+                    (serial,),
+                )
+                snap = cur.fetchone()
+                if snap is None:
+                    return None
+                snap = dict(snap)
+                sid = snap["id"]
 
-            cur.execute(
-                "SELECT node_id, sequence_id, released FROM state_node_states "
-                "WHERE snapshot_id = %s ORDER BY id",
-                (sid,),
-            )
-            snap["node_states"] = [dict(r) for r in cur.fetchall()]
+                cur.execute(
+                    "SELECT node_id, sequence_id, released FROM state_node_states "
+                    "WHERE snapshot_id = %s ORDER BY id",
+                    (sid,),
+                )
+                snap["node_states"] = [dict(r) for r in cur.fetchall()]
 
-            cur.execute(
-                "SELECT action_id, action_type, action_status "
-                "FROM state_action_states WHERE snapshot_id = %s ORDER BY id",
-                (sid,),
-            )
-            snap["action_states"] = [dict(r) for r in cur.fetchall()]
+                cur.execute(
+                    "SELECT action_id, action_type, action_status "
+                    "FROM state_action_states WHERE snapshot_id = %s ORDER BY id",
+                    (sid,),
+                )
+                snap["action_states"] = [dict(r) for r in cur.fetchall()]
 
-            cur.execute(
-                "SELECT error_type, error_level, error_description "
-                "FROM state_errors WHERE snapshot_id = %s ORDER BY id",
-                (sid,),
-            )
-            snap["errors"] = [dict(r) for r in cur.fetchall()]
-            return snap
+                cur.execute(
+                    "SELECT error_type, error_level, error_description "
+                    "FROM state_errors WHERE snapshot_id = %s ORDER BY id",
+                    (sid,),
+                )
+                snap["errors"] = [dict(r) for r in cur.fetchall()]
+                return snap
+        except _connection_exc_types() as exc:
+            broken = True
+            raise _to_unavailable(exc) from exc
     finally:
         try:
             conn.rollback()

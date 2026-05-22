@@ -23,8 +23,12 @@ export function AppBar() {
 
   const apiState: PillState = sys.isError ? 'error' : sys.isSuccess ? 'ok' : 'idle';
   const mqttState = mqttToPill(mqtt);
-  const dbState = serviceToPill(sys.data?.database.status);
-  const rosState = serviceToPill(sys.data?.roslib.status);
+  // G25 — when /system/status fails, sys.data retains its last successful
+  // body, which would leave DB / ROS showing green even though we can't
+  // actually tell. Degrade them to idle so the operator sees "unknown",
+  // not stale green.
+  const dbState = sys.isError ? 'idle' : serviceToPill(sys.data?.database.status);
+  const rosState = sys.isError ? 'idle' : serviceToPill(sys.data?.roslib.status);
 
   return (
     <header
@@ -56,12 +60,20 @@ export function AppBar() {
         <StatusPill
           state={dbState}
           label="DB"
-          title={`PostgreSQL: ${sys.data?.database.status ?? 'unknown'}`}
+          title={
+            sys.isError
+              ? 'PostgreSQL: unknown (API unreachable)'
+              : `PostgreSQL: ${sys.data?.database.status ?? 'unknown'}`
+          }
         />
         <StatusPill
           state={rosState}
           label="ROS"
-          title={`rosbridge (via backend MQTT): ${sys.data?.roslib.status ?? 'unknown'}`}
+          title={
+            sys.isError
+              ? 'rosbridge: unknown (API unreachable)'
+              : `rosbridge (via backend MQTT): ${sys.data?.roslib.status ?? 'unknown'}`
+          }
         />
       </div>
 

@@ -11,7 +11,10 @@
 > checklist text (abbreviated), the user's remark, and either a clarification,
 > the gap ID it became, or the next step to confirm it.
 
-Last updated: 2026-05-22.
+Last updated: 2026-05-22 (G34–G39 added — six frontend bugs surfaced
+during the checklist elaboration pass on the same date; mapped inline
+in each affected entry below. G24 + G25 marked **RESOLVED THIS SESSION**
+— the code fix landed and verified via pytest; pending manual re-test).
 
 ---
 
@@ -93,15 +96,21 @@ Last updated: 2026-05-22.
 - **Original:** Stop PostgreSQL. `GET /robots/amr001/state` → **503**;
   `GET /system/status` → `database: unavailable`.
 - **User remark:** Both return **500 Internal Server Error** instead.
-- **Outcome:** **GAP — opened as G24** ([gaps.md](gaps.md#g24)). `app/db.py`
-  raises `DatabaseUnavailable` when the pool can't connect, but neither
-  router catches it; FastAPI's default handler then sends a 500.
-  `/system/status` in particular should never crash — the whole point is
-  reporting subsystem state, so a DB outage must degrade gracefully.
-- **Fix sketch:** Wrap the two reads in a try/except for `DatabaseUnavailable`
-  → return `JSONResponse(status_code=503, content={"detail": "Database
-  unavailable: <msg>"})` for the state read; for `/system/status` mark the
-  `database` field `unavailable` and keep the response 200.
+- **Outcome:** **RESOLVED THIS SESSION (G24, 2026-05-22).** The real
+  root cause was deeper than initially diagnosed — `app/db.py`'s pool
+  *did* translate connection errors to `DatabaseUnavailable`, but only
+  at pool-build time. Once the pool existed, a Postgres outage caused
+  `psycopg2.OperationalError` from `cur.execute()` to propagate
+  unwrapped past the router's `except DatabaseUnavailable` guard. Fix
+  wraps every helper (`_query`, `_execute`, `_execute_returning`,
+  `_transaction`, `fetch_latest_state`) so `OperationalError` /
+  `InterfaceError` are translated to `DatabaseUnavailable`. Pool is
+  invalidated on failure so the next request rebuilds. `ping()` now
+  runs `SELECT 1` (a pooled connection can outlive a Postgres restart
+  in bookkeeping but be dead on the wire). Verified via
+  `tests/test_db_unavailable.py` (5 cases, all green). See
+  [gaps.md G24 Resolved](gaps.md) and the CONTINUATION.md entry. Pending
+  manual re-test against a live stack.
 
 ### Ordering / concurrency — new order during execution `[robot]`
 - **Original:** Submit a new order while one is mid-execution; behaviour is
@@ -225,11 +234,17 @@ Last updated: 2026-05-22.
 - **Original:** Stop FastAPI → within 5 s: API red, **DB red, ROS red**.
 - **User remark:** "Only API turns red, others stays green. On refresh
   others turn idle and api turns red and mqtt stays green".
-- **Outcome:** **GAP — opened as G25** ([gaps.md](gaps.md#g25)). DB and ROS
-  status are *derived* from `/system/status` — when that endpoint stops
-  responding, the pills should degrade ("idle" or "unknown") on the next
-  failed poll, not stay frozen green. They only update on page-refresh
-  today.
+- **Outcome:** **RESOLVED THIS SESSION (G25, 2026-05-22).** Root cause:
+  TanStack Query retains `data` from the last successful fetch across
+  errors by default — when the 5 s poll failed, `sys.data` still held
+  the last good body and the DB / ROS pills kept showing green. Fix
+  gates every pill derived from `sys.data` on `!sys.isError`. On error
+  they collapse to **idle** (grey) with tooltip "unknown — API
+  unreachable." Applied to AppBar (DB + ROS) and Health page (MQTT
+  backend, PostgreSQL, rosbridge fleet, Node-RED rows). The API pill
+  itself, and the MQTT browser pill (separate channel), keep their
+  direct signals. See [gaps.md G25 Resolved](gaps.md) and CONTINUATION.md.
+  Pending manual re-test.
 
 ### CORS — `Origin` request header check
 - **Original:** Network tab: requests to `localhost:8000/*` carry
@@ -323,11 +338,83 @@ Last updated: 2026-05-22.
 
 ---
 
+## Phase 11/12 — Frontend bugs surfaced during elaboration pass (2026-05-22)
+
+These were captured during the second walkthrough on 2026-05-22 — the one
+that added inline "How to test" elaborations to every "Not sure…" remark.
+Each maps to a tracked gap.
+
+### Instant-action toast renders `[object Object]`
+- **Original (three rows):** Cancel / Retry / Skip → toast confirming the
+  action.
+- **User remark:** "No toast, returns [object Object] in the active order
+  panel instead" / "Behaviour is similar to cancelling".
+- **Outcome:** **GAP — opened as G34** ([gaps.md](gaps.md#g34)). The toast
+  handler stringifies the API response body (a JS object) instead of
+  using its `actionType` field. Cheap fix in the mutation success path.
+
+### Cancel / Retry / Skip clickable after order completes
+- **Original:** Cancel/Retry/Skip while no order is active → button
+  disabled? (currently the panel is hidden — confirm there's no way to
+  send a stray instant action.)
+- **User remark:** "Order is completed. The active order is still there
+  with the button can still be clicked".
+- **Outcome:** **GAP — opened as G37** ([gaps.md](gaps.md#g37)). Buttons
+  should disable or hide when `nodeStates.length === 0`. Pairs with G34
+  — the broken toast hides the fact that a stray click went through.
+
+### Admin DataGrid triple-dot menu unreachable
+- **Original (Maps + Locations):** Delete `map-test` (trash) → confirm
+  → row gone.
+- **User remark:** "Cannot delete, no option to delete. Tried to click
+  three dots but is directed to edit instead. Cannot click triple dot".
+- **Outcome:** **GAP — opened as G35** ([gaps.md](gaps.md#g35)). DataGrid
+  row-actions menu click triggers Edit instead of opening the menu;
+  Delete inaccessible from the UI. Affects every Admin grid. Workaround:
+  delete via `curl.exe -X DELETE` or Swagger.
+
+### Numeric inputs concat placeholder "0"
+- **Original:** Manual dispatch numeric x / y / θ rows.
+- **User remark:** "Currently when inputing number. The placeholder number
+  doesnt go away. Meaning the default is 0. When i type 2. It becomes 02
+  instead of 2."
+- **Outcome:** **GAP — opened as G36** ([gaps.md](gaps.md#g36)). Same
+  defect in the location-editor coord inputs. Likely a controlled-input
+  start-value issue (`useState(0)` vs `useState('')`) or a literal
+  placeholder concatenation.
+
+### Negative coordinates rejected
+- **Original:** Click on the embedded canvas → x and y fields snap to the
+  clicked world coords.
+- **User remark:** "Unable to input negative coordinate number. The same
+  for manual dispatch".
+- **Outcome:** **GAP — opened as G38** ([gaps.md](gaps.md#g38)). ROS world
+  frame supports negatives; likely a `min="0"` left on the input. Same
+  fix serves both screens.
+
+### Robot Detail connection pill stuck at ONLINE on sim shutdown
+- **Original:** Connection pill (top-right) reflects the retained
+  `connection` topic.
+- **User remark:** "Correct when online, but when robot sim is stopped.
+  It doesnt reflect from online to offline. Only reflects when rosbridge
+  is stopped. However error shows connection error".
+- **Outcome:** **GAP — opened as G39 (needs investigation)**
+  ([gaps.md](gaps.md#g39)). May be expected VDA5050 behaviour (the
+  bridge publishes `connection` on behalf of the robot and can't see a
+  sim-only shutdown). But "error shows connection error" suggests
+  another channel does see it — the pill could plausibly bind to that.
+  Could resolve as EXPECTED after a look at the bridge's
+  CONNECTIONBROKEN logic.
+
+---
+
 ## Cross-cutting takeaways
 
-- **Real bugs surfaced (4):** G24 / G25 / G26 / G27 — see
-  [gaps.md](gaps.md). G24 (500-not-503) and G25 (stale pills) are user-visible
-  in any outage scenario; G26/G27 are polish.
+- **Resolved this session:** G24 + G25 (DB-down → 503, pills degrade on
+  poll failure). G28 + G29 (Frontend + Newman jobs added to CI).
+- **Real bugs still open (12):** G26 / G27 / G30–G39 — see
+  [gaps.md](gaps.md). G34 / G35 (instant-action toast + DataGrid menu) are
+  user-blocking on common UI flows; G36–G39 are polish / investigation.
 - **Documentation clarity needs work** on Phase 9 + Phase 11 — multiple
   "not sure what is asked" remarks all map to checklist steps that assume
   context the operator may not have. When a step requires more than one
@@ -345,5 +432,7 @@ Last updated: 2026-05-22.
 
 - [`manual-test-checklist.md`](manual-test-checklist.md) — the source list, phase-ordered.
 - [`manual-test-by-service.md`](manual-test-by-service.md) — the leftover manual items re-grouped by service.
-- [`gaps.md`](gaps.md) — the gap registry (G24–G27 are the new entries from this walkthrough).
+- [`gaps.md`](gaps.md) — the gap registry. G24–G27 from the first
+  walkthrough (2026-05-22 AM); G34–G39 from the elaboration pass
+  (2026-05-22 PM); G24 + G25 already resolved.
 - [`CONTINUATION.md`](CONTINUATION.md) — handoff snapshot including this session's typecheck fixes.

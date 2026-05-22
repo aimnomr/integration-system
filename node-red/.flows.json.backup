@@ -248,7 +248,7 @@
         "rap": true,
         "rh": 0,
         "inputs": 0,
-        "x": 150,
+        "x": 140,
         "y": 100,
         "wires": [
             [
@@ -898,7 +898,7 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "payload": "SELECT * FROM robots;",
+        "payload": "INSERT INTO maps (map_id, label) VALUES ('map-009','Test') ON CONFLICT DO NOTHING;",
         "payloadType": "str",
         "x": 186,
         "y": 239,

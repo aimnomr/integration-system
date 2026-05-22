@@ -2,7 +2,7 @@
 
 > A point-in-time handoff snapshot so work can resume without re-deriving context.
 > **This decays** — trust the code and the canonical docs over this page.
-> Last updated: 2026-05-22 (G28 + G29 closed — Frontend and Newman jobs now run in CI; six new follow-ups G28–G33 promoted from "untracked next steps" into the gaps tracker; manual-checklist walkthrough surfaced four real bugs — G24–G27 — and a batch of clarifications consolidated in `manual-test-remarks.md`).
+> Last updated: 2026-05-22 (G34–G39 added — six frontend bugs filed during the manual-checklist elaboration pass. G24 + G25 closed earlier — DB-down now surfaces as 503 from the affected routes and Health pills degrade to idle when the `/system/status` poll fails. G28 + G29 closed earlier — Frontend and Newman jobs run in CI. Six follow-ups G28–G33 promoted from "untracked next steps" into the gaps tracker; manual-checklist walkthrough surfaced four real bugs — G24–G27 — and a batch of clarifications consolidated in `manual-test-remarks.md`).
 
 ---
 
@@ -39,6 +39,94 @@ Phase 9–13 cover the new frontend and Phase-0 backend work.
 ---
 
 ## Recently completed (most recent first)
+
+**Manual-test-checklist elaboration pass + G34–G39 filed (2026-05-22, uncommitted).**
+Worked through every `{Not sure …}` / `{elaborate}` remark the user had
+added during the manual walkthrough. Two outputs:
+
+- **Checklist now self-contained.** Items that previously assumed
+  unstated context (DevTools steps, SQL repros, "what does this column
+  header mean") now carry an inline `_(How to check: …)_` block right
+  under the checkbox, so a future tester can re-run them without
+  asking. Same treatment given to phase-13 items where the prompt
+  "same page as …" had confused which screen was meant. Two malformed
+  rows (indented `[x]` missing the `- ` prefix on lines 496 + 601)
+  fixed. Banner updated to reflect 41/41 pytest after the G24 tests
+  landed.
+- **Six new gaps filed (G34–G39)** — frontend bugs surfaced from the
+  user's observations during the walkthrough. None of them were
+  obvious-from-code, all were "tried it, doesn't work how the spec
+  says":
+  - **G34** — instant-action toast (Cancel / Retry / Skip) renders
+    `[object Object]` instead of the action name. Three rows hit by
+    the same bug.
+  - **G35** — Admin DataGrid triple-dot row-actions menu can't be
+    opened — clicks land on Edit instead, so Delete is unreachable
+    from the UI on Maps + Locations + Robots. Workaround: `DELETE
+    /maps/<id>` via curl/Swagger.
+  - **G36** — numeric inputs in Dispatch (Manual mode) and Locations
+    concat the placeholder "0" with typed digits → "02" not "2".
+  - **G37** — Cancel / Retry / Skip buttons remain clickable after
+    the order completes (stray-action risk). Pairs with G34.
+  - **G38** — manual dispatch + location editor reject negative
+    coordinates; ROS world frame supports them.
+  - **G39** — Robot Detail connection pill stays ONLINE when the
+    simulator stops; only flips when rosbridge itself dies. **Needs
+    investigation** — may be expected VDA5050 contract behaviour,
+    but the user noted "error shows connection error" elsewhere,
+    suggesting another channel does see it.
+- **Total open gaps now:** 12 (G26 + G27 + G30–G39). Sorted by
+  user-blocking severity, G34 and G35 are the two worth fixing first
+  — they hit common UI flows. G36 / G38 are cheap polish. G37 pairs
+  with G34. G39 is investigation-first.
+- **Docs touched:** `gaps.md` (at-a-glance + Detail blocks for
+  G34–G39, header note), `manual-test-checklist.md` (inline `GAP G##`
+  cross-refs on the six affected items + elaborations on the rest),
+  `manual-test-remarks.md` (G24+G25 marked RESOLVED THIS SESSION,
+  new Phase 11/12 section consolidating G34–G39 walkthrough
+  observations), `status.md` (open-gap roll-up regrouped into
+  "Frontend polish" vs "Infrastructure / hardening").
+
+**Manual test checklist counts (post-pass):** 195 checked / 37
+unchecked / 232 total → **84.05 % complete**. The unchecked set is
+mostly robot-gated items, the still-open G24/G25 manual re-tests,
+the G34–G39 boxes (will check after fixes), and a few "destructive
+to repro" items (empty fleet, retention).
+
+**G24 + G25 — DB-down properly degrades both backend and frontend (2026-05-22, uncommitted).**
+The two medium-severity bugs surfaced by the manual-checklist walkthrough are
+closed. Backend now returns 503 (not 500) when Postgres is down; the React
+Health pills derived from `/system/status` collapse to idle when the poll
+itself fails (no more stale-green).
+
+- **G24 — backend.** `app/db.py`'s lazy connection pool was a one-shot
+  translator: it built the pool on first use and correctly mapped failures
+  to `DatabaseUnavailable`, but a Postgres outage *after* the pool existed
+  raised `psycopg2.OperationalError` from `cur.execute()` unwrapped → the
+  routers' `except DatabaseUnavailable` guard didn't fire → HTTP 500.
+  Fix: every helper (`_query`, `_execute`, `_execute_returning`,
+  `_transaction`, `fetch_latest_state`) now catches
+  `(psycopg2.OperationalError, psycopg2.InterfaceError)` and re-raises as
+  `DatabaseUnavailable` via a new `_to_unavailable()` helper. That helper
+  also calls `_invalidate_pool()` to drop the cached pool — without that,
+  every subsequent request would keep re-borrowing the same dead
+  connection. `ping()` now runs `SELECT 1` instead of just borrowing
+  (pooled connections can stay in the pool's bookkeeping after Postgres
+  restarts but be dead on the wire).
+- **G25 — frontend.** `useSystemStatus` returns TanStack Query's default
+  `data` retention across errors, so `sys.data` still held the last
+  successful body when the 5 s poll failed — `dbState = serviceToPill(...)`
+  kept showing green. Fix: every pill derived from `sys.data` is gated on
+  `sys.isError` (AppBar DB + ROS; Health page MQTT-backend, PostgreSQL,
+  rosbridge-fleet, Node-RED rows). On error they collapse to `idle` (grey)
+  with tooltip "unknown — API unreachable." The API pill itself, and the
+  MQTT browser pill (separate channel), keep their direct signals.
+- **Tests.** New `fastapi-service/tests/test_db_unavailable.py` (5 cases):
+  pool invalidation, `ping()` true/false, `GET /robots/{serial}/state` →
+  503, and `GET /system/status` → 200 with
+  `database.status == 'unavailable'` (the response contract G25 relies on).
+  Full pytest suite: **41 passed** (was 36). Frontend
+  `npm run typecheck` exits 0.
 
 **G28 + G29 — Frontend and Newman jobs added to CI (2026-05-22, uncommitted).**
 The two medium-severity CI gaps are closed. `.github/workflows/ci.yml` grew

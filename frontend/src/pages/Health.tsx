@@ -9,6 +9,13 @@ function pill(s: ServiceStatus | undefined): PillState {
   return 'error';
 }
 
+// G25 — every row whose state is derived from /system/status must collapse
+// to idle when the poll itself fails; otherwise sys.data retains its last
+// successful body and the rows keep showing green even though we can't tell.
+function pillGated(s: ServiceStatus | undefined, apiDown: boolean): PillState {
+  return apiDown ? 'idle' : pill(s);
+}
+
 function ServiceRow({
   label,
   state,
@@ -64,23 +71,37 @@ export default function Health() {
         />
         <ServiceRow
           label="MQTT (backend)"
-          state={pill(sys.data?.mosquitto.status)}
-          detail="FastAPI's own MQTT client liveness"
+          state={pillGated(sys.data?.mosquitto.status, sys.isError)}
+          detail={
+            sys.isError
+              ? 'Unknown — API unreachable'
+              : "FastAPI's own MQTT client liveness"
+          }
         />
         <ServiceRow
           label="PostgreSQL"
-          state={pill(sys.data?.database.status)}
-          detail="Reported by FastAPI's connection-pool ping"
+          state={pillGated(sys.data?.database.status, sys.isError)}
+          detail={
+            sys.isError
+              ? 'Unknown — API unreachable'
+              : "Reported by FastAPI's connection-pool ping"
+          }
         />
         <ServiceRow
           label="rosbridge fleet"
-          state={pill(sys.data?.roslib.status)}
-          detail="Derived from the robots' retained VDA5050 connection topics"
+          state={pillGated(sys.data?.roslib.status, sys.isError)}
+          detail={
+            sys.isError
+              ? 'Unknown — API unreachable'
+              : "Derived from the robots' retained VDA5050 connection topics"
+          }
         />
         <ServiceRow
           label="Node-RED"
-          state={pill(sys.data?.node_red.status)}
-          detail="HTTP probe of NODE_RED_URL"
+          state={pillGated(sys.data?.node_red.status, sys.isError)}
+          detail={
+            sys.isError ? 'Unknown — API unreachable' : 'HTTP probe of NODE_RED_URL'
+          }
         />
       </div>
     </div>

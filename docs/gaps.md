@@ -3,12 +3,20 @@
 Open items not yet addressed, consolidated for visibility. For what *is* working see
 [status.md](status.md). Resolved gaps are listed at the bottom.
 
-> Last updated: 2026-05-22 (G28 + G29 resolved — Frontend typecheck/build
-> and Newman smoke suite now run in GitHub Actions on every push/PR. G28–G33
-> added earlier this session — previously "untracked follow-ups" in
-> `status.md`, now tracked as gaps so they're scheduled work, not loose
-> ends. G24–G27 surfaced by the manual-checklist walkthrough on 2026-05-22;
-> consolidated remarks in `manual-test-remarks.md`).
+> Last updated: 2026-05-22 (G34–G39 added — six frontend bugs surfaced
+> during the manual-test-checklist elaboration pass on 2026-05-22:
+> instant-action toast renders `[object Object]`, Admin DataGrid
+> row-actions menu unreachable, numeric inputs concat placeholder zero,
+> instant-action buttons stay clickable after order completes, manual
+> dispatch + location form reject negative coordinates, and Robot
+> Detail connection pill misses simulator-side disconnect. G24 + G25
+> resolved earlier this session — DB-down now surfaces as HTTP 503,
+> Health pills degrade to idle on poll failure. G28 + G29 resolved
+> earlier — Frontend typecheck/build and Newman smoke suite now run
+> in GitHub Actions on every push/PR. G28–G33 added earlier this
+> session — previously "untracked follow-ups" in `status.md`, now
+> tracked as gaps. G24–G27 surfaced by the manual-checklist walkthrough
+> on 2026-05-22; consolidated remarks in `manual-test-remarks.md`).
 > Severity is a rough triage (High = blocks core function, Medium = limits
 > usefulness, Low = polish / hardening). Gap IDs are stable — resolved ones
 > keep their number rather than being renumbered.
@@ -17,11 +25,15 @@ Open items not yet addressed, consolidated for visibility. For what *is* working
 
 | # | Gap | Area | Severity |
 |---|---|---|---|
-| G24 | DB-down returns HTTP 500 instead of 503 from `GET /robots/{serial}/state` and `GET /system/status` | FastAPI | Medium |
-| G25 | Health pills don't degrade live when `/system/status` poll fails — DB / ROS stay green until refresh | Frontend | Medium |
 | G26 | Dashboard tile "last seen" timer stuck at `0s ago`; doesn't tick upward | Frontend | Low |
 | G27 | Named-location pin labels invisible vs the dark MapCanvas background | Frontend | Low |
 | G30 | Frontend has no Dockerfile / not in `docker-compose.yml` — local-dev only | Docker | Low |
+| G34 | Instant-action toast renders `[object Object]` instead of action name (Cancel / Retry / Skip) | Frontend | Medium |
+| G35 | Admin DataGrid row-actions menu (triple-dot) unreachable — Delete inaccessible | Frontend | Medium |
+| G36 | Numeric inputs (manual dispatch x/y/θ, location editor) concat placeholder "0" — typing "2" yields "02" | Frontend | Low |
+| G37 | Instant-action buttons (Cancel / Retry / Skip) stay clickable after order completes — risk of stray instant action | Frontend | Low |
+| G38 | Negative coordinates rejected by manual dispatch + named-location editor — world frame supports them | Frontend | Low |
+| G39 | Robot Detail "connection" pill stuck at ONLINE when simulator stops (only flips on rosbridge death) — needs investigation | Frontend | Low |
 | G31 | No `GET /orders/{id}` detail endpoint — blocks Order History click-to-expand drill-down | FastAPI | Low |
 | G32 | MQTT broker anonymous on both `:1883` and `:9001` — no auth / no TLS | Mosquitto | Low |
 | G33 | `frontend/tsconfig.json` lacks `"noEmit": true` — `npm run build` emits stray `.js` next to every `.ts` source | Frontend | Low |
@@ -29,6 +41,59 @@ Open items not yet addressed, consolidated for visibility. For what *is* working
 See [manual-test-remarks.md](manual-test-remarks.md) for the full walkthrough
 notes that surfaced G24–G27 — including items that looked like bugs but turned
 out to be expected behaviour or test-setup issues.
+
+### Detail — G34–G39 (frontend bugs surfaced during checklist elaboration, 2026-05-22)
+
+- **G34 — Instant-action toast renders `[object Object]`.** The success
+  toast fired after Cancel / Retry / Skip on the ActiveOrderPanel
+  stringifies the API response body (a JS object) instead of using its
+  `actionType` field. Surfaced three times in the walkthrough — the
+  user noted "Returns object Object in the active order panel" for
+  every instant action. Likely fix: in the success path of the instant-
+  action mutation, build the toast from the request's `action_type` (or
+  the response's `actionType`) rather than passing the whole response
+  body to `toast(...)`. Quick to repro: click Cancel on any active order.
+- **G35 — Admin DataGrid row-actions menu unreachable.** The Admin pages
+  (Maps, Named Locations, Robots, Fleet) use MUI X DataGrid's row-actions
+  triple-dot icon to expose Edit and Delete. The walkthrough found the
+  triple-dot button can't be opened — clicking it triggers Edit
+  directly, so Delete is inaccessible from the UI. Affects Maps,
+  Locations, and (less critically) Robots. Likely fix: switch to an
+  explicit two-icon column (pencil + trash) or audit the GridActionsCell
+  config — there's probably a stray onClick swallowing the menu open.
+  Workaround until fixed: delete via `curl.exe -X DELETE` or
+  `DELETE /maps/<id>` etc. through Swagger.
+- **G36 — Numeric inputs concat placeholder "0".** In Dispatch (Manual
+  mode x/y/θ inputs) and the Admin Locations form, the placeholder "0"
+  doesn't clear when the user types — typing "2" produces "02". Likely
+  fix: `<input type="number">` with a controlled value should use
+  `value={x}` with `x` starting at `null` / empty, not `0`; or the
+  placeholder is being concatenated with the value. Low severity (user
+  can backspace), but trips up every first-time manual order.
+- **G37 — Instant-action buttons stay clickable after order completes.**
+  The ActiveOrderPanel keeps Cancel / Retry / Skip enabled after the
+  order has finished (state.nodeStates empty). User can fire a stray
+  retryNode / skipNode against a robot with no active order. Likely
+  fix: disable (or hide) the three buttons when `nodeStates.length === 0`
+  / no `orderId` in the latest state. Pairs with G34 — the toast bug
+  makes it harder to notice that a stray click went through.
+- **G38 — Negative coordinates rejected.** Manual dispatch (x / y inputs)
+  and the named-location editor reject negative numbers, but the ROS
+  world frame can legitimately have negative coordinates (origin not
+  necessarily at the south-west corner). Likely fix: remove
+  `min="0"` from the inputs or any guard in the validator. Same fix
+  serves both screens since they share the numeric-input pattern.
+- **G39 — Robot Detail "connection" pill stuck at ONLINE on sim
+  shutdown.** Per the user remark: "Correct when online, but when robot
+  sim is stopped. It doesnt reflect from online to offline. Only
+  reflects when rosbridge is stopped. However error shows connection
+  error." May be expected VDA5050 contract behaviour — the `connection`
+  topic is published by the ROS Bridge process on behalf of each robot,
+  so the bridge itself can't tell the sim has stopped unless rosbridge
+  fails (Last-Will fires → CONNECTIONBROKEN). But the fact that
+  "error shows connection error" means some other channel knows about
+  the disconnect, so the pill could plausibly bind to that signal.
+  **Needs investigation** before fixing — could resolve as EXPECTED.
 
 ### Detail — G30–G33 (untracked → tracked, 2026-05-22)
 
@@ -80,6 +145,8 @@ out to be expected behaviour or test-setup issues.
 | G23 | `GET/POST/PUT /robots/{serial}` returned snake_case while `GET /robots` (list) returned camelCase — API self-inconsistency | 2026-05-21 |
 | G28 | Frontend not in CI — `tsc --noEmit` + `vite build` don't run on push/PR | 2026-05-22 |
 | G29 | Newman smoke suite not in CI — contract drift only caught locally | 2026-05-22 |
+| G24 | DB-down returns HTTP 500 instead of 503 from `GET /robots/{serial}/state` and `GET /system/status` | 2026-05-22 |
+| G25 | Health pills don't degrade live when `/system/status` poll fails — DB / ROS stay green until refresh | 2026-05-22 |
 
 G1–G3 — the ROS Bridge Service consumes `/move_base` feedback and the VDA5050
 `OrderStateMachine` auto-advances orders node-by-node. G12 — JSON-line logging in the
@@ -181,6 +248,40 @@ and PR. Playwright is intentionally **not** in this job — it needs the live
 stack and is local-only for now (the Newman job covers the same endpoints at
 the HTTP layer; a future `e2e` job could spin docker compose and run Playwright
 against it).
+
+**G24** — DB-down now returns 503 from the affected routes. Root cause:
+`app/db.py`'s connection pool is built lazily; on first call it correctly
+translated psycopg2 connection errors into `DatabaseUnavailable` (caught by
+the routers' `except DatabaseUnavailable` → 503). Once the pool was built,
+though, subsequent psycopg2 `OperationalError` / `InterfaceError` raised on
+`cur.execute()` (because Postgres restarted, the wire died, etc.) propagated
+unwrapped — the routers' guard didn't fire and FastAPI returned a generic
+500. The fix wraps every helper (`_query`, `_execute`, `_execute_returning`,
+`_transaction`, `fetch_latest_state`) so connection-level errors are
+translated into `DatabaseUnavailable`. It also adds `_invalidate_pool()` —
+called from `_to_unavailable()` so the cached pool is dropped after a
+connection failure; without that, the pool would keep handing out the same
+dead connection on every subsequent request even after Postgres recovers.
+`ping()` now runs `SELECT 1` rather than just borrowing a connection (a
+pooled connection survives a Postgres restart in the pool's bookkeeping
+while being dead on the wire). New tests in
+`fastapi-service/tests/test_db_unavailable.py` (5 cases) lock in: pool
+invalidation, `ping()` true/false branches, `GET /robots/{serial}/state` →
+503, and `GET /system/status` → 200 with `database.status == 'unavailable'`
+(the contract G25 depends on).
+
+**G25** — Health pills now degrade live when `/system/status` fails. Root
+cause: `useSystemStatus` returns TanStack Query's default `data` retention
+across errors — when the 5 s poll fails, `sys.data` still holds the last
+successful response, so `dbState = serviceToPill(sys.data?.database.status)`
+kept showing green. Fix: every pill derived from `sys.data` is now gated on
+`sys.isError` (AppBar's DB + ROS pills; Health's MQTT-backend, PostgreSQL,
+rosbridge-fleet, and Node-RED rows). When the poll errors they collapse to
+`idle` (grey) and the tooltip reads "unknown — API unreachable" so the
+operator can tell the answer is "we can't see," not "everything is fine."
+The API pill itself (and the MQTT browser pill, which is a separate
+channel) keep their direct signals. Verified manually + via `npm run
+typecheck` (0 errors).
 
 **G29** — Newman smoke suite now runs in CI. A `newman` job brings up
 `postgres + mosquitto + fastapi` via `docker compose up -d --build`, polls
