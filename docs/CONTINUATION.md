@@ -2,7 +2,7 @@
 
 > A point-in-time handoff snapshot so work can resume without re-deriving context.
 > **This decays** — trust the code and the canonical docs over this page.
-> Last updated: 2026-05-22 (frontend typecheck fixed; manual-checklist walkthrough surfaced four real bugs — G24–G27 — and a batch of clarifications consolidated in `manual-test-remarks.md`).
+> Last updated: 2026-05-22 (G28 + G29 closed — Frontend and Newman jobs now run in CI; six new follow-ups G28–G33 promoted from "untracked next steps" into the gaps tracker; manual-checklist walkthrough surfaced four real bugs — G24–G27 — and a batch of clarifications consolidated in `manual-test-remarks.md`).
 
 ---
 
@@ -39,6 +39,39 @@ Phase 9–13 cover the new frontend and Phase-0 backend work.
 ---
 
 ## Recently completed (most recent first)
+
+**G28 + G29 — Frontend and Newman jobs added to CI (2026-05-22, uncommitted).**
+The two medium-severity CI gaps are closed. `.github/workflows/ci.yml` grew
+from 3 to 5 jobs.
+
+- **Frontend job** — `npm ci` (cached against `frontend/package-lock.json`),
+  `npm run typecheck` (`tsc -b --noEmit`), `npm run build` (`tsc -b && vite
+  build`). Runs on every push / PR. Playwright deliberately excluded — it
+  needs the live stack and is the kind of work the Newman job covers at the
+  HTTP layer instead.
+- **Newman job** — `docker compose up -d --build postgres mosquitto fastapi`,
+  poll `docker inspect` for `fastapi`'s healthcheck (up to ~120 s), then
+  `npx newman run` the 13-section / 61-request collection with the
+  `htmlextra` reporter. JSON + HTML reports uploaded as
+  `newman-reports` artifact on every run. On failure: dumps FastAPI
+  container logs before tear-down. `node-red` and `ros-bridge` are
+  intentionally skipped — the collection only hits the FastAPI HTTP
+  surface, and `ros-bridge` would just log connect errors without a real
+  rosbridge upstream.
+- **Why these were medium, not low.** G22 and G23 (both shipped 2026-05-21)
+  were exactly the kind of contract drift that an in-CI Newman job would
+  have caught before merge — these jobs close that feedback loop.
+- **Docs updated** — `gaps.md` (G28 + G29 moved to Resolved with notes;
+  the "Detail" sub-section renamed G30–G33), `status.md` (CI section now
+  lists 5 jobs; open-gap count rebalanced).
+
+**Six untracked follow-ups promoted to tracked gaps (2026-05-22, uncommitted).**
+`docs/status.md` had a "Not yet implemented (post-v1)" bullet list of things
+that should happen but weren't on the tracker. They are now G28–G33 in
+`gaps.md`. Two of them (G28 frontend-CI, G29 Newman-CI) were closed in the
+same session — see above. Remaining open: G30 (frontend Dockerfile +
+compose service), G31 (`GET /orders/{id}` detail endpoint), G32 (MQTT
+auth + TLS), G33 (`noEmit: true` in `frontend/tsconfig.json`).
 
 **Frontend typecheck zero-errored + stray .js cleanup (2026-05-22, uncommitted).**
 The frontend `npm run typecheck` had been failing with 8 errors; `npm run build`

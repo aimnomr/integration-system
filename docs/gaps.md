@@ -3,8 +3,12 @@
 Open items not yet addressed, consolidated for visibility. For what *is* working see
 [status.md](status.md). Resolved gaps are listed at the bottom.
 
-> Last updated: 2026-05-22 (G24–G27 surfaced by the manual-checklist walkthrough
-> on 2026-05-22; consolidated remarks in `manual-test-remarks.md`).
+> Last updated: 2026-05-22 (G28 + G29 resolved — Frontend typecheck/build
+> and Newman smoke suite now run in GitHub Actions on every push/PR. G28–G33
+> added earlier this session — previously "untracked follow-ups" in
+> `status.md`, now tracked as gaps so they're scheduled work, not loose
+> ends. G24–G27 surfaced by the manual-checklist walkthrough on 2026-05-22;
+> consolidated remarks in `manual-test-remarks.md`).
 > Severity is a rough triage (High = blocks core function, Medium = limits
 > usefulness, Low = polish / hardening). Gap IDs are stable — resolved ones
 > keep their number rather than being renumbered.
@@ -17,10 +21,33 @@ Open items not yet addressed, consolidated for visibility. For what *is* working
 | G25 | Health pills don't degrade live when `/system/status` poll fails — DB / ROS stay green until refresh | Frontend | Medium |
 | G26 | Dashboard tile "last seen" timer stuck at `0s ago`; doesn't tick upward | Frontend | Low |
 | G27 | Named-location pin labels invisible vs the dark MapCanvas background | Frontend | Low |
+| G30 | Frontend has no Dockerfile / not in `docker-compose.yml` — local-dev only | Docker | Low |
+| G31 | No `GET /orders/{id}` detail endpoint — blocks Order History click-to-expand drill-down | FastAPI | Low |
+| G32 | MQTT broker anonymous on both `:1883` and `:9001` — no auth / no TLS | Mosquitto | Low |
+| G33 | `frontend/tsconfig.json` lacks `"noEmit": true` — `npm run build` emits stray `.js` next to every `.ts` source | Frontend | Low |
 
 See [manual-test-remarks.md](manual-test-remarks.md) for the full walkthrough
-notes that surfaced these — including items that looked like bugs but turned
+notes that surfaced G24–G27 — including items that looked like bugs but turned
 out to be expected behaviour or test-setup issues.
+
+### Detail — G30–G33 (untracked → tracked, 2026-05-22)
+
+- **G30 — Frontend Dockerfile + compose service.** Multi-stage build (Node
+  builder → nginx static serve) plus a `frontend` service in
+  `docker-compose.yml`. Phase 5 of the frontend plan, deferred.
+- **G31 — `GET /orders/{id}`.** Detail endpoint returning the order header +
+  joined `order_nodes` / `order_edges`. The list endpoint `GET /orders`
+  already exists; the React Order History grid has no row drill-down yet.
+- **G32 — MQTT auth + TLS.** Both Mosquitto listeners (`:1883` backend,
+  `:9001` browser) are anonymous; password file + TLS cert config needed,
+  plus credentials wired through FastAPI / ROS Bridge / Node-RED / frontend
+  env. Fine for FYP / LAN; not for any wider deployment.
+- **G33 — `noEmit` in tsconfig.** `frontend/tsconfig.json` doesn't set
+  `"noEmit": true`, so `tsc -b` (invoked by the `build` script) writes
+  compiled `.js` next to every source `.ts`. The 2026-05-22 cleanup removed
+  50 stray files but they'll regenerate on the next build. One-line config
+  fix; the Vite build still produces `dist/` because Vite handles emission
+  separately.
 
 ---
 
@@ -51,6 +78,8 @@ out to be expected behaviour or test-setup issues.
 | G21 | VDA5050 `headerId` / `orderId` counters reset on restart | 2026-05-18 |
 | G22 | Frontend named-order POST sent camelCase, FastAPI expected snake_case (422 on every Dispatch → Named send) | 2026-05-21 |
 | G23 | `GET/POST/PUT /robots/{serial}` returned snake_case while `GET /robots` (list) returned camelCase — API self-inconsistency | 2026-05-21 |
+| G28 | Frontend not in CI — `tsc --noEmit` + `vite build` don't run on push/PR | 2026-05-22 |
+| G29 | Newman smoke suite not in CI — contract drift only caught locally | 2026-05-22 |
 
 G1–G3 — the ROS Bridge Service consumes `/move_base` feedback and the VDA5050
 `OrderStateMachine` auto-advances orders node-by-node. G12 — JSON-line logging in the
@@ -144,6 +173,25 @@ assertion `expected j.serialNumber to eql 'amr001'` failing against
 2026-05-21 03:13). Fixed by adding a `_to_camel(row)` helper in
 `app/routers/robots.py` and applying it to the get/post/put responses;
 `db.py` stays SQL-shaped (snake_case) by convention.
+
+**G28** — frontend now runs in CI. A `frontend` job in `.github/workflows/ci.yml`
+runs `npm ci` (cached against `frontend/package-lock.json`), `npm run typecheck`
+(`tsc -b --noEmit`), and `npm run build` (`tsc -b && vite build`) on every push
+and PR. Playwright is intentionally **not** in this job — it needs the live
+stack and is local-only for now (the Newman job covers the same endpoints at
+the HTTP layer; a future `e2e` job could spin docker compose and run Playwright
+against it).
+
+**G29** — Newman smoke suite now runs in CI. A `newman` job brings up
+`postgres + mosquitto + fastapi` via `docker compose up -d --build`, polls
+`docker inspect` for the FastAPI healthcheck to reach `healthy` (up to ~120 s),
+then runs the 13-section / 61-request collection via `npx newman` with the
+`htmlextra` reporter. Reports are uploaded as a GitHub Actions artifact
+(`newman-reports`) on every run; on failure the FastAPI container logs are
+dumped before tear-down. `node-red` and `ros-bridge` are skipped — the
+collection only exercises the FastAPI HTTP surface, and `ros-bridge` would
+just log "no robot" errors without a real rosbridge upstream. Catches the
+kind of contract drift that G22 / G23 were.
 
 **G22** — `postNamedOrder` in `frontend/src/api/robots.ts` was sending
 `{ locationIds: [...] }` (camelCase) while FastAPI's `NamedOrderRequest`

@@ -105,14 +105,20 @@ each, where reports land). Short version:
   surface: AppShell, Health page live timestamp, Dashboard tile, Dispatch
   named + manual happy paths, Admin Maps/Robots/Fleet CRUD incl. 409 toast,
   Orders + OEE empty state, no-CORS-errors check. `cd frontend && npm run e2e`.
-- **GitHub Actions CI** (`.github/workflows/ci.yml`) — three jobs:
+- **GitHub Actions CI** (`.github/workflows/ci.yml`) — five jobs:
   - **ROS Bridge** — `npm ci`, `node --check`, `npm test`.
   - **FastAPI** — `pip install -r requirements*.txt`, `compileall`, `pytest`.
     `tests/conftest.py` stubs the four DB calls `RobotRegistry.__init__`
     makes, so router imports don't need a live Postgres.
   - **Node-RED** — `flows.json` JSON validation.
-  Frontend (Playwright + `tsc`/build) and the Tier-2 integration suites are
-  **not** in CI yet — they need the live stack up. Local-only for now.
+  - **Frontend** — `npm ci`, `npm run typecheck` (`tsc -b --noEmit`), and
+    `npm run build` (`tsc -b && vite build`). Added 2026-05-22 (G28).
+  - **Newman API smoke** — boots `postgres + mosquitto + fastapi` via
+    `docker compose`, waits for the FastAPI healthcheck, replays the
+    13-section collection, uploads HTML+JSON reports as artifacts. Added
+    2026-05-22 (G29).
+  Playwright is still local-only (needs a live full stack with rosbridge);
+  the Newman job is the in-CI substitute for HTTP-level contract drift.
 
 ### Docker & ops
 
@@ -155,19 +161,14 @@ each, where reports land). Short version:
 
 ## Not yet implemented (post-v1)
 
-Tracked gaps **G1–G23 are resolved; G24–G27 are open** (see
-[gaps.md](gaps.md) for severity + repro and
+Tracked gaps **G1–G23 + G28 + G29 are resolved; G24–G27 + G30–G33 are open**
+(see [gaps.md](gaps.md) for severity + repro and
 [manual-test-remarks.md](manual-test-remarks.md) for the walkthrough
-context). Things that would be the natural next steps but aren't tracked
-as gaps:
+context behind G24–G27). G30–G33 are the previously "untracked next
+steps" now promoted into the gaps tracker:
 
-- **Frontend in CI** — `tsc --noEmit && vite build` job. ~15 min to add.
-- **Newman in CI** — boot the stack via `docker compose`, run the collection,
-  tear down. Would catch contract drift on every PR.
-- **Frontend Dockerfile + compose service** — currently local-dev only.
-- **`GET /orders/{id}`** — detail endpoint for the Order History → click-to-
-  expand drill-down. The list endpoint is in place.
-- **Playwright E2E** for the frontend — Phase 1 was scaffold-only; the UI has
-  no automated browser tests.
-- **MQTT auth + TLS** on both broker listeners — anonymous is fine for FYP /
-  LAN, not for any wider deployment.
+- **G30** — Frontend Dockerfile + `docker-compose.yml` service.
+- **G31** — `GET /orders/{id}` detail endpoint for Order History drill-down.
+- **G32** — MQTT auth + TLS on both broker listeners.
+- **G33** — `"noEmit": true` in `frontend/tsconfig.json` to stop stray `.js`
+  emission on `npm run build`.

@@ -49,3 +49,77 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate flows.json
         run: python -c "import json; json.load(open('node-red/flows.json'))"
+
+  frontend:
+    # G28 — frontend typecheck + Vite build run on every push/PR.
+    # Playwright is intentionally not run here; it needs the live stack and
+    # belongs in a separate e2e job (the Newman job below proves the same
+    # endpoints at the HTTP layer).
+    name: Frontend (typecheck + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
+
+  newman:
+    # G29 — replay the Postman smoke suite against a real stack.
+    # Brings up postgres + mosquitto + fastapi via docker compose, waits for
+    # the FastAPI healthcheck, runs the collection, then tears the stack
+    # down. node-red and ros-bridge are skipped (Newman only exercises the
+    # FastAPI HTTP surface; ros-bridge needs a real robot rosbridge anyway).
+    name: Newman API smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Start backend stack
+        run: docker compose up -d --build postgres mosquitto fastapi
+      - name: Wait for FastAPI healthcheck
+        run: |
+          for i in $(seq 1 60); do
+            status=$(docker inspect --format='{{.State.Health.Status}}' $(docker compose ps -q fastapi))
+            echo "fastapi health: $status"
+            if [ "$status" = "healthy" ]; then exit 0; fi
+            sleep 2
+          done
+          echo "FastAPI did not become healthy in time" >&2
+          docker compose logs fastapi
+          exit 1
+      - name: Run Newman collection
+        run: |
+          npx --yes -p newman -p newman-reporter-htmlextra newman run \
+            docs/postman/amr-integration.postman_collection.json \
+            -e docs/postman/local.postman_environment.json \
+            --env-var baseUrl=http://localhost:8000 \
+            --env-var apiKey= \
+            --reporters cli,json,htmlextra \
+            --reporter-json-export newman-report.json \
+            --reporter-htmlextra-export newman-report.html
+      - name: Upload Newman reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: newman-reports
+          path: |
+            newman-report.json
+            newman-report.html
+      - name: Dump FastAPI logs on failure
+        if: failure()
+        run: docker compose logs fastapi
+      - name: Tear down stack
+        if: always()
+        run: docker compose down -v
