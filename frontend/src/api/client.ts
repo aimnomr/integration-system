@@ -69,11 +69,46 @@ export async function apiFetch<T = unknown>(
   const payload = isJson ? await res.json().catch(() => null) : await res.text();
 
   if (!res.ok) {
-    const message =
-      (typeof payload === 'object' && payload && 'detail' in payload
-        ? String((payload as { detail: unknown }).detail)
-        : null) ?? `${res.status} ${res.statusText}`;
-    throw new ApiError(message, res.status, payload);
+    throw new ApiError(formatErrorMessage(payload, res), res.status, payload);
   }
   return payload as T;
+}
+
+/**
+ * Pull a human-readable message out of a FastAPI error body.
+ *
+ * FastAPI's `detail` can be:
+ *  - A plain string (raised via `HTTPException(detail="…")`) — use as-is.
+ *  - An array of validation errors (422 from a pydantic body) — each entry
+ *    has `{loc: [...], msg: "...", type: "..."}`. Stringifying the array
+ *    directly produced `"[object Object],[object Object]"` (G34's
+ *    `[object Object]` toast). Format each entry as `loc.path: msg`.
+ *  - A single validation-error object (rare) — same field shape.
+ *  - Anything else — fall back to the HTTP status line.
+ */
+function formatErrorMessage(payload: unknown, res: Response): string {
+  if (typeof payload === 'object' && payload && 'detail' in payload) {
+    const detail = (payload as { detail: unknown }).detail;
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) {
+      return detail.map(formatValidationEntry).filter(Boolean).join('; ')
+        || `${res.status} ${res.statusText}`;
+    }
+    if (typeof detail === 'object' && detail) {
+      const single = formatValidationEntry(detail);
+      if (single) return single;
+    }
+  }
+  return `${res.status} ${res.statusText}`;
+}
+
+function formatValidationEntry(entry: unknown): string {
+  if (typeof entry !== 'object' || !entry) return '';
+  const e = entry as { loc?: unknown[]; msg?: unknown };
+  const path = Array.isArray(e.loc)
+    // Drop the leading "body" / "query" / "path" element FastAPI prefixes.
+    ? e.loc.slice(1).map(String).join('.')
+    : '';
+  const msg = typeof e.msg === 'string' ? e.msg : '';
+  return path && msg ? `${path}: ${msg}` : (msg || path);
 }

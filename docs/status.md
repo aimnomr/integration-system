@@ -163,17 +163,15 @@ each, where reports land). Short version:
 
 ## Not yet implemented (post-v1)
 
-Tracked gaps **G1–G25 + G28 + G29 are resolved; G26 + G27 + G30–G39 are
-open** (see [gaps.md](gaps.md) for severity + repro and
+Tracked gaps **G1–G25 + G28 + G29 + G33 + G34 + G35 + G36 + G37 + G38
+are resolved; G26 + G27 + G30 + G31 + G32 + G39 are open** (6 open total —
+see [gaps.md](gaps.md) for severity + repro and
 [manual-test-remarks.md](manual-test-remarks.md) for the walkthrough
 context behind G24–G27 and G34–G39). The open set breaks down as:
 
 - **Frontend polish (manual walkthrough):** G26 (last-seen timer), G27
-  (pin label contrast), G34 (instant-action toast `[object Object]`),
-  G35 (Admin DataGrid triple-dot unreachable), G36 (numeric input "02"),
-  G37 (instant-action buttons clickable after completion), G38 (negative
-  coords rejected), G39 (connection pill on sim shutdown — needs
+  (pin label contrast), G39 (connection pill on sim shutdown — needs
   investigation).
 - **Infrastructure / hardening (untracked → tracked):** G30 (frontend
   Dockerfile + compose service), G31 (`GET /orders/{id}` detail endpoint),
-  G32 (MQTT auth + TLS), G33 (`noEmit: true` in `frontend/tsconfig.json`).
+  G32 (MQTT auth + TLS).

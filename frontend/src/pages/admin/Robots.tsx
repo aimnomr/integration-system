@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Button, MenuItem, TextField } from '@mui/material';
+import { Alert, Button, IconButton, MenuItem, TextField, Tooltip } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -74,15 +74,20 @@ export default function AdminRobots() {
     { field: 'rosbridgeUrl', headerName: 'rosbridge URL', flex: 1,
       renderCell: (p) => <span className="font-mono text-xs">{p.value}</span> },
     {
+      // G35 — see Maps.tsx for the rationale (Button minWidth → Delete clipped).
       field: '_actions', headerName: '', width: 110, sortable: false, filterable: false,
       renderCell: (p) => (
         <>
-          <Button size="small" onClick={() => setEdit({ mode: 'edit', row: p.row })}>
-            <EditIcon fontSize="small" />
-          </Button>
-          <Button size="small" color="error" onClick={() => setDelTarget(p.row)}>
-            <DeleteIcon fontSize="small" />
-          </Button>
+          <Tooltip title="Edit">
+            <IconButton size="small" onClick={() => setEdit({ mode: 'edit', row: p.row })}>
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Delete">
+            <IconButton size="small" color="error" onClick={() => setDelTarget(p.row)}>
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </>
       ),
     },

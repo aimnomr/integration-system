@@ -2,7 +2,7 @@
 
 > A point-in-time handoff snapshot so work can resume without re-deriving context.
 > **This decays** — trust the code and the canonical docs over this page.
-> Last updated: 2026-05-22 (G34–G39 added — six frontend bugs filed during the manual-checklist elaboration pass. G24 + G25 closed earlier — DB-down now surfaces as 503 from the affected routes and Health pills degrade to idle when the `/system/status` poll fails. G28 + G29 closed earlier — Frontend and Newman jobs run in CI. Six follow-ups G28–G33 promoted from "untracked next steps" into the gaps tracker; manual-checklist walkthrough surfaced four real bugs — G24–G27 — and a batch of clarifications consolidated in `manual-test-remarks.md`).
+> Last updated: 2026-05-22 (housekeeping pass — `frontend/tsconfig.tsbuildinfo` untracked from git, ~8 MB of stale generated artifacts cleared from postman reports, playwright report, frontend dist, test-results, and python pycache. All gitignored, no source touched. G34 + G35 closed earlier — instant-action wire format corrected (`action_type` + full VDA5050 names), API client error formatter handles 422 validation arrays, ActiveOrderPanel wires success toasts; Admin DataGrid actions switched from `Button` to `IconButton` so Delete fits the column. G33 + G36 + G37 + G38 closed earlier — the cheap-quartet patch. tsconfig `noEmit: true`; new `NumberField` for select-on-focus + negative/decimal entry; ActiveOrderPanel disables Cancel/Retry/Skip on order complete. G34–G39 added earlier — six frontend bugs filed during the manual-checklist elaboration pass. G24 + G25 closed earlier — DB-down now surfaces as 503 from the affected routes and Health pills degrade to idle when the `/system/status` poll fails. G28 + G29 closed earlier — Frontend and Newman jobs run in CI. Six follow-ups G28–G33 promoted from "untracked next steps" into the gaps tracker; manual-checklist walkthrough surfaced four real bugs — G24–G27 — and a batch of clarifications consolidated in `manual-test-remarks.md`).
 
 ---
 
@@ -39,6 +39,153 @@ Phase 9–13 cover the new frontend and Phase-0 backend work.
 ---
 
 ## Recently completed (most recent first)
+
+**Housekeeping pass — generated artifacts cleared, tsbuildinfo untracked (2026-05-22, uncommitted).**
+After the G34/G35 patch the working tree had accumulated ~8 MB of
+gitignored-but-stale generated files plus one tracked-but-shouldn't-be
+artifact. Cleared in one pass:
+
+- **`frontend/tsconfig.tsbuildinfo`** — tracked in git despite the
+  `*.tsbuildinfo` rule added to `frontend/.gitignore` in the G33 patch.
+  Removed from the index via `git rm --cached`. The local file
+  regenerates on the next `tsc -b` run; only the tracked copy was
+  stale.
+- **`docs/postman/reports/`** — 10 timestamped HTML+JSON reports from
+  2026-05-21 (6.1 MB), all predating the G22/G23/G24 fixes so the
+  pass/fail picture they captured is no longer current. Cleared. The
+  directory itself is gitignored at the repo root; future
+  `.\docs\postman\run-newman.ps1` invocations refill it.
+- **`frontend/playwright-report/`** — single 540 KB `index.html` from a
+  2026-05-21 E2E run. Same reasoning — predates the frontend fixes.
+  `npm run e2e` regenerates it.
+- **`frontend/test-results/`** — Playwright's per-run scratch dir (only
+  `.last-run.json` was present). Regenerates.
+- **`frontend/dist/`** — 1.6 MB of build output from the last
+  `npm run build` during the G33 verification. Regenerates on demand.
+- **`fastapi-service/**/__pycache__/`** — Python bytecode cache from the
+  41-passing pytest run. Regenerates on the next test invocation.
+
+No source code touched. All paths are gitignored at the repo level
+(`root .gitignore`: `playwright-report/`, `test-results/`,
+`docs/postman/reports/`, `__pycache__/`; `frontend/.gitignore`: `dist/`,
+`*.tsbuildinfo`). Net effect on the working tree: smaller `du -sh
+docs/postman frontend` and one git deletion staged.
+
+**G34 + G35 closed — the medium-severity frontend pair (2026-05-22, uncommitted).**
+Both bugs the user flagged as "user-blocking on common UI flows" are
+gone. Total open gaps now **6** (was 8). Typecheck + production build
+both green.
+
+- **G34 — instant-action UX overhaul.** Initial diagnosis was wrong —
+  the `[object Object]` string the user saw was not a broken toast
+  renderer; it was a G22-style wire-format mismatch hiding behind a
+  poor error formatter:
+  1. **Wire format.** `postInstantAction` in `frontend/src/api/robots.ts`
+     sent `{"action": "cancel"}` (short, camelCase), but FastAPI's
+     `InstantActionRequest` declares
+     `action_type: Literal["cancelOrder", "retryNode", "skipNode"]`.
+     Every Cancel / Retry / Skip click returned 422. Added an
+     `ACTION_TYPE` map and now sends `{action_type: ACTION_TYPE[action]}`.
+     TS API surface stays short + camelCase for callers; translation
+     lives at the boundary.
+  2. **Error formatter.** `apiFetch` in `frontend/src/api/client.ts` used
+     `String((payload as { detail: unknown }).detail)`. Fine for a string
+     `detail`, but a 422 has `detail: [{...validation errors...}]` →
+     `String([{...}])` = `"[object Object]"`. New `formatErrorMessage`
+     helper handles all three FastAPI detail shapes: plain string, array
+     of validation entries (`loc.path: msg`), single-entry object.
+     Means future schema drift on other endpoints surfaces readably,
+     not as `[object Object]`.
+  3. **Success toast.** `ActiveOrderPanel` now imports `useToast` and
+     fires `toast.success(\`${label} sent\`)` / `toast.error(...)` on
+     the mutation result. Combined with G37 (already in), the operator
+     gets clear feedback and can't fire a stray action against a
+     finished order.
+- **G35 — Admin DataGrid actions reachable.** There was **never a
+  triple-dot menu** — the row-actions column rendered two MUI `Button`
+  components. MUI `Button` defaults to `minWidth: 64px`; two of them
+  = 128 px in a column with `width: 110`. Delete overflowed and clicks
+  on its visible portion landed on Edit. The user's "triple dot"
+  mental model was an attempt to explain the broken click. Fixed by
+  swapping to `IconButton` (sized to its icon, ~32 px each) wrapped in
+  MUI `Tooltip` for hover labels. Applied to Maps + Locations + Robots
+  admin grids (Fleet has no row actions). Column width unchanged.
+- **Verification.** `npm run typecheck` exits 0. Production build still
+  succeeds. Playwright tests use `getByRole('button')` which matches
+  both `Button` and `IconButton`, so the existing E2E suite still
+  resolves the row-actions correctly.
+- **Docs touched.** `gaps.md` (G34 + G35 → Resolved with detailed notes
+  on the actual root causes, since both were misdiagnosed by their
+  symptoms initially; open-gap roll-up rewritten), `status.md` (open
+  count → 6), `manual-test-checklist.md` (three affected cross-refs
+  flipped from "GAP G##" to "FIXED — pending re-test"),
+  `manual-test-remarks.md` (G34 + G35 entries flipped to RESOLVED THIS
+  SESSION with corrected root-cause notes).
+
+**Open gaps now (6):** G26 (last-seen tick), G27 (pin labels), G30
+(frontend Dockerfile), G31 (`GET /orders/{id}`), G32 (MQTT auth + TLS),
+G39 (connection pill — needs investigation). Recommended next pass:
+G26 + G27 (frontend polish, share the dashboard / map files), then G31
+(small backend endpoint), then G39 (investigation might resolve as
+EXPECTED). G30 + G32 are the biggest remaining items and best done
+deliberately.
+
+**Cheap-quartet patch: G33 + G36 + G37 + G38 closed (2026-05-22, uncommitted).**
+Four low-severity frontend bugs cleared in one pass; total open gaps
+now **8** (was 12). Typecheck + production build both green.
+
+- **G33 — `"noEmit": true` in `frontend/tsconfig.json`.** One-line config
+  fix. `npm run build` no longer emits `.js` next to source `.ts` files
+  (verified: `Get-ChildItem src -Filter *.js -Recurse | Measure-Object`
+  reports 0). Vite still produces `dist/` via its own pipeline. Added
+  `*.tsbuildinfo` to `frontend/.gitignore` so the tsc incremental cache
+  doesn't get committed.
+- **G36 + G38 — new `NumberField` component
+  (`frontend/src/components/common/NumberField.tsx`).** Shared root cause:
+  MUI `<TextField type="number">` plus `value={number}` + `Number()`
+  parsing on every keystroke fights the user when they need a leading
+  sign or a partial decimal. The wrapper:
+  - Selects all existing text on focus, so typing "2" replaces "0"
+    rather than yielding "02" (G36).
+  - Keeps a transient string buffer (`""`, `"-"`, `"."`, `"-."`, `"1."`)
+    so the parent's numeric state isn't reset to NaN/0 between
+    keystrokes, allowing negatives and decimals to be entered naturally
+    (G38).
+  - Resyncs from external `value` changes (MapCanvas click → parent
+    `set('x', …)`) via a `useEffect` that compares `Number(text)` to
+    `value`.
+  - On blur, normalises unparseable buffers back to "0".
+  - Uses `type="text"` + `inputMode="decimal"` so mobile keyboards
+    still show the numeric pad without the HTML number input's edge
+    cases.
+  Swapped into `OrderBuilder.tsx` (Manual mode x/y/θ) and
+  `pages/admin/Locations.tsx` (x/y/θ editor). Other admin forms have no
+  numeric coord inputs.
+- **G37 — ActiveOrderPanel button gating.** Added `done =
+  nodeStates.length === 0`. Cancel / Retry / Skip now carry
+  `disabled={busy !== null || done}` and a subtext reads "Order
+  complete — instant actions disabled. Submit a new order to re-enable."
+  Completed orderId stays visible for context. Pairs with G34 (still
+  open) — even though the toast is still buggy, there's no longer a way
+  to fire a stray instant action.
+- **Verification.** `npm run typecheck` exits 0; `npm run build` exits 0
+  with the existing chunk-size hint (not an error). Manual re-test
+  pending — the bugs were user-observed, so the user is best placed to
+  confirm the fixes look right in a browser.
+- **Docs touched.** `gaps.md` (G33/G36/G37/G38 moved to Resolved with
+  notes; G34/G35/G39 are now the only frontend bugs from the walkthrough
+  still open), `status.md` (open count → 8), `manual-test-checklist.md`
+  (inline cross-refs flipped from "GAP G##" to "FIXED — pending re-test"
+  on the three affected items), `manual-test-remarks.md` (entries
+  flipped to RESOLVED THIS SESSION; takeaway open-count reduced).
+
+**Open gaps now (8):** G26 (last-seen tick), G27 (pin labels), G30
+(frontend Dockerfile), G31 (`GET /orders/{id}`), G32 (MQTT auth + TLS),
+G34 (instant-action toast `[object Object]`), G35 (Admin DataGrid
+triple-dot), G39 (connection pill needs investigation). Recommended
+next pass: G34 + G35 together (both medium severity, both surface
+during normal UI use), then G26/G27 (small polish), then the
+investigation on G39, then the bigger infra ones.
 
 **Manual-test-checklist elaboration pass + G34–G39 filed (2026-05-22, uncommitted).**
 Worked through every `{Not sure …}` / `{elaborate}` remark the user had

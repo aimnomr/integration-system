@@ -1,27 +1,42 @@
 import { useState } from 'react';
 import { Button } from '@mui/material';
-import { postInstantAction } from '@/api/robots';
+import { postInstantAction, type InstantAction } from '@/api/robots';
 import type { ApiError } from '@/api/client';
 import type { VdaState } from '@/types/api';
+import { useToast } from '@/components/common/Snackbar';
 
 interface Props {
   serial: string;
   state: VdaState | null;
 }
 
+const ACTION_LABEL: Record<InstantAction, string> = {
+  cancel: 'Cancel',
+  retry:  'Retry',
+  skip:   'Skip',
+};
+
 export function ActiveOrderPanel({ serial, state }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const toast = useToast();
 
   const orderId = state?.orderId;
   const nodeStates = state?.nodeStates ?? [];
+  const done = nodeStates.length === 0;
 
-  const send = (action: 'cancel' | 'retry' | 'skip') => async () => {
+  const send = (action: InstantAction) => async () => {
     setBusy(action); setErr(null);
     try {
       await postInstantAction(serial, action);
+      // G34 — explicit success toast using the friendly label, not the
+      // raw API response body (which the old code dropped on the floor
+      // and the local error path then stringified into `[object Object]`).
+      toast.success(`${ACTION_LABEL[action]} sent`);
     } catch (e) {
-      setErr((e as ApiError).message);
+      const message = (e as ApiError).message;
+      setErr(message);
+      toast.error(`${ACTION_LABEL[action]} failed — ${message}`);
     } finally {
       setBusy(null);
     }
@@ -58,11 +73,22 @@ export function ActiveOrderPanel({ serial, state }: Props) {
 
       {err && <p className="text-xs text-red-400">{err}</p>}
 
+      {/*
+        G37 — once the order finishes (no nodes remaining), the robot has
+        no order to act on; firing cancel/retry/skip would be a stray
+        instant action. Gate the buttons on `done` so a completed-but-
+        still-visible orderId doesn't let an action slip through.
+      */}
       <div className="flex gap-2">
-        <Button size="small" variant="outlined" color="error"   disabled={busy !== null} onClick={send('cancel')}>{busy === 'cancel' ? '…' : 'Cancel'}</Button>
-        <Button size="small" variant="outlined" color="warning" disabled={busy !== null} onClick={send('retry')}>{busy === 'retry' ? '…' : 'Retry'}</Button>
-        <Button size="small" variant="outlined"                 disabled={busy !== null} onClick={send('skip')}>{busy === 'skip' ? '…' : 'Skip'}</Button>
+        <Button size="small" variant="outlined" color="error"   disabled={busy !== null || done} onClick={send('cancel')}>{busy === 'cancel' ? '…' : 'Cancel'}</Button>
+        <Button size="small" variant="outlined" color="warning" disabled={busy !== null || done} onClick={send('retry')}>{busy === 'retry' ? '…' : 'Retry'}</Button>
+        <Button size="small" variant="outlined"                 disabled={busy !== null || done} onClick={send('skip')}>{busy === 'skip' ? '…' : 'Skip'}</Button>
       </div>
+      {done && (
+        <p className="text-[11px] text-slate-500">
+          Order complete — instant actions disabled. Submit a new order to re-enable.
+        </p>
+      )}
     </div>
   );
 }

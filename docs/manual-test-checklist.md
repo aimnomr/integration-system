@@ -639,9 +639,15 @@ RATE_LIMIT_PER_MINUTE=5
 - [x] Toggle to **Manual** → empty row at x=0, y=0, θ=0.
 - [ ] Edit numeric values; add a second node; remove returns to one row;
       remove button disabled at one row. {Good, but currently when inputing number. The placeholder number doesnt go away. Meaning the default is 0. When i type 2. It becomes 02 instead of 2. Adding and remove node works as expected}
-      > **GAP G36** — numeric inputs concat placeholder "0" → typing "2"
-      > yields "02". See [gaps.md#g36](gaps.md). Same defect in the
-      > Locations editor coord inputs.
+      > **FIXED (G36 + G38, 2026-05-22) — pending re-test.** New
+      > `NumberField` component in
+      > `frontend/src/components/common/NumberField.tsx` wraps MUI
+      > TextField: selects all on focus (so "2" replaces "0", not "02")
+      > and keeps a string buffer mid-typing so `-` and `.` don't reset
+      > the parent state. Swapped into OrderBuilder (Manual mode) and the
+      > Locations editor. Re-test: focus an x field; the existing "0"
+      > should highlight; typing "2" yields "2". Typing "-1.5" should
+      > also work end-to-end.
 - [x] **Send order** → new orderId in the panel.
 
 ### Active order panel
@@ -649,10 +655,17 @@ RATE_LIMIT_PER_MINUTE=5
 - [x] **[robot]** As the robot completes nodes, `nodeStates` shrinks; once empty,
       the panel collapses to "No active order".
 - [ ] **Cancel** → toast; the panel clears once the robot returns to no-orderId. {No toast, returns [object Object] in the active order panel instead}
-      > **GAP G34** — instant-action toast renders `[object Object]`. See
-      > [gaps.md#g34](gaps.md). The toast renderer stringifies the API
-      > response body instead of using its `actionType` field. Affects
-      > Cancel + Retry + Skip alike.
+      > **FIXED (G34, 2026-05-22) — pending re-test.** Three-part fix:
+      > (1) `postInstantAction` was sending `{"action":"cancel"}` but
+      > FastAPI expected `{"action_type":"cancelOrder"}` — every call
+      > was returning 422. Wire format corrected via a translation map
+      > (G22-style). (2) The 422 `detail` is an array, so the old
+      > `String(detail)` formatter produced `[object Object]` — a new
+      > `formatErrorMessage` in `api/client.ts` handles array shapes.
+      > (3) `ActiveOrderPanel` now fires `toast.success("Cancel sent")`
+      > / `toast.error(...)`. Re-test: click Cancel on an active order →
+      > expect green "Cancel sent" toast; click Retry / Skip → same
+      > behaviour with their labels.
 - [ ] **Retry** sends a retryNode instant action; backend logs the call. {Not sure what is expected here, elaborate. Behaviour is similar to cancelling. Returns object Object in the active order panel}
       > **What "retryNode" means.** It's a VDA5050 instant action that
       > tells the robot to re-attempt the **current** node after a
@@ -695,10 +708,12 @@ RATE_LIMIT_PER_MINUTE=5
 - [ ] Cancel/Retry/Skip while no order is active → button disabled? (currently
       the panel is hidden — confirm there's no way to send a stray instant
       action.) {Order is completed. The active order is still there with the button can still be clicked}
-      > **GAP G37** — buttons stay clickable after order completes. See
-      > [gaps.md#g37](gaps.md). Should disable or hide the three buttons
-      > when `nodeStates.length === 0` so a stray click can't fire an
-      > instant action against an idle robot.
+      > **FIXED (G37, 2026-05-22) — pending re-test.** `ActiveOrderPanel`
+      > now sets `done = nodeStates.length === 0`; Cancel / Retry / Skip
+      > are gated on `disabled={busy || done}` and a subtext reads
+      > "Order complete — instant actions disabled. Submit a new order
+      > to re-enable." Re-test: complete an order; confirm the three
+      > buttons render disabled-grey and clicking does nothing.
 
 ### Teleop
 - [x] `/teleop` → robot picker; ENGAGED switch is disabled until rosbridge is
@@ -785,10 +800,14 @@ RATE_LIMIT_PER_MINUTE=5
 - [x] Edit `map-test` (pencil) → drawer; label disabled-fields show ID; change
       label; Save → toast updated; grid reflects new label.
 - [ ] Delete `map-test` (trash) → confirm dialog; confirm → toast deleted; row gone. {Cannot delete, no option to delete. Tried to click three dots but is directed to edit instead. Cannot click triple dot}
-      > **GAP G35** — Admin DataGrid triple-dot row-actions menu can't
-      > be opened — click triggers Edit instead. See [gaps.md#g35](gaps.md).
-      > Workaround: delete via `curl.exe -X DELETE
-      > http://localhost:8000/maps/<id>` or Swagger `DELETE /maps/{map_id}`.
+      > **FIXED (G35, 2026-05-22) — pending re-test.** There was never a
+      > triple-dot menu in the code; the row had two MUI `Button`s
+      > overflowing the 110px-wide actions column (Button `minWidth=64`
+      > × 2 = 128 > 110), so Delete was clipped and clicks landed on
+      > Edit. Swapped to `IconButton` (sized to its icon) wrapped in
+      > `Tooltip`. Applied to Maps + Locations + Robots admin grids.
+      > Re-test: hover the row → both pencil and trash visible; click
+      > trash → confirm dialog opens.
 - [ ] Try to delete `map-001` (used by `amr001`) → red toast
       "Cannot delete: still in use" (HTTP 409). `map-001` still present.
 
@@ -798,18 +817,17 @@ RATE_LIMIT_PER_MINUTE=5
       robot rosbridge.
 - [ ] Click on the embedded canvas → x and y fields snap to the clicked world
       coords; pin appears at the click position. {Able to get location, but not rotation. Also unable to input negative coordinate number. The same for manual dispatch}
-      > **GAP G38** — negative coordinates rejected by both the manual
-      > dispatch x/y inputs and the location-editor x/y inputs. See
-      > [gaps.md#g38](gaps.md). ROS world frame supports negatives;
-      > likely a leftover `min="0"` or guard. The "no rotation on click"
-      > behaviour is by design (canvas click only sets x/y; θ stays
-      > editable separately).
+      > **FIXED (G38, 2026-05-22) — pending re-test.** Resolved in the
+      > same patch as G36 via the new `NumberField` component — see the
+      > G36 note above. The "no rotation on click" behaviour is **by
+      > design** (canvas click only sets x/y; θ stays editable separately
+      > in its own input).
 - [x] Save → toast; new row in grid.
 - [x] Edit an existing location → ID field disabled; map / label / x / y / θ
       editable; clicking on canvas re-positions the pin.
 - [ ] Delete a location not referenced by any order → succeeds. {Same problem with the previous triple dot problem}
-      > **GAP G35** — same DataGrid triple-dot issue. See
-      > [gaps.md#g35](gaps.md). Workaround via `DELETE /locations/<id>`.
+      > **FIXED (G35, 2026-05-22) — pending re-test.** Same IconButton
+      > swap as on Maps — see note above.
 - [ ] Switch the form's map dropdown → the embedded canvas re-subscribes to that
       map's rosbridge (you may see a momentary "Waiting…" then the new grid). {unable to emulate, since it reads directly from current rosbridge connection. It still shows the current map}
       > **Verdict: expected behavior, not a bug — rewrite this item.**

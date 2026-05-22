@@ -10,3 +10,6 @@ dist/
 # Throwaway captures (e.g. `npm run typecheck > typecheck.txt`)
 typecheck.txt
 build-output.txt
+
+# `tsc -b` incremental cache (kept after G33 added "noEmit": true)
+*.tsbuildinfo

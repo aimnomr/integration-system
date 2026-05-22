@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Button, MenuItem, TextField } from '@mui/material';
+import { Button, IconButton, MenuItem, TextField, Tooltip } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -15,6 +15,7 @@ import { EditDrawer } from '@/components/common/EditDrawer';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { MapCanvas } from '@/components/map/MapCanvas';
 import { useToast } from '@/components/common/Snackbar';
+import { NumberField } from '@/components/common/NumberField';
 import { dataGridSx } from './Maps';
 import type { NamedLocation } from '@/types/api';
 
@@ -72,15 +73,20 @@ export default function AdminLocations() {
     { field: 'theta',  headerName: 'θ',     width: 90, type: 'number',
       valueFormatter: (_v, row) => typeof row.theta === 'number' ? row.theta.toFixed(3) : '—' },
     {
+      // G35 — see Maps.tsx for the rationale (Button minWidth → Delete clipped).
       field: '_actions', headerName: '', width: 110, sortable: false, filterable: false,
       renderCell: (p) => (
         <>
-          <Button size="small" onClick={() => setEdit({ mode: 'edit', row: p.row })}>
-            <EditIcon fontSize="small" />
-          </Button>
-          <Button size="small" color="error" onClick={() => setDelTarget(p.row)}>
-            <DeleteIcon fontSize="small" />
-          </Button>
+          <Tooltip title="Edit">
+            <IconButton size="small" onClick={() => setEdit({ mode: 'edit', row: p.row })}>
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Delete">
+            <IconButton size="small" color="error" onClick={() => setDelTarget(p.row)}>
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </>
       ),
     },
@@ -229,20 +235,20 @@ function LocationForm({
         onChange={(e) => set('label', e.target.value)}
       />
       <div className="grid grid-cols-3 gap-3">
-        <TextField
-          label="x (m)" size="small" type="number" inputProps={{ step: '0.001' }}
+        <NumberField
+          label="x (m)" size="small" inputProps={{ step: '0.001' }}
           value={row.x}
-          onChange={(e) => set('x', Number(e.target.value))}
+          onChange={(v) => set('x', v)}
         />
-        <TextField
-          label="y (m)" size="small" type="number" inputProps={{ step: '0.001' }}
+        <NumberField
+          label="y (m)" size="small" inputProps={{ step: '0.001' }}
           value={row.y}
-          onChange={(e) => set('y', Number(e.target.value))}
+          onChange={(v) => set('y', v)}
         />
-        <TextField
-          label="θ (rad)" size="small" type="number" inputProps={{ step: '0.01' }}
+        <NumberField
+          label="θ (rad)" size="small" inputProps={{ step: '0.01' }}
           value={row.theta}
-          onChange={(e) => set('theta', Number(e.target.value))}
+          onChange={(v) => set('theta', v)}
         />
       </div>
 

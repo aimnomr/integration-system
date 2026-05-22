@@ -11,10 +11,18 @@
 > checklist text (abbreviated), the user's remark, and either a clarification,
 > the gap ID it became, or the next step to confirm it.
 
-Last updated: 2026-05-22 (G34–G39 added — six frontend bugs surfaced
-during the checklist elaboration pass on the same date; mapped inline
-in each affected entry below. G24 + G25 marked **RESOLVED THIS SESSION**
-— the code fix landed and verified via pytest; pending manual re-test).
+Last updated: 2026-05-22 (G34 + G35 fixed — instant-action wire format
+corrected to `action_type` + full VDA5050 names; ApiError formatter now
+handles 422 validation-array `detail`; ActiveOrderPanel wires success
+toasts. Admin DataGrid actions switched from `Button` to `IconButton`
+to fit the column. G33 + G36 + G37 + G38 fixed earlier this session
+in the cheap-quartet patch — `noEmit` added to tsconfig; new
+`NumberField` wraps MUI TextField with select-on-focus + string-buffer
+for `-`/`.`; ActiveOrderPanel disables Cancel/Retry/Skip when nodes
+are exhausted. G34–G39 added — six frontend bugs surfaced during the
+checklist elaboration pass on the same date; mapped inline in each
+affected entry below. G24 + G25 marked **RESOLVED THIS SESSION** —
+the code fix landed and verified via pytest; pending manual re-test).
 
 ---
 
@@ -349,9 +357,18 @@ Each maps to a tracked gap.
   action.
 - **User remark:** "No toast, returns [object Object] in the active order
   panel instead" / "Behaviour is similar to cancelling".
-- **Outcome:** **GAP — opened as G34** ([gaps.md](gaps.md#g34)). The toast
-  handler stringifies the API response body (a JS object) instead of
-  using its `actionType` field. Cheap fix in the mutation success path.
+- **Outcome:** **RESOLVED THIS SESSION (G34, 2026-05-22).** Initial
+  diagnosis (toast stringifying response body) was wrong — actually a
+  G22-style wire-format mismatch hiding behind a poor error formatter.
+  `postInstantAction` was sending `{"action":"cancel"}` but FastAPI's
+  `InstantActionRequest` expected `{"action_type":"cancelOrder"}`. Every
+  Cancel / Retry / Skip returned **422**, whose `detail` is a pydantic
+  validation-error array — the old `String(detail)` in `apiFetch`
+  produced `"[object Object],..."`. Three-part fix: wire format
+  corrected via an `ACTION_TYPE` map; new `formatErrorMessage` in
+  `client.ts` handles array-shape `detail`; `ActiveOrderPanel` fires
+  `toast.success("Cancel sent")` / `toast.error(...)`. Pending manual
+  re-test.
 
 ### Cancel / Retry / Skip clickable after order completes
 - **Original:** Cancel/Retry/Skip while no order is active → button
@@ -359,38 +376,51 @@ Each maps to a tracked gap.
   send a stray instant action.)
 - **User remark:** "Order is completed. The active order is still there
   with the button can still be clicked".
-- **Outcome:** **GAP — opened as G37** ([gaps.md](gaps.md#g37)). Buttons
-  should disable or hide when `nodeStates.length === 0`. Pairs with G34
-  — the broken toast hides the fact that a stray click went through.
+- **Outcome:** **RESOLVED THIS SESSION (G37, 2026-05-22).** `ActiveOrderPanel`
+  now computes `done = nodeStates.length === 0`; Cancel / Retry / Skip
+  are gated on `disabled={busy || done}` and a subtext reads "Order
+  complete — instant actions disabled. Submit a new order to re-enable."
+  The completed orderId stays visible (so the operator can read what
+  just ran) but no stray instant actions can fire. Pending manual re-test.
 
 ### Admin DataGrid triple-dot menu unreachable
 - **Original (Maps + Locations):** Delete `map-test` (trash) → confirm
   → row gone.
 - **User remark:** "Cannot delete, no option to delete. Tried to click
   three dots but is directed to edit instead. Cannot click triple dot".
-- **Outcome:** **GAP — opened as G35** ([gaps.md](gaps.md#g35)). DataGrid
-  row-actions menu click triggers Edit instead of opening the menu;
-  Delete inaccessible from the UI. Affects every Admin grid. Workaround:
-  delete via `curl.exe -X DELETE` or Swagger.
+- **Outcome:** **RESOLVED THIS SESSION (G35, 2026-05-22).** There was
+  never a triple-dot menu in the code — the row used two MUI `Button`s
+  (each with default `minWidth: 64px`, total 128px) inside a 110px-wide
+  actions column. The Delete button overflowed and the visible click
+  target landed on Edit. Fixed by swapping both row-actions controls
+  to `IconButton` (sized to the icon ~32px) wrapped in `Tooltip`.
+  Applied to Maps + Locations + Robots admin grids. Pending manual
+  re-test.
 
 ### Numeric inputs concat placeholder "0"
 - **Original:** Manual dispatch numeric x / y / θ rows.
 - **User remark:** "Currently when inputing number. The placeholder number
   doesnt go away. Meaning the default is 0. When i type 2. It becomes 02
   instead of 2."
-- **Outcome:** **GAP — opened as G36** ([gaps.md](gaps.md#g36)). Same
-  defect in the location-editor coord inputs. Likely a controlled-input
-  start-value issue (`useState(0)` vs `useState('')`) or a literal
-  placeholder concatenation.
+- **Outcome:** **RESOLVED THIS SESSION (G36, 2026-05-22).** Fixed in the
+  same patch as G38 — new `NumberField` component
+  (`frontend/src/components/common/NumberField.tsx`) wraps MUI TextField
+  with `onFocus={(e) => e.target.select()}` so the existing "0" is
+  highlighted on focus and the first keystroke replaces it. Swapped into
+  OrderBuilder (Manual mode) and Locations editor. Pending manual re-test.
 
 ### Negative coordinates rejected
 - **Original:** Click on the embedded canvas → x and y fields snap to the
   clicked world coords.
 - **User remark:** "Unable to input negative coordinate number. The same
   for manual dispatch".
-- **Outcome:** **GAP — opened as G38** ([gaps.md](gaps.md#g38)). ROS world
-  frame supports negatives; likely a `min="0"` left on the input. Same
-  fix serves both screens.
+- **Outcome:** **RESOLVED THIS SESSION (G38, 2026-05-22).** Fixed in the
+  same `NumberField` patch as G36 — the component keeps a transient
+  string buffer (`""`, `"-"`, `"."`, `"-."`, `"1."` all allowed) so the
+  user can type a negative or decimal number without the parent's number
+  state thrashing back to NaN/0 mid-keystroke. The parsed number only
+  propagates when the buffer is a valid finite number; on blur, an
+  unparseable buffer falls back to 0. Pending manual re-test.
 
 ### Robot Detail connection pill stuck at ONLINE on sim shutdown
 - **Original:** Connection pill (top-right) reflects the retained
@@ -412,9 +442,10 @@ Each maps to a tracked gap.
 
 - **Resolved this session:** G24 + G25 (DB-down → 503, pills degrade on
   poll failure). G28 + G29 (Frontend + Newman jobs added to CI).
-- **Real bugs still open (12):** G26 / G27 / G30–G39 — see
-  [gaps.md](gaps.md). G34 / G35 (instant-action toast + DataGrid menu) are
-  user-blocking on common UI flows; G36–G39 are polish / investigation.
+- **Real bugs still open (6):** G26 / G27 / G30 / G31 / G32 / G39 — see
+  [gaps.md](gaps.md). G39 is investigation-first; the rest are polish
+  (G26, G27) and infra hardening (G30 frontend Docker, G31
+  `GET /orders/{id}`, G32 MQTT auth). G33–G38 all fixed this session.
 - **Documentation clarity needs work** on Phase 9 + Phase 11 — multiple
   "not sure what is asked" remarks all map to checklist steps that assume
   context the operator may not have. When a step requires more than one

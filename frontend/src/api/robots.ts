@@ -43,12 +43,23 @@ export function postNamedOrder(serial: string, body: NamedOrderRequest) {
   );
 }
 
-type InstantAction = 'cancel' | 'retry' | 'skip';
+export type InstantAction = 'cancel' | 'retry' | 'skip';
+
+// FastAPI's `InstantActionRequest` pydantic schema uses snake_case
+// (`action_type`) and the full VDA5050 action names (`cancelOrder`,
+// `retryNode`, `skipNode`). The TS API surface stays short + camelCase
+// for callers; we translate at the wire boundary here (G34 — same
+// shape of fix as G22 was for `postNamedOrder`).
+const ACTION_TYPE: Record<InstantAction, 'cancelOrder' | 'retryNode' | 'skipNode'> = {
+  cancel: 'cancelOrder',
+  retry:  'retryNode',
+  skip:   'skipNode',
+};
 
 export function postInstantAction(serial: string, action: InstantAction) {
   return apiFetch<InstantActionResponse>(
     `/robots/${encodeURIComponent(serial)}/instant-actions`,
-    { method: 'POST', body: { action } },
+    { method: 'POST', body: { action_type: ACTION_TYPE[action] } },
   );
 }
 

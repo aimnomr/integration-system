@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { listLocations } from '@/api/locations';
 import { postNamedOrder, postOrder } from '@/api/robots';
 import type { ApiError } from '@/api/client';
+import { NumberField } from '@/components/common/NumberField';
 
 interface Props {
   serial: string;
@@ -107,9 +108,9 @@ export function OrderBuilder({ serial, mapId, onSent }: Props) {
         <div className="flex flex-col gap-2">
           {nodes.map((n, i) => (
             <div key={i} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 text-xs">
-              <TextField size="small" label="x"     type="number" value={n.x}     onChange={(e) => updateNode(i, { x: Number(e.target.value) })} />
-              <TextField size="small" label="y"     type="number" value={n.y}     onChange={(e) => updateNode(i, { y: Number(e.target.value) })} />
-              <TextField size="small" label="θ (rad)" type="number" value={n.theta} onChange={(e) => updateNode(i, { theta: Number(e.target.value) })} />
+              <NumberField size="small" label="x"       value={n.x}     onChange={(v) => updateNode(i, { x: v })} />
+              <NumberField size="small" label="y"       value={n.y}     onChange={(v) => updateNode(i, { y: v })} />
+              <NumberField size="small" label="θ (rad)" value={n.theta} onChange={(v) => updateNode(i, { theta: v })} />
               <Button
                 size="small" variant="text" color="error"
                 disabled={nodes.length === 1}

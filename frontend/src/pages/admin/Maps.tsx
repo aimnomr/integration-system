@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, TextField } from '@mui/material';
+import { Button, IconButton, TextField, Tooltip } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -61,15 +61,22 @@ export default function AdminMaps() {
       renderCell: (p) => <span className="font-mono">{p.value}</span> },
     { field: 'label',  headerName: 'Label',  flex: 1 },
     {
+      // G35 — was `Button` (minWidth 64px each → 128px > 110px column,
+      // Delete clipped). `IconButton` sizes to the icon (~32px) and
+      // both fit comfortably with room for tooltip targets.
       field: '_actions', headerName: '', width: 110, sortable: false, filterable: false,
       renderCell: (p) => (
         <>
-          <Button size="small" onClick={() => setEdit({ mode: 'edit', row: p.row })}>
-            <EditIcon fontSize="small" />
-          </Button>
-          <Button size="small" color="error" onClick={() => setDelTarget(p.row)}>
-            <DeleteIcon fontSize="small" />
-          </Button>
+          <Tooltip title="Edit">
+            <IconButton size="small" onClick={() => setEdit({ mode: 'edit', row: p.row })}>
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Delete">
+            <IconButton size="small" color="error" onClick={() => setDelTarget(p.row)}>
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </>
       ),
     },

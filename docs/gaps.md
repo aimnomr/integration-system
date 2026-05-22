@@ -3,7 +3,25 @@
 Open items not yet addressed, consolidated for visibility. For what *is* working see
 [status.md](status.md). Resolved gaps are listed at the bottom.
 
-> Last updated: 2026-05-22 (G34–G39 added — six frontend bugs surfaced
+> Last updated: 2026-05-22 (housekeeping pass — `frontend/tsconfig.tsbuildinfo`
+> untracked from git (was tracked despite the G33-era `.gitignore` rule),
+> ~8 MB of stale generated artifacts removed from `docs/postman/reports/`,
+> `frontend/playwright-report/`, `frontend/dist/`, `frontend/test-results/`,
+> and `fastapi-service/**/__pycache__/`. All gitignored and regenerate on
+> next test/build run; no source code touched. G34 + G35 resolved
+> earlier this session — instant-action wire format corrected from
+> `{action:"cancel"}` to `{action_type:"cancelOrder"}` (G22-style fix),
+> api client error formatter now handles FastAPI 422 validation arrays
+> (no more `[object Object]`), instant-action panel wires success/failure
+> toasts, and Admin DataGrid rows now use `IconButton` so both Edit
+> and Delete fit in the actions column.
+> G33 + G36 + G37 + G38 resolved earlier this session — the "cheap
+> quartet" of frontend polish bugs. `noEmit` added to `tsconfig.json`;
+> new `NumberField` component wraps MUI TextField so numeric inputs (a)
+> select-on-focus so typing "2" replaces "0" instead of yielding "02"
+> and (b) keep a string buffer mid-typing so negatives are accepted;
+> ActiveOrderPanel disables Cancel/Retry/Skip when no nodes remain.
+> G34–G39 added — six frontend bugs surfaced
 > during the manual-test-checklist elaboration pass on 2026-05-22:
 > instant-action toast renders `[object Object]`, Admin DataGrid
 > row-actions menu unreachable, numeric inputs concat placeholder zero,
@@ -28,61 +46,16 @@ Open items not yet addressed, consolidated for visibility. For what *is* working
 | G26 | Dashboard tile "last seen" timer stuck at `0s ago`; doesn't tick upward | Frontend | Low |
 | G27 | Named-location pin labels invisible vs the dark MapCanvas background | Frontend | Low |
 | G30 | Frontend has no Dockerfile / not in `docker-compose.yml` — local-dev only | Docker | Low |
-| G34 | Instant-action toast renders `[object Object]` instead of action name (Cancel / Retry / Skip) | Frontend | Medium |
-| G35 | Admin DataGrid row-actions menu (triple-dot) unreachable — Delete inaccessible | Frontend | Medium |
-| G36 | Numeric inputs (manual dispatch x/y/θ, location editor) concat placeholder "0" — typing "2" yields "02" | Frontend | Low |
-| G37 | Instant-action buttons (Cancel / Retry / Skip) stay clickable after order completes — risk of stray instant action | Frontend | Low |
-| G38 | Negative coordinates rejected by manual dispatch + named-location editor — world frame supports them | Frontend | Low |
 | G39 | Robot Detail "connection" pill stuck at ONLINE when simulator stops (only flips on rosbridge death) — needs investigation | Frontend | Low |
 | G31 | No `GET /orders/{id}` detail endpoint — blocks Order History click-to-expand drill-down | FastAPI | Low |
 | G32 | MQTT broker anonymous on both `:1883` and `:9001` — no auth / no TLS | Mosquitto | Low |
-| G33 | `frontend/tsconfig.json` lacks `"noEmit": true` — `npm run build` emits stray `.js` next to every `.ts` source | Frontend | Low |
 
 See [manual-test-remarks.md](manual-test-remarks.md) for the full walkthrough
 notes that surfaced G24–G27 — including items that looked like bugs but turned
 out to be expected behaviour or test-setup issues.
 
-### Detail — G34–G39 (frontend bugs surfaced during checklist elaboration, 2026-05-22)
+### Detail — G39 (frontend bug surfaced during checklist elaboration, 2026-05-22)
 
-- **G34 — Instant-action toast renders `[object Object]`.** The success
-  toast fired after Cancel / Retry / Skip on the ActiveOrderPanel
-  stringifies the API response body (a JS object) instead of using its
-  `actionType` field. Surfaced three times in the walkthrough — the
-  user noted "Returns object Object in the active order panel" for
-  every instant action. Likely fix: in the success path of the instant-
-  action mutation, build the toast from the request's `action_type` (or
-  the response's `actionType`) rather than passing the whole response
-  body to `toast(...)`. Quick to repro: click Cancel on any active order.
-- **G35 — Admin DataGrid row-actions menu unreachable.** The Admin pages
-  (Maps, Named Locations, Robots, Fleet) use MUI X DataGrid's row-actions
-  triple-dot icon to expose Edit and Delete. The walkthrough found the
-  triple-dot button can't be opened — clicking it triggers Edit
-  directly, so Delete is inaccessible from the UI. Affects Maps,
-  Locations, and (less critically) Robots. Likely fix: switch to an
-  explicit two-icon column (pencil + trash) or audit the GridActionsCell
-  config — there's probably a stray onClick swallowing the menu open.
-  Workaround until fixed: delete via `curl.exe -X DELETE` or
-  `DELETE /maps/<id>` etc. through Swagger.
-- **G36 — Numeric inputs concat placeholder "0".** In Dispatch (Manual
-  mode x/y/θ inputs) and the Admin Locations form, the placeholder "0"
-  doesn't clear when the user types — typing "2" produces "02". Likely
-  fix: `<input type="number">` with a controlled value should use
-  `value={x}` with `x` starting at `null` / empty, not `0`; or the
-  placeholder is being concatenated with the value. Low severity (user
-  can backspace), but trips up every first-time manual order.
-- **G37 — Instant-action buttons stay clickable after order completes.**
-  The ActiveOrderPanel keeps Cancel / Retry / Skip enabled after the
-  order has finished (state.nodeStates empty). User can fire a stray
-  retryNode / skipNode against a robot with no active order. Likely
-  fix: disable (or hide) the three buttons when `nodeStates.length === 0`
-  / no `orderId` in the latest state. Pairs with G34 — the toast bug
-  makes it harder to notice that a stray click went through.
-- **G38 — Negative coordinates rejected.** Manual dispatch (x / y inputs)
-  and the named-location editor reject negative numbers, but the ROS
-  world frame can legitimately have negative coordinates (origin not
-  necessarily at the south-west corner). Likely fix: remove
-  `min="0"` from the inputs or any guard in the validator. Same fix
-  serves both screens since they share the numeric-input pattern.
 - **G39 — Robot Detail "connection" pill stuck at ONLINE on sim
   shutdown.** Per the user remark: "Correct when online, but when robot
   sim is stopped. It doesnt reflect from online to offline. Only
@@ -95,7 +68,7 @@ out to be expected behaviour or test-setup issues.
   the disconnect, so the pill could plausibly bind to that signal.
   **Needs investigation** before fixing — could resolve as EXPECTED.
 
-### Detail — G30–G33 (untracked → tracked, 2026-05-22)
+### Detail — G30–G32 (untracked → tracked, 2026-05-22)
 
 - **G30 — Frontend Dockerfile + compose service.** Multi-stage build (Node
   builder → nginx static serve) plus a `frontend` service in
@@ -107,13 +80,6 @@ out to be expected behaviour or test-setup issues.
   `:9001` browser) are anonymous; password file + TLS cert config needed,
   plus credentials wired through FastAPI / ROS Bridge / Node-RED / frontend
   env. Fine for FYP / LAN; not for any wider deployment.
-- **G33 — `noEmit` in tsconfig.** `frontend/tsconfig.json` doesn't set
-  `"noEmit": true`, so `tsc -b` (invoked by the `build` script) writes
-  compiled `.js` next to every source `.ts`. The 2026-05-22 cleanup removed
-  50 stray files but they'll regenerate on the next build. One-line config
-  fix; the Vite build still produces `dist/` because Vite handles emission
-  separately.
-
 ---
 
 ## Resolved
@@ -147,6 +113,12 @@ out to be expected behaviour or test-setup issues.
 | G29 | Newman smoke suite not in CI — contract drift only caught locally | 2026-05-22 |
 | G24 | DB-down returns HTTP 500 instead of 503 from `GET /robots/{serial}/state` and `GET /system/status` | 2026-05-22 |
 | G25 | Health pills don't degrade live when `/system/status` poll fails — DB / ROS stay green until refresh | 2026-05-22 |
+| G33 | `frontend/tsconfig.json` lacks `"noEmit": true` — `npm run build` emits stray `.js` next to every `.ts` source | 2026-05-22 |
+| G36 | Numeric inputs (manual dispatch x/y/θ, location editor) concat placeholder "0" — typing "2" yields "02" | 2026-05-22 |
+| G37 | Instant-action buttons (Cancel / Retry / Skip) stay clickable after order completes — risk of stray instant action | 2026-05-22 |
+| G38 | Negative coordinates rejected by manual dispatch + named-location editor — world frame supports them | 2026-05-22 |
+| G34 | Instant-action toast renders `[object Object]` instead of action name (Cancel / Retry / Skip) | 2026-05-22 |
+| G35 | Admin DataGrid row-actions menu (triple-dot) unreachable — Delete inaccessible | 2026-05-22 |
 
 G1–G3 — the ROS Bridge Service consumes `/move_base` feedback and the VDA5050
 `OrderStateMachine` auto-advances orders node-by-node. G12 — JSON-line logging in the
@@ -269,6 +241,92 @@ while being dead on the wire). New tests in
 invalidation, `ping()` true/false branches, `GET /robots/{serial}/state` →
 503, and `GET /system/status` → 200 with `database.status == 'unavailable'`
 (the contract G25 depends on).
+
+**G34** — instant-action UX overhauled in three places. Root cause was
+**not** a toast-string bug (as initially suspected from the user remark
+"Returns object Object in the active order panel"); it was a
+G22-style wire-format mismatch hiding behind a poor error formatter:
+
+1. **Wire format.** `postInstantAction` in `frontend/src/api/robots.ts`
+   sent `{"action": "cancel"}` (short, camelCase) but FastAPI's
+   `InstantActionRequest` schema declares
+   `action_type: Literal["cancelOrder", "retryNode", "skipNode"]`
+   (snake_case + full VDA5050 action names). Every Cancel / Retry / Skip
+   click returned **422 Unprocessable Entity**. Fixed by adding an
+   `ACTION_TYPE` map (`cancel → cancelOrder`, `retry → retryNode`,
+   `skip → skipNode`) and sending `{action_type: ACTION_TYPE[action]}`
+   on the wire. The TS API surface stays short + camelCase for callers
+   — translation lives at the boundary, same as G22.
+2. **Error message formatter.** `apiFetch` in `frontend/src/api/client.ts`
+   used `String((payload as { detail: unknown }).detail)` — fine for a
+   string `detail` (`HTTPException(detail="...")`) but garbage for a 422
+   whose `detail` is an **array** of pydantic validation entries
+   (`String([{...}])` → `"[object Object]"`). New `formatErrorMessage`
+   helper handles all three FastAPI detail shapes: plain string, array
+   of validation entries (formatted as `loc.path: msg`), and the rarer
+   single-entry object. So even future schema drift on other endpoints
+   produces a readable error.
+3. **Success toasts.** `ActiveOrderPanel` now imports `useToast` and
+   fires `toast.success(\`${label} sent\`)` / `toast.error(...)` on the
+   instant-action mutation result. Combined with G37's button gating,
+   the operator now gets clear feedback on every Cancel / Retry / Skip
+   click and can't fire a stray action against a finished order.
+
+**G35** — Admin DataGrid row actions are now reachable. Root cause:
+the row-actions column was rendering two MUI `Button` components. MUI
+`Button` has `minWidth: 64px` by default; two of them = **128 px**
+minimum, but the column was `width: 110`. The Delete button overflowed
+the cell's bounds and the visible click target landed on Edit. The
+user's mental model of "triple dot dropdown" was conjured by trying to
+explain the broken click behaviour — there was never a triple-dot menu
+in the code. Fixed by swapping to `IconButton` (sized to the icon,
+~32 px each), wrapped in MUI `Tooltip` for hover labels. Applied to
+all three admin grids: Maps, Locations, Robots. No column-width
+change needed.
+
+**G33** — `frontend/tsconfig.json` now sets `"noEmit": true`. The
+`tsc -b` invocation in the `build` script no longer writes `.js` (or
+`.d.ts`) next to source `.ts` files. Vite still produces `dist/` because
+Vite handles emission via its own ESBuild/Rollup pipeline, independent
+of tsc. Verified: `npm run build` followed by
+`Get-ChildItem -Path src -Filter *.js -Recurse | Measure-Object` → `0`.
+The `*.tsbuildinfo` file (tsc's incremental cache, controlled by
+`incremental`, not `noEmit`) still appears at the project root and has
+been added to `frontend/.gitignore` so it doesn't get committed.
+
+**G36 + G38** — both gaps shared a single fix: new component
+`frontend/src/components/common/NumberField.tsx`, a wrapper around MUI
+`TextField` that:
+- **Selects existing text on focus** (`onFocus={(e) => e.target.select()}`)
+  so the first keystroke replaces the displayed "0" instead of
+  concatenating to "02" — closes G36.
+- **Keeps a transient string buffer** for the input (`""`, `"-"`, `"."`,
+  `"-."`, `"1."` are all allowed mid-typing) so the user can type a
+  negative or decimal number without the parent's numeric state being
+  reset to NaN/0 on every keystroke — closes G38. The parsed number is
+  only propagated to the parent when the buffer is a valid finite
+  number; on blur, an unparseable buffer falls back to 0.
+- **Resyncs from external value changes** (e.g. MapCanvas click → parent
+  calls `set('x', …)`) via a `useEffect` that only resets the buffer when
+  `Number(text) !== value`.
+
+Swapped into:
+- `OrderBuilder.tsx` — Manual mode x/y/θ inputs.
+- `Locations.tsx` — x/y/θ inputs in the location editor form.
+The Robots / Maps / Fleet admin forms don't have numeric coord inputs,
+so they're untouched. The `id` field in the Locations form is left as a
+plain `TextField` because IDs are non-negative integers entered as
+whole numbers — no decimal/negative gymnastics needed.
+
+**G37** — `ActiveOrderPanel` now disables Cancel / Retry / Skip when the
+order is finished. Logic: `done = nodeStates.length === 0`. A completed
+orderId stays visible (so the operator can see what just ran), but the
+three action buttons go disabled-grey and a small subtext reads "Order
+complete — instant actions disabled. Submit a new order to re-enable."
+Closes the "stray instant action" risk that pairs with G34 — together
+with G34's later fix (wire format + readable error formatter + success
+toasts), the operator now has clear feedback on every Cancel / Retry /
+Skip click and can't fire one by accident against a finished order.
 
 **G25** — Health pills now degrade live when `/system/status` fails. Root
 cause: `useSystemStatus` returns TanStack Query's default `data` retention
