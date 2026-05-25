@@ -5,7 +5,7 @@ Replaces the former flat /amr/* routes. FastAPI publishes VDA5050 `order` and
 """
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from .. import db
@@ -32,6 +32,11 @@ router = APIRouter(prefix="/robots")
 def _require_robot(serial: str) -> dict:
     robot = registry.get(serial)
     if robot is None:
+        if registry.is_archived(serial):
+            raise HTTPException(
+                status_code=410,
+                detail=f"Robot '{serial}' is archived — restore it before sending commands.",
+            )
         raise HTTPException(status_code=404, detail=f"Robot '{serial}' not registered")
     return robot
 
@@ -44,19 +49,32 @@ def _unavailable(exc: DatabaseUnavailable) -> JSONResponse:
 
 
 @router.get("")
-def list_robots():
-    return {"robots": registry.list()}
+def list_robots(include_archived: bool = Query(False)):
+    """Active fleet by default. `?include_archived=true` returns active +
+    archived (archived rows carry an `archivedAt` ISO timestamp; active rows
+    have `archivedAt: null`). The admin Robots page uses the expanded view;
+    operator surfaces (Dashboard, Dispatch, Teleop) call without the flag and
+    read from `registry.list()`."""
+    if not include_archived:
+        return {"robots": registry.list()}
+    try:
+        rows = db.fetch_robots_all()
+    except DatabaseUnavailable as exc:
+        return _unavailable(exc)
+    return {"robots": [_to_camel(r) for r in rows]}
 
 
 def _to_camel(row: dict) -> dict:
     """db.fetch_robot/insert/update return raw snake_case rows. The list
     endpoint (and the rest of the API) speak camelCase, so single-row
     responses must match. Mapped here at the router boundary so db.py stays
-    SQL-shaped."""
+    SQL-shaped. archived_at is serialised to ISO via .isoformat() when set."""
+    archived = row.get("archived_at")
     return {
         "serialNumber": row["serial_number"],
         "rosbridgeUrl": row["rosbridge_url"],
         "mapId":        row["map_id"],
+        "archivedAt":   archived.isoformat() if archived else None,
     }
 
 
@@ -85,6 +103,27 @@ def create_robot(body: RobotIn):
             raise HTTPException(
                 status_code=422, detail=f"Map '{body.map_id}' does not exist"
             )
+        # Disambiguate the collision: an *archived* serial collides with the
+        # PRIMARY KEY just like an active one, but the operator's recourse is
+        # different (Restore vs pick a new serial). Returning the same generic
+        # 409 for both would push the operator toward a workaround instead of
+        # the right path. We surface archive state via the response body so the
+        # admin UI can offer "Restore" inline.
+        existing = db.fetch_robot(body.serial_number)
+        if existing is not None and existing.get("archived_at"):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "archived_serial",
+                    "message": (
+                        f"Robot '{body.serial_number}' exists but is archived. "
+                        "Restore it from Admin → Robots, or pick a different "
+                        "serial."
+                    ),
+                    "serialNumber": body.serial_number,
+                    "archivedAt": existing["archived_at"].isoformat(),
+                },
+            )
         row = db.insert_robot(body.serial_number, body.rosbridge_url, body.map_id)
     except DatabaseUnavailable as exc:
         return _unavailable(exc)
@@ -107,6 +146,14 @@ def update_robot(serial: str, body: RobotUpdate):
     except DatabaseUnavailable as exc:
         return _unavailable(exc)
     if row is None:
+        # db.update_robot only touches active rows; distinguish 404 from "exists
+        # but archived" so the operator gets the actionable error.
+        existing = db.fetch_robot(serial)
+        if existing is not None and existing.get("archived_at"):
+            raise HTTPException(
+                status_code=409,
+                detail=f"Robot '{serial}' is archived — restore it before editing.",
+            )
         raise HTTPException(status_code=404, detail=f"Robot '{serial}' not found")
     registry.reload()
     return _to_camel(row)
@@ -114,6 +161,11 @@ def update_robot(serial: str, body: RobotUpdate):
 
 @router.delete("/{serial}")
 def delete_robot(serial: str):
+    """Hard-delete (only valid for robots with no history).
+
+    The Admin UI funnels routine removals through POST /archive instead; this
+    endpoint stays available for clearing genuinely-empty rows (e.g. a robot
+    added by mistake before any telemetry was ingested)."""
     try:
         deleted = db.delete_robot(serial)
     except DatabaseUnavailable as exc:
@@ -121,12 +173,43 @@ def delete_robot(serial: str):
     except IntegrityConflict:
         raise HTTPException(
             status_code=409,
-            detail=f"Robot '{serial}' still has telemetry / order history",
+            detail=(
+                f"Robot '{serial}' still has telemetry / order history — "
+                "use POST /robots/{serial}/archive to soft-delete instead."
+            ),
         )
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Robot '{serial}' not found")
     registry.reload()
     return {"status": "ok", "deleted": serial}
+
+
+@router.post("/{serial}/archive")
+def archive_robot(serial: str):
+    """Soft-delete: mark the robot archived. Hides it from operator surfaces
+    and cuts off ingest (see ingest.py). History rows survive intact and the
+    serial can be restored later. Idempotent."""
+    try:
+        row = db.archive_robot(serial)
+    except DatabaseUnavailable as exc:
+        return _unavailable(exc)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Robot '{serial}' not found")
+    registry.reload()
+    return _to_camel(row)
+
+
+@router.post("/{serial}/restore")
+def restore_robot(serial: str):
+    """Restore a previously archived robot. Idempotent for active rows."""
+    try:
+        row = db.restore_robot(serial)
+    except DatabaseUnavailable as exc:
+        return _unavailable(exc)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Robot '{serial}' not found")
+    registry.reload()
+    return _to_camel(row)
 
 
 # --- Orders ---

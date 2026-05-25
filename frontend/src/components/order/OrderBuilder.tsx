@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import {
-  Button, MenuItem, TextField, ToggleButton, ToggleButtonGroup,
+  Button, IconButton, MenuItem, TextField, ToggleButton, ToggleButtonGroup,
 } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import { useQuery } from '@tanstack/react-query';
 import { listLocations } from '@/api/locations';
 import { postNamedOrder, postOrder } from '@/api/robots';
@@ -51,7 +52,7 @@ export function OrderBuilder({ serial, mapId, onSent }: Props) {
     <div className="flex flex-col gap-4 rounded-lg border border-surface-2 bg-surface-1 p-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold uppercase tracking-widest text-slate-400">
-          New order
+          New Order
         </h2>
         <ToggleButtonGroup
           size="small"
@@ -69,7 +70,7 @@ export function OrderBuilder({ serial, mapId, onSent }: Props) {
           <TextField
             select
             size="small"
-            label="Add location"
+            label="Add Location"
             value=""
             onChange={(e) => {
               const id = Number(e.target.value);
@@ -84,18 +85,23 @@ export function OrderBuilder({ serial, mapId, onSent }: Props) {
             ))}
           </TextField>
           {locationIds.length > 0 && (
-            <ol className="flex flex-col gap-1 text-xs">
+            <ol className="order-list flex flex-col gap-1 text-xs">
               {locationIds.map((id, i) => {
                 const l = onMap.find((x) => x.id === id);
                 return (
-                  <li key={`${id}-${i}`} className="flex items-center justify-between rounded bg-surface-2/50 px-2 py-1">
+                  <li
+                    key={`${id}-${i}`}
+                    className="order-row flex items-center justify-between rounded bg-surface-2/50 px-2 py-1"
+                  >
                     <span>{i + 1}. #{id} — {l?.label ?? 'unknown'}</span>
-                    <button
-                      className="text-slate-400 hover:text-red-400"
+                    <IconButton
+                      size="small"
+                      aria-label={`Remove location ${l?.label ?? id}`}
                       onClick={() => setLocationIds(locationIds.filter((_, j) => j !== i))}
+                      sx={{ color: 'rgb(148 163 184)', '&:hover': { color: 'rgb(248 113 113)' } }}
                     >
-                      remove
-                    </button>
+                      <CloseIcon sx={{ fontSize: 14 }} />
+                    </IconButton>
                   </li>
                 );
               })}
@@ -105,9 +111,9 @@ export function OrderBuilder({ serial, mapId, onSent }: Props) {
       )}
 
       {mode === 'manual' && (
-        <div className="flex flex-col gap-2">
+        <div className="order-list flex flex-col gap-2">
           {nodes.map((n, i) => (
-            <div key={i} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 text-xs">
+            <div key={i} className="order-row grid grid-cols-[1fr_1fr_1fr_auto] gap-2 text-xs">
               <NumberField size="small" label="x"       value={n.x}     onChange={(v) => updateNode(i, { x: v })} />
               <NumberField size="small" label="y"       value={n.y}     onChange={(v) => updateNode(i, { y: v })} />
               <NumberField size="small" label="θ (rad)" value={n.theta} onChange={(v) => updateNode(i, { theta: v })} />
@@ -124,7 +130,7 @@ export function OrderBuilder({ serial, mapId, onSent }: Props) {
             size="small" variant="outlined"
             onClick={() => setNodes([...nodes, { x: 0, y: 0, theta: 0 }])}
           >
-            + Add node
+            + Add Node
           </Button>
         </div>
       )}
@@ -135,8 +141,24 @@ export function OrderBuilder({ serial, mapId, onSent }: Props) {
         variant="contained" disabled={busy || !canSubmit}
         onClick={submit}
       >
-        {busy ? 'Sending…' : 'Send order'}
+        {busy ? 'Sending…' : 'Send Order'}
       </Button>
+
+      <style>{`
+        .order-row {
+          opacity: 1;
+          transform: translateY(0);
+          transition:
+            opacity 200ms var(--ease-out),
+            transform 200ms var(--ease-out);
+        }
+        @starting-style {
+          .order-list .order-row {
+            opacity: 0;
+            transform: translateY(-4px);
+          }
+        }
+      `}</style>
     </div>
   );
 

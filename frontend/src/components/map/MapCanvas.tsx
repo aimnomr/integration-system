@@ -186,17 +186,37 @@ export function MapCanvas({ rosbridgeUrl, onClickWorld, pins = [] }: MapCanvasPr
     drawPath(globalPlan, COLOR_GLOBAL_PATH);
     drawPath(localPlan, COLOR_LOCAL_PATH);
 
-    // Pins
+    // Pins. G27 — render the label inside a dark pill with a thin stroke so
+    // it reads against both the white free-space cells and the black
+    // out-of-map background; plain white text disappeared on both.
     for (const pin of pins) {
       const { px, py } = geometry.worldToPx(pin.x, pin.y);
+      const pinColor = pin.color ?? '#a78bfa'; // violet-400
       ctx.beginPath();
       ctx.arc(px, py, 5, 0, 2 * Math.PI);
-      ctx.fillStyle = pin.color ?? '#a78bfa'; // violet-400
+      ctx.fillStyle = pinColor;
       ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(15,23,42,0.9)'; // slate-900
+      ctx.stroke();
       if (pin.label) {
-        ctx.fillStyle = 'rgba(255,255,255,0.85)';
-        ctx.font = '11px system-ui';
-        ctx.fillText(pin.label, px + 8, py + 4);
+        const fontSize = 11;
+        ctx.font = `${fontSize}px system-ui, sans-serif`;
+        ctx.textBaseline = 'middle';
+        const padX = 4;
+        const padY = 3;
+        const textW = ctx.measureText(pin.label).width;
+        const boxX = px + 8;
+        const boxY = py - (fontSize / 2 + padY);
+        const boxW = textW + padX * 2;
+        const boxH = fontSize + padY * 2;
+        ctx.fillStyle = 'rgba(15,23,42,0.85)'; // slate-900 pill
+        ctx.fillRect(boxX, boxY, boxW, boxH);
+        ctx.strokeStyle = pinColor;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(boxX, boxY, boxW, boxH);
+        ctx.fillStyle = '#f1f5f9'; // slate-100
+        ctx.fillText(pin.label, boxX + padX, py);
       }
     }
 

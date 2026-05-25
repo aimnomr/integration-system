@@ -125,11 +125,8 @@ established a few contracts that the v2 keeps verbatim:
 
 ## What's not here yet
 
-- **Frontend in CI** — `tsc --noEmit && vite build` job. ~15 min to add.
-- **Playwright E2E tests.**
-- **Frontend Dockerfile** — currently local dev only; no `docker-compose.yml`
-  service.
-- **Order detail drill-down** — would need a new `GET /orders/{id}` on the
-  backend.
+- **Order History row drill-down** — the backend endpoint
+  (`GET /orders/{order_id}`) and frontend client (`getOrder()` +
+  `OrderDetail` type) shipped 2026-05-25; the UI hook-up is still to do.
 - **Multi-camera support** — the camera topic is hardcoded to
   `/camera/front/image_raw/compressed`.

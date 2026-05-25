@@ -52,10 +52,8 @@ function NavSection({ title, items }: { title: string; items: NavItem[] }) {
               end={to === '/'}
               className={({ isActive }) =>
                 [
-                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
-                  isActive
-                    ? 'bg-brand-primary/15 text-white'
-                    : 'text-slate-300 hover:bg-surface-2/60 hover:text-white',
+                  'nav-link relative flex items-center gap-3 rounded-md px-3 py-2 text-sm',
+                  isActive ? 'is-active text-white' : 'text-slate-300',
                 ].join(' ')
               }
             >
@@ -80,6 +78,39 @@ export function LeftNav() {
         <div className="my-1 border-t border-surface-2" />
         <NavSection title="Admin" items={ADMIN} />
       </nav>
+      <style>{`
+        .nav-link {
+          transition:
+            background-color var(--dur-hover) var(--ease-out),
+            color var(--dur-hover) var(--ease-out),
+            transform var(--dur-press) var(--ease-out);
+        }
+        .nav-link::before {
+          content: '';
+          position: absolute;
+          left: 0;
+          top: 6px;
+          bottom: 6px;
+          width: 2px;
+          border-radius: 1px;
+          background: var(--brand-primary);
+          transform: scaleY(0);
+          transform-origin: center;
+          transition: transform 180ms var(--ease-out);
+        }
+        .nav-link.is-active::before {
+          transform: scaleY(1);
+        }
+        .nav-link:active {
+          transform: scale(0.99);
+        }
+        @media (hover: hover) and (pointer: fine) {
+          .nav-link:not(.is-active):hover {
+            background-color: color-mix(in oklab, #334155 60%, transparent);
+            color: white;
+          }
+        }
+      `}</style>
     </aside>
   );
 }

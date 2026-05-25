@@ -40,7 +40,7 @@ export default function AdminFleetConfig() {
     onError: (e: ApiError) => toast.error(e.message),
   });
 
-  if (fleet.isLoading) return <Loading label="Loading fleet config…" />;
+  if (fleet.isLoading) return <Loading label="Loading Fleet Config" />;
   if (fleet.isError) {
     return (
       <p className="text-sm text-red-400">
@@ -61,32 +61,32 @@ export default function AdminFleetConfig() {
       <h1 className="text-2xl font-semibold text-white">Admin — Fleet Config</h1>
 
       <Alert severity="warning" variant="outlined" className="text-slate-300">
-        Changing <b>interface_name</b>, <b>major_version</b>, or <b>manufacturer</b>
+        Changing <b>Interface Name</b>, <b>Major Version</b>, or <b>Manufacturer</b>
         rewrites every robot&apos;s MQTT topic prefix
         (<code>{form.interface_name}/{form.major_version}/{form.manufacturer}/&lt;serial&gt;/*</code>).
         Robot firmware listening on the old prefix will go silent until restarted.
       </Alert>
 
       <TextField
-        label="interface_name" size="small" required
+        label="Interface Name" size="small" required
         value={form.interface_name}
         onChange={(e) => set('interface_name', e.target.value)}
         helperText="VDA5050 interfaceName — currently 'amr'"
       />
       <TextField
-        label="major_version" size="small" required
+        label="Major Version" size="small" required
         value={form.major_version}
         onChange={(e) => set('major_version', e.target.value)}
         helperText="e.g. v2"
       />
       <TextField
-        label="version" size="small" required
+        label="Version" size="small" required
         value={form.version}
         onChange={(e) => set('version', e.target.value)}
         helperText="Full VDA5050 version string — e.g. 2.0.0"
       />
       <TextField
-        label="manufacturer" size="small" required
+        label="Manufacturer" size="small" required
         value={form.manufacturer}
         onChange={(e) => set('manufacturer', e.target.value)}
         helperText="Used as the third topic segment"

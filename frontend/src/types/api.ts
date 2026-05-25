@@ -33,6 +33,12 @@ export interface Robot {
   serialNumber: string;
   mapId: string;
   rosbridgeUrl: string;
+  /**
+   * Soft-delete timestamp (ISO-8601). `null` for active robots.
+   * `GET /robots` omits this for callers using the default (active-only) view;
+   * `GET /robots?include_archived=true` always populates it.
+   */
+  archivedAt?: string | null;
 }
 
 export interface OrderRequest {
@@ -98,6 +104,35 @@ export interface OrderHistoryRow {
 export interface OrdersResponse {
   orders: OrderHistoryRow[];
   count: number;
+}
+
+export interface OrderNode {
+  node_id: string;
+  sequence_id: number;
+  released: boolean;
+  pos_x: number | null;
+  pos_y: number | null;
+  theta: number | null;
+  map_id: string | null;
+}
+
+export interface OrderEdge {
+  edge_id: string;
+  sequence_id: number;
+  released: boolean;
+  start_node_id: string;
+  end_node_id: string;
+}
+
+export interface OrderDetail {
+  id: number;
+  serial_number: string;
+  ts: string;
+  header_id: number;
+  order_id: string;
+  order_update_id: number;
+  nodes: OrderNode[];
+  edges: OrderEdge[];
 }
 
 // --- /system/status --------------------------------------------------------

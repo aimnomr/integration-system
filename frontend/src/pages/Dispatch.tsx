@@ -17,7 +17,7 @@ export default function Dispatch() {
 
   const { state } = useRobotState(fleet.data, selected?.serialNumber);
 
-  if (fleet.isLoading) return <Loading label="Loading fleet…" />;
+  if (fleet.isLoading) return <Loading label="Loading Fleet" />;
   if (fleet.isError) {
     return <div className="text-sm text-red-400">Failed to load fleet — {fleet.error.message}</div>;
   }
@@ -26,10 +26,8 @@ export default function Dispatch() {
     <div className="flex max-w-2xl flex-col gap-4">
       <h1 className="text-2xl font-semibold text-white">Dispatch</h1>
       <p className="text-sm text-slate-400">
-        Send a navigation order to a robot. Named locations come from the
-        <code className="mx-1 rounded bg-surface-2 px-1">named_locations</code>
-        table, filtered to the robot&apos;s current map. Manual mode lets you
-        enter x / y / θ directly — angles are radians (VDA5050 convention).
+        Send a navigation order. Named locations are filtered to the
+        robot&apos;s map. Manual lets you enter x, y, and θ in radians.
       </p>
 
       <TextField

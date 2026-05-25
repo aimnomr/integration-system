@@ -7,8 +7,9 @@ import type {
   VdaState,
 } from '@/types/api';
 
-export function getRobots() {
-  return apiFetch<{ robots: Robot[] }>('/robots');
+export function getRobots(opts: { includeArchived?: boolean } = {}) {
+  const q = opts.includeArchived ? '?include_archived=true' : '';
+  return apiFetch<{ robots: Robot[] }>(`/robots${q}`);
 }
 
 export function getRobot(serial: string) {
@@ -89,5 +90,20 @@ export function updateRobot(serial: string, body: RobotUpdate) {
 export function deleteRobot(serial: string) {
   return apiFetch<void>(`/robots/${encodeURIComponent(serial)}`, {
     method: 'DELETE',
+  });
+}
+
+/** Soft-delete: hide the robot from operator surfaces and cut off ingest.
+ * History rows are kept and the serial can be restored later. */
+export function archiveRobot(serial: string) {
+  return apiFetch<Robot>(`/robots/${encodeURIComponent(serial)}/archive`, {
+    method: 'POST',
+  });
+}
+
+/** Un-archive a previously archived robot. */
+export function restoreRobot(serial: string) {
+  return apiFetch<Robot>(`/robots/${encodeURIComponent(serial)}/restore`, {
+    method: 'POST',
   });
 }

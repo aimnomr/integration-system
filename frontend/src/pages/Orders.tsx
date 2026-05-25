@@ -57,7 +57,7 @@ export default function Orders() {
           select size="small" label="Robot" sx={{ minWidth: 180 }}
           value={serial} onChange={(e) => setSerial(e.target.value)}
         >
-          <MenuItem value="">All robots</MenuItem>
+          <MenuItem value="">All Robots</MenuItem>
           {(fleet.data?.robots ?? []).map((r) => (
             <MenuItem key={r.serialNumber} value={r.serialNumber}>
               {r.serialNumber}
@@ -65,7 +65,7 @@ export default function Orders() {
           ))}
         </TextField>
         <TextField
-          select size="small" label="Page size" sx={{ minWidth: 120 }}
+          select size="small" label="Page Size" sx={{ minWidth: 120 }}
           value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}
         >
           {LIMITS.map((n) => <MenuItem key={n} value={n}>{n}</MenuItem>)}
@@ -109,8 +109,8 @@ export default function Orders() {
           {q.isFetchingNextPage
             ? 'Loading…'
             : q.hasNextPage
-              ? 'Load older'
-              : 'End of history'}
+              ? 'Load Older'
+              : 'End of History'}
         </Button>
       </div>
 

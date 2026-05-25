@@ -88,7 +88,7 @@ export default function OEE() {
           select size="small" label="Robot" sx={{ minWidth: 180 }}
           value={serial} onChange={(e) => setSerial(e.target.value)}
         >
-          {robots.length === 0 && <MenuItem value="">No robots</MenuItem>}
+          {robots.length === 0 && <MenuItem value="">No Robots</MenuItem>}
           {robots.map((r) => (
             <MenuItem key={r.serialNumber} value={r.serialNumber}>
               {r.serialNumber}
@@ -103,7 +103,7 @@ export default function OEE() {
         <>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <MetricCard
-              label="Total cycles"
+              label="Total Cycles"
               value={summary.data?.total_cycles?.toString() ?? '—'}
             />
             <MetricCard
@@ -116,7 +116,7 @@ export default function OEE() {
               value={summary.data?.failed?.toString() ?? '—'}
             />
             <MetricCard
-              label="Avg duration"
+              label="Avg Duration"
               value={
                 summary.data?.avg_duration_s !== undefined
                   ? `${Number(summary.data.avg_duration_s).toFixed(1)} s`
@@ -151,7 +151,7 @@ export default function OEE() {
 
           <div className="rounded-lg border border-surface-2 bg-surface-1 p-4">
             <h2 className="text-sm font-semibold uppercase tracking-widest text-slate-400">
-              Recent cycle durations (oldest → newest)
+              Recent Cycle Durations (Oldest → Newest)
             </h2>
             <div className="mt-3 h-64">
               {chartData.length === 0 ? (
@@ -182,7 +182,7 @@ export default function OEE() {
 
           <div className="min-h-[20rem] rounded-lg border border-surface-2 bg-surface-1">
             <div className="border-b border-surface-2 px-4 py-3 text-sm font-semibold uppercase tracking-widest text-slate-400">
-              Cycles log
+              Cycles Log
             </div>
             <DataGrid
               rows={cycles.data?.cycles ?? []}

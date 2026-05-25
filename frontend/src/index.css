@@ -1,12 +1,51 @@
 @import 'tailwindcss';
 @config '../tailwind.config.ts';
 
+:root {
+  /* Motion tokens — strong easings; built-in cubic-bezier(0.25, 0.1, 0.25, 1) is too weak */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  --dur-press: 120ms;
+  --dur-hover: 160ms;
+  --dur-pill: 200ms;
+
+  /* Brand tokens mirror branding.ts so CSS can reach them without JS. */
+  --brand-primary: #6366f1;
+  --brand-focus: #818cf8;
+}
+
 html, body, #root {
   height: 100%;
+}
+
+/* Single brand-coloured focus ring for native interactives. MUI ships its own. */
+:where(button, a, [role="button"], input, select, textarea):focus-visible {
+  outline: 2px solid var(--brand-focus, #818cf8);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 /* Scrollbar — slimmer, dark-mode-friendly. */
 *::-webkit-scrollbar { width: 8px; height: 8px; }
 *::-webkit-scrollbar-track { background: transparent; }
-*::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+*::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+  transition: background-color var(--dur-hover) var(--ease-out);
+}
 *::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* Opacity transitions still aid comprehension, keep them shorter */
+  :where(.preserve-fade) {
+    transition: opacity 120ms linear !important;
+  }
+}

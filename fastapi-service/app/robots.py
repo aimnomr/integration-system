@@ -23,7 +23,13 @@ class RobotRegistry:
         self._seed_counters()
 
     def _load(self) -> None:
-        """(Re)read the fleet definition from the database."""
+        """(Re)read the fleet definition from the database.
+
+        Only active (non-archived) robots populate `_robots` — operator surfaces,
+        ingest, command publishing and the fleet endpoint all go through the
+        registry, so they share a single source of truth for "is this robot
+        currently live?". `_archived_serials` lets ingest reject archived
+        traffic with O(1) lookup, no per-message DB hit (see is_archived())."""
         fleet = db.fetch_fleet_config()
         self.interface_name: str = fleet["interface_name"]
         self.major_version: str = fleet["major_version"]
@@ -38,6 +44,10 @@ class RobotRegistry:
             }
             for row in db.fetch_robots()
         }
+        try:
+            self._archived_serials: set[str] = db.fetch_archived_serials()
+        except db.DatabaseUnavailable:
+            self._archived_serials = set()
 
     def _seed_counters(self) -> None:
         """Resume the headerId / orderId counters from persisted history (G21).
@@ -91,6 +101,11 @@ class RobotRegistry:
 
     def exists(self, serial: str) -> bool:
         return serial in self._robots
+
+    def is_archived(self, serial: str) -> bool:
+        """True iff the robot exists in the DB with a non-NULL archived_at.
+        Stays in sync via reload() after archive/restore."""
+        return serial in self._archived_serials
 
     def next_header_id(self, serial: str, topic: str) -> int:
         """Next headerId — increments per topic, per robot."""

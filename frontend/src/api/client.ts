@@ -95,6 +95,11 @@ function formatErrorMessage(payload: unknown, res: Response): string {
         || `${res.status} ${res.statusText}`;
     }
     if (typeof detail === 'object' && detail) {
+      // Some endpoints return a structured detail with `{code, message, ...}`
+      // so the UI can react to a specific error code (e.g. archived_serial →
+      // offer Restore). Surface the human-readable message preferentially.
+      const structured = detail as { message?: unknown };
+      if (typeof structured.message === 'string') return structured.message;
       const single = formatValidationEntry(detail);
       if (single) return single;
     }

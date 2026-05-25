@@ -94,3 +94,36 @@ def test_list_orders_handles_database_unavailable(monkeypatch):
     monkeypatch.setattr(orders_router, "fetch_orders", boom)
     resp = orders_router.list_orders(serial="amr001", limit=10, before=None)
     assert resp.status_code == 503
+
+
+# --- GET /orders/{id} ------------------------------------------------------
+
+def test_get_order_returns_header_with_children(monkeypatch):
+    detail = {
+        "id": 7, "serial_number": "amr001", "ts": "2026-05-20T00:00:00Z",
+        "header_id": 9, "order_id": "amr001-order-7", "order_update_id": 0,
+        "nodes": [{"node_id": "n0", "sequence_id": 0, "released": True,
+                   "pos_x": 1.0, "pos_y": 2.0, "theta": 0.0, "map_id": "map-001"}],
+        "edges": [],
+    }
+    monkeypatch.setattr(orders_router, "fetch_order", lambda oid: detail)
+    result = orders_router.get_order(order_id="amr001-order-7")
+    assert result["order_id"] == "amr001-order-7"
+    assert result["nodes"][0]["node_id"] == "n0"
+    assert result["edges"] == []
+
+
+def test_get_order_404_for_unknown_id(monkeypatch):
+    monkeypatch.setattr(orders_router, "fetch_order", lambda oid: None)
+    with pytest.raises(HTTPException) as exc:
+        orders_router.get_order(order_id="amr001-order-999")
+    assert exc.value.status_code == 404
+
+
+def test_get_order_handles_database_unavailable(monkeypatch):
+    def boom(oid):
+        raise db.DatabaseUnavailable("no socket")
+
+    monkeypatch.setattr(orders_router, "fetch_order", boom)
+    resp = orders_router.get_order(order_id="amr001-order-1")
+    assert resp.status_code == 503

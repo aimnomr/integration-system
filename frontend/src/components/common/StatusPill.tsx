@@ -23,7 +23,10 @@ export function StatusPill({ state, label, title }: StatusPillProps) {
     >
       <span
         className="h-2 w-2 rounded-full"
-        style={{ backgroundColor: COLOR[state] }}
+        style={{
+          backgroundColor: COLOR[state],
+          transition: 'background-color var(--dur-pill) var(--ease-out)',
+        }}
       />
       {label}
     </span>

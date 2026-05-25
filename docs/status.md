@@ -1,6 +1,6 @@
 # Implementation Status
 
-> **This is a point-in-time snapshot and decays.** Last updated: 2026-05-22.
+> **This is a point-in-time snapshot and decays.** Last updated: 2026-05-25.
 > When in doubt, the code is authoritative.
 
 ---
@@ -125,10 +125,12 @@ each, where reports land). Short version:
 ### Docker & ops
 
 - Per-service `Dockerfile`s; root `docker-compose.yml` brings up the whole
-  stack (Postgres → Mosquitto → FastAPI → ROS Bridge → Node-RED) with
-  healthcheck-gated start order. Schema auto-applies on first run.
-- The frontend is **not** in `docker-compose.yml` — runs via `npm run dev`
-  for now; Phase 5 (Dockerize) was planned but not done.
+  stack (Postgres → Mosquitto → FastAPI → ROS Bridge → Node-RED → Frontend)
+  with healthcheck-gated start order. Schema auto-applies on first run.
+- The frontend is now containerised (G30, 2026-05-25) — multi-stage build
+  (Node 20 builder → nginx 1.27 static serve) under `frontend/Dockerfile`,
+  exposed as the `frontend` compose service on host port `5173`. `VITE_*`
+  endpoints are baked in at build time via build args.
 
 ---
 
@@ -163,15 +165,13 @@ each, where reports land). Short version:
 
 ## Not yet implemented (post-v1)
 
-Tracked gaps **G1–G25 + G28 + G29 + G33 + G34 + G35 + G36 + G37 + G38
-are resolved; G26 + G27 + G30 + G31 + G32 + G39 are open** (6 open total —
-see [gaps.md](gaps.md) for severity + repro and
+Tracked gaps **G1–G31 + G33–G38 are resolved; G32 + G39 are open** (2 open
+total — see [gaps.md](gaps.md) for severity + repro and
 [manual-test-remarks.md](manual-test-remarks.md) for the walkthrough
 context behind G24–G27 and G34–G39). The open set breaks down as:
 
-- **Frontend polish (manual walkthrough):** G26 (last-seen timer), G27
-  (pin label contrast), G39 (connection pill on sim shutdown — needs
-  investigation).
-- **Infrastructure / hardening (untracked → tracked):** G30 (frontend
-  Dockerfile + compose service), G31 (`GET /orders/{id}` detail endpoint),
-  G32 (MQTT auth + TLS).
+- **Frontend investigation:** G39 (Robot Detail connection pill stays
+  ONLINE when the simulator stops; only flips on rosbridge death) —
+  may resolve as EXPECTED VDA5050 contract behaviour.
+- **Hardening:** G32 (MQTT auth + TLS — both Mosquitto listeners are
+  anonymous; fine for FYP / LAN, required before any wider deployment).

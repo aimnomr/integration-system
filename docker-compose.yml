@@ -97,6 +97,30 @@ services:
       mosquitto:
         condition: service_healthy
 
+  # G30 — React frontend served by nginx. VITE_* vars are baked in at build
+  # time; defaults point at the host-published ports (localhost from the
+  # browser's POV) so the compose stack works out of the box. To rebuild
+  # against different endpoints:
+  #   docker compose build --build-arg VITE_API_URL=... frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8000
+        VITE_MQTT_WS_URL: ws://localhost:9001
+        VITE_API_KEY: ""
+    ports:
+      - "5173:80"
+    depends_on:
+      fastapi:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
 volumes:
   postgres-data:
   mosquitto-data:

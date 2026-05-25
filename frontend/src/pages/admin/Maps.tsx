@@ -116,7 +116,7 @@ export default function AdminMaps() {
 
       <ConfirmDialog
         open={delTarget !== null}
-        title={`Delete map ${delTarget?.map_id}?`}
+        title={`Delete Map ${delTarget?.map_id}?`}
         body="The backend will refuse with 409 if any robot or location still references it."
         confirmLabel="Delete"
         destructive
@@ -149,7 +149,7 @@ function MapEditDrawer({
     <EditDrawer
       key={key}
       open={state.mode !== 'closed'}
-      title={isCreate ? 'New map' : `Edit ${initialId}`}
+      title={isCreate ? 'New Map' : `Edit ${initialId}`}
       onClose={onClose}
       onSave={() => { /* handled in inner form */ }}
       saving={saving}

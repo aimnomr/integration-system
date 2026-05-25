@@ -506,11 +506,35 @@ def fetch_fleet_config() -> dict:
 
 
 def fetch_robots() -> list[dict]:
-    """The fleet roster, ordered by serial number."""
+    """The active fleet roster, ordered by serial number.
+
+    Archived robots are excluded — operator surfaces and the in-memory
+    RobotRegistry should only see active ones. Use `fetch_robots_all()` for
+    admin views that want both."""
     return _query(
         "SELECT serial_number, rosbridge_url, map_id FROM robots "
+        "WHERE archived_at IS NULL "
         "ORDER BY serial_number"
     )
+
+
+def fetch_robots_all() -> list[dict]:
+    """Every robot, active + archived. Active first, then archived
+    (newest-archived first), each block ordered by serial."""
+    return _query(
+        "SELECT serial_number, rosbridge_url, map_id, archived_at FROM robots "
+        "ORDER BY archived_at IS NOT NULL, archived_at DESC NULLS FIRST, "
+        "serial_number"
+    )
+
+
+def fetch_archived_serials() -> set[str]:
+    """Just the serial numbers of archived robots — used by RobotRegistry to
+    answer is_archived() without a DB hit on every ingest message."""
+    rows = _query(
+        "SELECT serial_number FROM robots WHERE archived_at IS NOT NULL"
+    )
+    return {row["serial_number"] for row in rows}
 
 
 def fetch_named_locations() -> dict[int, dict]:
@@ -623,6 +647,63 @@ def fetch_orders(
     return _query(sql, tuple(params))
 
 
+def fetch_order(order_id: str) -> dict | None:
+    """One order row plus its joined `order_nodes` / `order_edges` children, so
+    the UI can drill down from the Order History grid without a second round
+    trip. Returns None if the order_id is unknown."""
+    import psycopg2.extras
+
+    pool = _get_pool()
+    try:
+        conn = pool.getconn()
+    except _connection_exc_types() as exc:
+        raise _to_unavailable(exc) from exc
+    broken = False
+    try:
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT id, serial_number, ts, header_id, order_id, "
+                    "       order_update_id "
+                    "FROM orders WHERE order_id = %s "
+                    "ORDER BY ts DESC LIMIT 1",
+                    (order_id,),
+                )
+                head = cur.fetchone()
+                if head is None:
+                    return None
+                head = dict(head)
+                pk = head["id"]
+
+                cur.execute(
+                    "SELECT node_id, sequence_id, released, "
+                    "       pos_x, pos_y, theta, map_id "
+                    "FROM order_nodes WHERE order_pk = %s "
+                    "ORDER BY sequence_id, id",
+                    (pk,),
+                )
+                head["nodes"] = [dict(r) for r in cur.fetchall()]
+
+                cur.execute(
+                    "SELECT edge_id, sequence_id, released, "
+                    "       start_node_id, end_node_id "
+                    "FROM order_edges WHERE order_pk = %s "
+                    "ORDER BY sequence_id, id",
+                    (pk,),
+                )
+                head["edges"] = [dict(r) for r in cur.fetchall()]
+                return head
+        except _connection_exc_types() as exc:
+            broken = True
+            raise _to_unavailable(exc) from exc
+    finally:
+        try:
+            conn.rollback()
+        except Exception:
+            broken = True
+        pool.putconn(conn, close=broken)
+
+
 def fetch_max_order_suffixes() -> dict[str, int]:
     """Highest order-id suffix N (orderId is `{serial}-order-N`) per robot."""
     rows = _query(
@@ -694,9 +775,11 @@ def delete_map(map_id: str) -> bool:
 
 # Robots
 def fetch_robot(serial: str) -> dict | None:
+    """One robot, including archived. Returns archived_at so callers can
+    decide whether to surface or 410 it."""
     rows = _query(
-        "SELECT serial_number, rosbridge_url, map_id FROM robots "
-        "WHERE serial_number = %s",
+        "SELECT serial_number, rosbridge_url, map_id, archived_at "
+        "FROM robots WHERE serial_number = %s",
         (serial,),
     )
     return rows[0] if rows else None
@@ -705,26 +788,55 @@ def fetch_robot(serial: str) -> dict | None:
 def insert_robot(serial: str, rosbridge_url: str, map_id: str) -> dict:
     return _execute_returning(
         "INSERT INTO robots (serial_number, rosbridge_url, map_id) "
-        "VALUES (%s, %s, %s) RETURNING serial_number, rosbridge_url, map_id",
+        "VALUES (%s, %s, %s) "
+        "RETURNING serial_number, rosbridge_url, map_id, archived_at",
         (serial, rosbridge_url, map_id),
     )[0]
 
 
 def update_robot(serial: str, rosbridge_url: str, map_id: str) -> dict | None:
+    """Edit an active robot. Archived robots are not editable — callers must
+    restore first. Returns None if the serial does not match an active row."""
     rows = _execute_returning(
         "UPDATE robots SET rosbridge_url = %s, map_id = %s "
-        "WHERE serial_number = %s "
-        "RETURNING serial_number, rosbridge_url, map_id",
+        "WHERE serial_number = %s AND archived_at IS NULL "
+        "RETURNING serial_number, rosbridge_url, map_id, archived_at",
         (rosbridge_url, map_id, serial),
     )
     return rows[0] if rows else None
 
 
 def delete_robot(serial: str) -> bool:
+    """Hard-delete a robot row. Will raise IntegrityConflict if any FK-referencing
+    history exists (orders, state_snapshots, …) — operators should use
+    archive_robot() instead for any robot with history."""
     return bool(_execute_returning(
         "DELETE FROM robots WHERE serial_number = %s RETURNING serial_number",
         (serial,),
     ))
+
+
+def archive_robot(serial: str) -> dict | None:
+    """Mark a robot archived (soft-delete). Idempotent: archiving an already-
+    archived row is a no-op that still returns the row."""
+    rows = _execute_returning(
+        "UPDATE robots SET archived_at = COALESCE(archived_at, now()) "
+        "WHERE serial_number = %s "
+        "RETURNING serial_number, rosbridge_url, map_id, archived_at",
+        (serial,),
+    )
+    return rows[0] if rows else None
+
+
+def restore_robot(serial: str) -> dict | None:
+    """Un-archive: clear archived_at. Idempotent for already-active rows."""
+    rows = _execute_returning(
+        "UPDATE robots SET archived_at = NULL "
+        "WHERE serial_number = %s "
+        "RETURNING serial_number, rosbridge_url, map_id, archived_at",
+        (serial,),
+    )
+    return rows[0] if rows else None
 
 
 # Named locations

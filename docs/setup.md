@@ -6,12 +6,18 @@
 docker compose up --build
 ```
 
-This builds and starts all five services in the correct order (PostgreSQL →
-Mosquitto → FastAPI → ROS Bridge → Node-RED), with healthcheck-gated dependencies,
-and auto-applies `docs/schema/schema.sql` to a fresh database. Re-seed the database
-with `docker compose down -v` (drops the volume) then `up` again. A real robot's
-`rosbridge_server` still has to be reachable from the `ros-bridge` container for
-navigation to run.
+This builds and starts all six services in the correct order (PostgreSQL →
+Mosquitto → FastAPI → ROS Bridge → Node-RED → Frontend), with healthcheck-gated
+dependencies, and auto-applies `docs/schema/schema.sql` to a fresh database.
+Re-seed the database with `docker compose down -v` (drops the volume) then `up`
+again. A real robot's `rosbridge_server` still has to be reachable from the
+`ros-bridge` container for navigation to run.
+
+The frontend container (G30, 2026-05-25) is a multi-stage build (Node 20 →
+nginx 1.27) exposed on host port `5173`. The `VITE_*` endpoints are baked in
+at build time via Compose build args, with defaults that work out of the box.
+Rebuild against different endpoints with
+`docker compose build --build-arg VITE_API_URL=https://api.example.com frontend`.
 
 ## TL;DR — run each service manually
 

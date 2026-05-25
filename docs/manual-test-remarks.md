@@ -278,17 +278,12 @@ the code fix landed and verified via pytest; pending manual re-test).
   "0s ago" and ticks upward.
 - **User remark:** "Stays 0, bug or because of repeated reset on message
   arrival".
-- **Outcome:** **GAP — opened as G26** ([gaps.md](gaps.md#g26)). Possible
-  causes (need to inspect the RobotTile component):
-  1. No `setInterval` driving a re-render every second, so the elapsed-time
-     calculation never re-runs.
-  2. The robot is genuinely emitting `state` every <1 s (5 s heartbeat plus
-     change-based publishes), so by the time the formatter runs the elapsed
-     is always <1 s and rounds to 0. If true, that's not a bug — but the
-     formatter could show `<1s` instead of `0s` so it's distinguishable.
-- **Triage step:** open `RobotTile.tsx`, search for `lastSeen` /
-  `lastUpdated` / `formatDistance`; if there's no `setInterval` or `useNow`
-  hook, that's the root cause.
+- **Outcome:** **RESOLVED 2026-05-25** ([gaps.md](gaps.md#g26)). Cause was
+  exactly the first hypothesis: `agoLabel(lastSeen)` is a pure function,
+  but `lastSeen` only changed when a new MQTT message arrived, so the tile
+  never re-rendered between messages. Fix: a 1 s `setInterval` + throwaway
+  `setTick` state in `RobotTile.tsx` forces a re-render every second so
+  the label re-evaluates against `Date.now()`. Re-test pending.
 
 ### Dashboard — no-robots empty state
 - **Original:** No robots in fleet → "No robots in the fleet" hint with a
@@ -339,10 +334,12 @@ the code fix landed and verified via pytest; pending manual re-test).
 - **User remark:** "Pins are there, but labels are not visible due to color
   similarity with background. Make it violet too or change to other than
   bright colors".
-- **Outcome:** **GAP — opened as G27** ([gaps.md](gaps.md#g27)). Trivial
-  fix: change label text colour or add a contrast outline/halo in
-  `MapCanvas.tsx`. Slate-900 background, so any near-slate colour
-  disappears; needs a light or saturated colour with stroke.
+- **Outcome:** **RESOLVED 2026-05-25** ([gaps.md](gaps.md#g27)). The label
+  now renders inside a slate-900 (`rgba(15,23,42,0.85)`) rounded pill with
+  a pin-coloured stroke and slate-100 text — readable against both white
+  free-space cells and the dark map chrome. The pin circle also got a
+  slate-900 stroke so the marker shows on bright free-space areas.
+  Re-test pending.
 
 ---
 
@@ -442,10 +439,11 @@ Each maps to a tracked gap.
 
 - **Resolved this session:** G24 + G25 (DB-down → 503, pills degrade on
   poll failure). G28 + G29 (Frontend + Newman jobs added to CI).
-- **Real bugs still open (6):** G26 / G27 / G30 / G31 / G32 / G39 — see
-  [gaps.md](gaps.md). G39 is investigation-first; the rest are polish
-  (G26, G27) and infra hardening (G30 frontend Docker, G31
-  `GET /orders/{id}`, G32 MQTT auth). G33–G38 all fixed this session.
+- **Real bugs still open (2):** G32 (MQTT auth + TLS — deliberate FYP-scope
+  deferral) and G39 (Robot Detail connection pill — needs investigation,
+  may resolve as EXPECTED VDA5050 contract behaviour). G26 + G27 + G30 +
+  G31 closed 2026-05-25 (last-seen ticker, pin labels readable, frontend
+  Dockerised, `GET /orders/{id}` shipped). G33–G38 all fixed earlier.
 - **Documentation clarity needs work** on Phase 9 + Phase 11 — multiple
   "not sure what is asked" remarks all map to checklist steps that assume
   context the operator may not have. When a step requires more than one

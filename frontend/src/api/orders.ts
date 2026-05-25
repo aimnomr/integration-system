@@ -1,5 +1,5 @@
 import { apiFetch } from './client';
-import type { OrdersResponse } from '@/types/api';
+import type { OrderDetail, OrdersResponse } from '@/types/api';
 
 export interface ListOrdersQuery {
   serial?: string;
@@ -10,4 +10,8 @@ export interface ListOrdersQuery {
 
 export function listOrders(q: ListOrdersQuery = {}, signal?: AbortSignal) {
   return apiFetch<OrdersResponse>('/orders', { query: q, signal });
+}
+
+export function getOrder(orderId: string, signal?: AbortSignal) {
+  return apiFetch<OrderDetail>(`/orders/${encodeURIComponent(orderId)}`, { signal });
 }

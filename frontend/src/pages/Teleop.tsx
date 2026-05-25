@@ -37,7 +37,7 @@ export default function Teleop() {
   useEffect(() => { setEngaged(false); }, [serial]);
   useEffect(() => { if (ros !== 'connected') setEngaged(false); }, [ros]);
 
-  if (fleet.isLoading) return <Loading label="Loading fleet…" />;
+  if (fleet.isLoading) return <Loading label="Loading Fleet" />;
 
   return (
     <div className="flex h-full flex-col gap-4">
@@ -88,9 +88,8 @@ export default function Teleop() {
           <div className="flex flex-col gap-3">
             <KeyboardPad rosbridgeUrl={selected.rosbridgeUrl} engaged={engaged} />
             <p className="max-w-[14rem] text-[11px] leading-relaxed text-slate-500">
-              Hold a key or click+hold a button. <b>S</b> = stop. Releases
-              publish a zero Twist. Linear 0.3 m/s, angular 0.5 rad/s, 100 ms
-              repeat — publishes to <code>/web_teleop/cmd_vel</code>.
+              Hold to drive, release to stop. <b>S</b> halts immediately.
+              0.3 m/s linear, 0.5 rad/s angular.
             </p>
           </div>
         </div>

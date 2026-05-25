@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRosPublisher } from '@/hooks/useRosPublisher';
 import type { Twist } from '@/types/ros';
 
@@ -49,6 +49,7 @@ export function KeyboardPad({ rosbridgeUrl, engaged }: Props) {
   );
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeKeyRef = useRef<string | null>(null);
+  const [pressedKey, setPressedKey] = useState<string | null>(null);
 
   const sendCmd = useCallback((cmd: { x: number; z: number }) => {
     if (!engaged) return;
@@ -58,16 +59,6 @@ export function KeyboardPad({ rosbridgeUrl, engaged }: Props) {
     });
   }, [engaged, publish]);
 
-  const start = useCallback((key: string) => {
-    const cmd = CMDS[key];
-    if (!cmd) return;
-    if (activeKeyRef.current === key) return; // already holding
-    stop();
-    activeKeyRef.current = key;
-    sendCmd(cmd);
-    intervalRef.current = setInterval(() => sendCmd(cmd), REPEAT_MS);
-  }, [sendCmd]);
-
   const stop = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -75,9 +66,21 @@ export function KeyboardPad({ rosbridgeUrl, engaged }: Props) {
     }
     if (activeKeyRef.current !== null) {
       activeKeyRef.current = null;
+      setPressedKey(null);
       if (engaged) publish(STOP);
     }
   }, [engaged, publish]);
+
+  const start = useCallback((key: string) => {
+    const cmd = CMDS[key];
+    if (!cmd) return;
+    if (activeKeyRef.current === key) return; // already holding
+    stop();
+    activeKeyRef.current = key;
+    setPressedKey(key);
+    sendCmd(cmd);
+    intervalRef.current = setInterval(() => sendCmd(cmd), REPEAT_MS);
+  }, [sendCmd, stop]);
 
   useEffect(() => {
     if (!engaged) {
@@ -111,24 +114,45 @@ export function KeyboardPad({ rosbridgeUrl, engaged }: Props) {
   const keys = [['q', 'w', 'e'], ['a', 's', 'd'], ['z', 'x', 'c']];
   return (
     <div className="grid w-fit grid-cols-3 gap-2 rounded-lg border border-surface-2 bg-surface-1 p-3">
-      {keys.flat().map((k) => (
-        <button
-          key={k}
-          disabled={!engaged}
-          onMouseDown={() => start(k)}
-          onMouseUp={stop}
-          onMouseLeave={stop}
-          onTouchStart={(e) => { e.preventDefault(); start(k); }}
-          onTouchEnd={stop}
-          className={`h-14 w-14 select-none rounded font-mono text-lg font-semibold uppercase ${
-            engaged
-              ? 'bg-surface-2 text-white hover:bg-brand-primary/30 active:bg-brand-primary/50'
-              : 'cursor-not-allowed bg-surface-2/40 text-slate-500'
-          }`}
-        >
-          {k}
-        </button>
-      ))}
+      {keys.flat().map((k) => {
+        const isPressed = pressedKey === k;
+        return (
+          <button
+            key={k}
+            disabled={!engaged}
+            data-pressed={isPressed || undefined}
+            onMouseDown={() => start(k)}
+            onMouseUp={stop}
+            onMouseLeave={stop}
+            onTouchStart={(e) => { e.preventDefault(); start(k); }}
+            onTouchEnd={stop}
+            className={`teleop-key h-14 w-14 select-none rounded font-mono text-lg font-semibold uppercase ${
+              engaged
+                ? 'bg-surface-2 text-white'
+                : 'cursor-not-allowed bg-surface-2/40 text-slate-500 opacity-60'
+            }`}
+            style={{
+              transition:
+                'transform var(--dur-press) var(--ease-out),' +
+                'background-color var(--dur-press) var(--ease-out)',
+            }}
+          >
+            {k}
+          </button>
+        );
+      })}
+      <style>{`
+        .teleop-key[data-pressed],
+        .teleop-key:not(:disabled):active {
+          transform: scale(0.95);
+          background-color: color-mix(in oklab, var(--brand-primary) 50%, transparent);
+        }
+        @media (hover: hover) and (pointer: fine) {
+          .teleop-key:not(:disabled):hover {
+            background-color: color-mix(in oklab, var(--brand-primary) 30%, transparent);
+          }
+        }
+      `}</style>
     </div>
   );
 }

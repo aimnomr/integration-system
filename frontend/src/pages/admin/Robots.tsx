@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, Button, IconButton, MenuItem, TextField, Tooltip } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
+import ArchiveIcon from '@mui/icons-material/Archive';
+import UnarchiveIcon from '@mui/icons-material/Unarchive';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  createRobot, deleteRobot, getRobots, updateRobot,
+  archiveRobot, createRobot, getRobots, restoreRobot, updateRobot,
   type RobotIn,
 } from '@/api/robots';
 import { listMaps } from '@/api/maps';
@@ -19,54 +20,103 @@ import type { Robot } from '@/types/api';
 
 type EditState =
   | { mode: 'closed' }
-  | { mode: 'create' }
+  | { mode: 'create'; prefillSerial?: string }
   | { mode: 'edit'; row: Robot };
+
+interface ArchivedErrorBody {
+  detail?: {
+    code?: string;
+    message?: string;
+    serialNumber?: string;
+    archivedAt?: string;
+  };
+}
 
 export default function AdminRobots() {
   const qc = useQueryClient();
   const toast = useToast();
-  const list = useQuery({ queryKey: ['admin-robots'], queryFn: getRobots });
+  // Always include archived rows here — the admin page is the canonical
+  // place to see and act on the full roster. Operator surfaces still use
+  // the default (active-only) shape via the `fleet` query.
+  const list = useQuery({
+    queryKey: ['admin-robots', { includeArchived: true }],
+    queryFn: () => getRobots({ includeArchived: true }),
+  });
   const maps = useQuery({ queryKey: ['maps'], queryFn: listMaps });
 
   const [edit, setEdit] = useState<EditState>({ mode: 'closed' });
-  const [delTarget, setDelTarget] = useState<Robot | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<Robot | null>(null);
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['admin-robots'] });
+    qc.invalidateQueries({ queryKey: ['fleet'] });
+  };
 
   const create = useMutation({
     mutationFn: createRobot,
     onSuccess: () => {
       toast.success('Robot created — restart the ROS Bridge to pick it up');
-      qc.invalidateQueries({ queryKey: ['admin-robots'] });
-      qc.invalidateQueries({ queryKey: ['fleet'] });
+      invalidate();
       setEdit({ mode: 'closed' });
     },
-    onError: (e: ApiError) => toast.error(e.message),
+    onError: (e: ApiError) => {
+      const body = e.body as ArchivedErrorBody | undefined;
+      const archivedSerial = body?.detail?.code === 'archived_serial'
+        ? body.detail.serialNumber
+        : null;
+      if (archivedSerial) {
+        // G40 — when a serial collides with an archived row, surface the
+        // restore action inline rather than just "already exists". The user
+        // can either restore the existing row (preserving its history) or
+        // pick a new serial. The toast spells out both paths.
+        toast.error(
+          `${e.message} Use the Restore button on the Archived row.`,
+        );
+      } else {
+        toast.error(e.message);
+      }
+    },
   });
   const update = useMutation({
     mutationFn: ({ serial, body }: { serial: string; body: Partial<RobotIn> }) =>
       updateRobot(serial, body),
     onSuccess: () => {
       toast.success('Robot updated');
-      qc.invalidateQueries({ queryKey: ['admin-robots'] });
-      qc.invalidateQueries({ queryKey: ['fleet'] });
+      invalidate();
       setEdit({ mode: 'closed' });
     },
     onError: (e: ApiError) => toast.error(e.message),
   });
-  const remove = useMutation({
-    mutationFn: deleteRobot,
-    onSuccess: () => {
-      toast.success('Robot deleted');
-      qc.invalidateQueries({ queryKey: ['admin-robots'] });
-      qc.invalidateQueries({ queryKey: ['fleet'] });
+  const archive = useMutation({
+    mutationFn: archiveRobot,
+    onSuccess: (_data, serial) => {
+      toast.success(`Robot ${serial} archived`);
+      invalidate();
+      setArchiveTarget(null);
     },
     onError: (e: ApiError) => {
-      if (e.status === 409) {
-        toast.error(`Cannot delete: telemetry rows still reference this robot (${e.message})`);
-      } else toast.error(e.message);
+      toast.error(e.message);
+      setArchiveTarget(null);
     },
   });
+  const restore = useMutation({
+    mutationFn: restoreRobot,
+    onSuccess: (_data, serial) => {
+      toast.success(`Robot ${serial} restored`);
+      invalidate();
+    },
+    onError: (e: ApiError) => toast.error(e.message),
+  });
 
-  const cols: GridColDef<Robot>[] = [
+  const { active, archived } = useMemo(() => {
+    const rows = list.data?.robots ?? [];
+    return {
+      active:   rows.filter((r) => !r.archivedAt),
+      archived: rows.filter((r) =>  r.archivedAt),
+    };
+  }, [list.data]);
+
+  const activeCols: GridColDef<Robot>[] = [
     { field: 'serialNumber', headerName: 'Serial',  width: 140,
       renderCell: (p) => <span className="font-mono">{p.value}</span> },
     { field: 'mapId',        headerName: 'Map',     width: 120,
@@ -74,7 +124,6 @@ export default function AdminRobots() {
     { field: 'rosbridgeUrl', headerName: 'rosbridge URL', flex: 1,
       renderCell: (p) => <span className="font-mono text-xs">{p.value}</span> },
     {
-      // G35 — see Maps.tsx for the rationale (Button minWidth → Delete clipped).
       field: '_actions', headerName: '', width: 110, sortable: false, filterable: false,
       renderCell: (p) => (
         <>
@@ -83,12 +132,46 @@ export default function AdminRobots() {
               <EditIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Delete">
-            <IconButton size="small" color="error" onClick={() => setDelTarget(p.row)}>
-              <DeleteIcon fontSize="small" />
+          <Tooltip title="Archive — hide from operators, keep history">
+            <IconButton
+              size="small" color="warning"
+              onClick={() => setArchiveTarget(p.row)}
+            >
+              <ArchiveIcon fontSize="small" />
             </IconButton>
           </Tooltip>
         </>
+      ),
+    },
+  ];
+
+  const archivedCols: GridColDef<Robot>[] = [
+    { field: 'serialNumber', headerName: 'Serial',  width: 140,
+      renderCell: (p) => <span className="font-mono text-slate-400">{p.value}</span> },
+    { field: 'mapId',        headerName: 'Map',     width: 120,
+      renderCell: (p) => <span className="font-mono text-slate-500">{p.value}</span> },
+    {
+      field: 'archivedAt', headerName: 'Archived',  width: 180,
+      renderCell: (p) => (
+        <span className="text-xs text-slate-500">
+          {p.value ? new Date(p.value as string).toLocaleString() : '—'}
+        </span>
+      ),
+    },
+    { field: 'rosbridgeUrl', headerName: 'rosbridge URL', flex: 1,
+      renderCell: (p) => <span className="font-mono text-xs text-slate-500">{p.value}</span> },
+    {
+      field: '_actions', headerName: '', width: 110, sortable: false, filterable: false,
+      renderCell: (p) => (
+        <Tooltip title="Restore — make this robot active again">
+          <IconButton
+            size="small" color="primary"
+            disabled={restore.isPending}
+            onClick={() => restore.mutate(p.row.serialNumber)}
+          >
+            <UnarchiveIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
       ),
     },
   ];
@@ -107,22 +190,49 @@ export default function AdminRobots() {
       </header>
 
       <Alert severity="info" variant="outlined" className="text-slate-300">
-        FastAPI&apos;s in-memory <code>RobotRegistry</code> reloads automatically on save.
-        The <b>ROS Bridge Service still needs a restart</b> to instantiate a new robot
-        (it builds per-robot connections at boot).
+        FastAPI&apos;s in-memory <code>RobotRegistry</code> reloads automatically on
+        save / archive / restore. The <b>ROS Bridge Service still needs a restart</b>
+        to instantiate a new robot (it builds per-robot connections at boot).
       </Alert>
 
-      <div className="min-h-[20rem] flex-1">
-        <DataGrid
-          rows={list.data?.robots ?? []}
-          columns={cols}
-          getRowId={(r) => r.serialNumber}
-          loading={list.isLoading}
-          density="compact"
-          disableRowSelectionOnClick
-          sx={dataGridSx}
-        />
-      </div>
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold uppercase tracking-widest text-slate-400">
+          Active ({active.length})
+        </h2>
+        <div className="min-h-[16rem]">
+          <DataGrid
+            rows={active}
+            columns={activeCols}
+            getRowId={(r) => r.serialNumber}
+            loading={list.isLoading}
+            density="compact"
+            disableRowSelectionOnClick
+            sx={dataGridSx}
+          />
+        </div>
+      </section>
+
+      {archived.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-widest text-slate-500">
+            Archived ({archived.length})
+          </h2>
+          <p className="text-xs text-slate-500">
+            Hidden from operator surfaces. History and order records are
+            preserved. Restore to make a robot active again.
+          </p>
+          <div className="min-h-[10rem]">
+            <DataGrid
+              rows={archived}
+              columns={archivedCols}
+              getRowId={(r) => r.serialNumber}
+              density="compact"
+              disableRowSelectionOnClick
+              sx={dataGridSx}
+            />
+          </div>
+        </section>
+      )}
 
       <RobotEditDrawer
         state={edit}
@@ -137,13 +247,22 @@ export default function AdminRobots() {
       />
 
       <ConfirmDialog
-        open={delTarget !== null}
-        title={`Delete robot ${delTarget?.serialNumber}?`}
-        body="Telemetry history is kept (FKs aren't cascaded). Delete will be rejected with 409 if any state/order rows still reference this robot."
-        confirmLabel="Delete"
+        open={archiveTarget !== null}
+        title={`Archive Robot ${archiveTarget?.serialNumber}?`}
+        body={
+          <>
+            The robot is hidden from operator surfaces (Dashboard, Dispatch,
+            Teleop, OEE) and the backend rejects any further telemetry from it.
+            All historical orders, state snapshots and OEE cycles are kept and
+            can be inspected via the Orders / OEE pages.
+            <br /><br />
+            You can restore the robot from this page at any time.
+          </>
+        }
+        confirmLabel="Archive"
         destructive
-        onClose={() => setDelTarget(null)}
-        onConfirm={() => delTarget && remove.mutate(delTarget.serialNumber)}
+        onClose={() => setArchiveTarget(null)}
+        onConfirm={() => archiveTarget && archive.mutate(archiveTarget.serialNumber)}
       />
     </div>
   );
@@ -176,7 +295,7 @@ function RobotEditDrawer({
     <EditDrawer
       key={key}
       open={state.mode !== 'closed'}
-      title={isCreate ? 'New robot' : `Edit ${initial.serial_number}`}
+      title={isCreate ? 'New Robot' : `Edit ${initial.serial_number}`}
       onClose={onClose}
       saving={saving}
     >
@@ -214,7 +333,7 @@ function RobotForm({
       onSubmit={(e) => { e.preventDefault(); if (valid) onSubmit(row); }}
     >
       <TextField
-        label="Serial number" size="small" required
+        label="Serial Number" size="small" required
         value={row.serial_number}
         disabled={!idEditable}
         onChange={(e) => set('serial_number', e.target.value)}
@@ -224,7 +343,7 @@ function RobotForm({
         label="rosbridge URL" size="small" required
         value={row.rosbridge_url}
         onChange={(e) => set('rosbridge_url', e.target.value)}
-        helperText="ws://host:9090 — reachable from this browser AND from the ROS Bridge"
+        helperText="ws://host:9090 — must be reachable from both this browser and the ROS Bridge container"
       />
       <TextField
         select label="Map" size="small" required

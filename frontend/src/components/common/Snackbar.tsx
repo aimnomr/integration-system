@@ -2,7 +2,8 @@ import {
   createContext, useCallback, useContext, useMemo, useState,
   type ReactNode,
 } from 'react';
-import { Alert, Snackbar as MuiSnackbar } from '@mui/material';
+import { Alert, Slide, Snackbar as MuiSnackbar } from '@mui/material';
+import type { SlideProps } from '@mui/material/Slide';
 
 type Severity = 'success' | 'info' | 'warning' | 'error';
 
@@ -22,6 +23,18 @@ const Ctx = createContext<SnackbarContextValue | null>(null);
 
 let _seq = 0;
 
+// Errors deserve attention; success is acknowledgment; info is between.
+const DURATION: Record<Severity, number | null> = {
+  success: 3000,
+  info:    2800,
+  warning: 5000,
+  error:   null, // persistent — operator must dismiss
+};
+
+function SlideUp(props: SlideProps) {
+  return <Slide {...props} direction="up" />;
+}
+
 export function SnackbarProvider({ children }: { children: ReactNode }) {
   const [queue, setQueue] = useState<ToastEntry[]>([]);
 
@@ -37,6 +50,7 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
   }), [show]);
 
   const current = queue[0] ?? null;
+  const dismiss = () => setQueue((q) => q.slice(1));
 
   return (
     <Ctx.Provider value={value}>
@@ -44,19 +58,24 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
       <MuiSnackbar
         key={current?.id ?? 'none'}
         open={current !== null}
-        autoHideDuration={4000}
+        autoHideDuration={current ? DURATION[current.severity] : null}
         onClose={(_, reason) => {
           if (reason === 'clickaway') return;
-          setQueue((q) => q.slice(1));
+          dismiss();
         }}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        TransitionComponent={SlideUp}
+        transitionDuration={{ enter: 320, exit: 220 }}
       >
         {current ? (
           <Alert
             severity={current.severity}
-            onClose={() => setQueue((q) => q.slice(1))}
+            onClose={dismiss}
             variant="filled"
-            sx={{ width: '100%' }}
+            sx={{
+              width: '100%',
+              transition: 'transform 320ms cubic-bezier(0.32, 0.72, 0, 1)',
+            }}
           >
             {current.message}
           </Alert>

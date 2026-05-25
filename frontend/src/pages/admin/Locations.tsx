@@ -131,7 +131,7 @@ export default function AdminLocations() {
 
       <ConfirmDialog
         open={delTarget !== null}
-        title={`Delete location #${delTarget?.id}?`}
+        title={`Delete Location #${delTarget?.id}?`}
         body={delTarget?.label}
         confirmLabel="Delete"
         destructive
@@ -165,7 +165,7 @@ function LocationEditDrawer({
     <EditDrawer
       key={key}
       open={state.mode !== 'closed'}
-      title={isCreate ? 'New location' : `Edit #${initial.id} — ${initial.label}`}
+      title={isCreate ? 'New Location' : `Edit #${initial.id} — ${initial.label}`}
       onClose={onClose}
       saving={saving}
       width={560}

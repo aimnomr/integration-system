@@ -2,6 +2,80 @@
 
 > A point-in-time handoff snapshot so work can resume without re-deriving context.
 > **This decays** — trust the code and the canonical docs over this page.
+> Last updated: 2026-05-25 (typography + copy consistency pass — all labels,
+> headings, buttons, drawer/dialog titles, menu items, and metric cards
+> converted to Title Case ("Order History", "System Health", "Admin — Fleet
+> Config", "Serial Number", "Page Size", "Avg Duration", "New Robot",
+> "Archive Robot amr002?", "Send Order", "+ Add Node", "Load Older", "End
+> of History", "All Robots", "Loading Fleet", etc.). Sentence case kept for
+> toasts, helper text, dialog body copy, empty states, and tooltip
+> descriptors after the verb. Proper-noun exceptions preserved: `rosbridge`
+> stays lowercase (project naming convention), `ROS Bridge` stays as the
+> service brand, acronyms (OEE/MQTT/API/DB/ROS/VDA5050) preserved.
+> `ENGAGED — robot will move` kept all-caps for intentional danger emphasis.
+> Frontend typecheck clean. Also synced the schema change (`archived_at`)
+> into the Node-RED Reset-DB SQL string in `node-red/flows.json` so the
+> DB Admin "Reset" button creates a fresh schema with the column already
+> present (no migration needed after a reset).
+>
+> NOT YET IMPLEMENTED (proposed and designed, awaiting green light): auto-
+> generated IDs for `robots.serial_number`, `maps.map_id`, and
+> `named_locations.id`. Per-prefix sequencing on robots/maps with optional
+> operator-supplied prefix (default "amr" / "map-"); plain sequence on
+> named_locations. See the conversation log for the full design.
+>
+> Last updated: 2026-05-25 (G40 closed — robot soft-delete (archive) shipped.
+> New `robots.archived_at TIMESTAMPTZ` column (`docs/schema/migrations/
+> 2026-05-25_robots_archived_at.sql` for existing dev DBs; `schema.sql`
+> already includes it for fresh installs). Backend: `db.fetch_robots()` now
+> filters to active; new `fetch_robots_all()`, `fetch_archived_serials()`,
+> `archive_robot()`, `restore_robot()`. `RobotRegistry` tracks an
+> `_archived_serials` set so `is_archived()` is O(1) — no per-message DB hit
+> on ingest. Routers: `POST /robots/{serial}/archive`, `POST /robots/
+> {serial}/restore`, `GET /robots?include_archived=true`. `POST /robots`
+> returns a structured 409 (`detail.code="archived_serial"`, plus
+> `serialNumber` + `archivedAt`) when the new serial collides with an
+> archived row, so the admin UI offers Restore inline. Command paths
+> (`/order`, `/instant-actions`, `/state`) return 410 for archived robots
+> via `_require_robot`. `/ingest/state|connection|command|oee-cycle`
+> return 410 for archived serials. Frontend: `Robot.archivedAt`,
+> `archiveRobot()` / `restoreRobot()`, Admin → Robots split into Active +
+> Archived sections with Archive (warning-icon) and Restore (primary-icon)
+> buttons. ConfirmDialog body explains what archive does. ApiError client
+> now surfaces `detail.message` from structured-error responses. Tests:
+> `tests/test_robots_archive.py` (15 cases), `tests/conftest.py` extended
+> to stub paho `Client` so pytest no longer needs a live Mosquitto.
+> `npm run typecheck` clean, `npm run build` clean, pytest 59/59.
+> G41 added (cosmetic note: `app/mqtt.py` connect-at-import).
+>
+> Last updated: 2026-05-25 (frontend polish + distill pass — no behaviour
+> change, motion + visual hygiene only. Added `--ease-out` / `--dur-*` motion
+> tokens, `:focus-visible` ring, and `prefers-reduced-motion` block to
+> `src/index.css`. Introduced shared `useNow` hook so RobotTile no longer
+> runs one `setInterval` per tile. Press feedback (`active:scale`), pointer-
+> fine hover gating, and keyboard-press sync added to KeyboardPad; LeftNav
+> grew a 2 px active indicator and lost its tinted active background; MUI
+> dialogs/drawers/snackbar use stronger curves and asymmetric enter/exit;
+> `ConfirmDialog` enters from `scale(0.96)` not `0`. AppBar pills moved from
+> `title` to MUI `Tooltip`. Snackbar errors now persist until dismissed.
+> ErrorList no longer uses a side-stripe border (severity tint instead).
+> Distill pass trimmed: RobotTile (dropped Map + rosbridge fields), StateTable
+> (16 → 7 fields), Dispatch / Teleop / Health prose, Dashboard subtitle,
+> RobotDetail header. Frontend `npm run typecheck` exits 0; `npm run build`
+> succeeds with no new warnings.
+>
+> Last updated: 2026-05-25 (G26 + G27 + G30 + G31 closed in one pass.
+> RobotTile drives a 1 s ticker so the "last seen" label counts up between
+> MQTT messages; MapCanvas pin labels render inside a slate-900 pill with a
+> pin-coloured stroke so they read against both white free-space cells and
+> the black out-of-map background; `GET /orders/{id}` added with joined
+> nodes+edges (frontend `getOrder` + `OrderDetail` type wired); new
+> `frontend/Dockerfile` (multi-stage Node 20 → nginx 1.27) +
+> `frontend/nginx.conf` (SPA fallback + asset cache) +
+> `frontend/.dockerignore`, `frontend` service added to `docker-compose.yml`
+> on host port 5173. Frontend `npm run typecheck` exits 0; pytest
+> `tests/test_orders.py` 11/11. Open gaps reduced from 6 to **2** (G32, G39).
+>
 > Last updated: 2026-05-22 (housekeeping pass — `frontend/tsconfig.tsbuildinfo` untracked from git, ~8 MB of stale generated artifacts cleared from postman reports, playwright report, frontend dist, test-results, and python pycache. All gitignored, no source touched. G34 + G35 closed earlier — instant-action wire format corrected (`action_type` + full VDA5050 names), API client error formatter handles 422 validation arrays, ActiveOrderPanel wires success toasts; Admin DataGrid actions switched from `Button` to `IconButton` so Delete fits the column. G33 + G36 + G37 + G38 closed earlier — the cheap-quartet patch. tsconfig `noEmit: true`; new `NumberField` for select-on-focus + negative/decimal entry; ActiveOrderPanel disables Cancel/Retry/Skip on order complete. G34–G39 added earlier — six frontend bugs filed during the manual-checklist elaboration pass. G24 + G25 closed earlier — DB-down now surfaces as 503 from the affected routes and Health pills degrade to idle when the `/system/status` poll fails. G28 + G29 closed earlier — Frontend and Newman jobs run in CI. Six follow-ups G28–G33 promoted from "untracked next steps" into the gaps tracker; manual-checklist walkthrough surfaced four real bugs — G24–G27 — and a batch of clarifications consolidated in `manual-test-remarks.md`).
 
 ---
@@ -39,6 +113,70 @@ Phase 9–13 cover the new frontend and Phase-0 backend work.
 ---
 
 ## Recently completed (most recent first)
+
+**G26 + G27 + G30 + G31 closed in one pass (2026-05-25, uncommitted).**
+Four of the six remaining gaps cleared — two frontend polish, one
+backend endpoint, one infra. Open count drops from 6 to **2** (G32, G39).
+Typecheck green, pytest `tests/test_orders.py` 11/11.
+
+- **G26 — Dashboard "last seen" tile ticks.** Root cause: `agoLabel(lastSeen)`
+  is pure but `lastSeen` only changes when an MQTT `state` or `connection`
+  message arrives — between messages the tile never re-renders, so the
+  label sat frozen at whatever value it had on the last message
+  (often `0s ago`, immediately after a fresh message). Fix: a 1 s
+  `setInterval` + a throwaway `setTick` state in `RobotTile.tsx`. The
+  `agoLabel` call re-evaluates against `Date.now()` on every tick. Memory
+  cost is one timer per visible tile (the same shape as the existing
+  per-robot `lastSeen` state).
+- **G27 — Map pin labels readable.** Root cause: the old text draw was
+  `ctx.fillStyle = 'rgba(255,255,255,0.85)'` with no background — when a
+  pin landed on a free-space occupancy cell (rasterised as `v = 255` /
+  pure white) the label was white-on-white. Fix: render label inside a
+  slate-900 (`rgba(15,23,42,0.85)`) rounded rect with a thin pin-coloured
+  stroke; text colour is `slate-100` for AA contrast. Also added a
+  slate-900 stroke around the pin circle itself so the marker shows on
+  bright free-space areas too. Touch only in `MapCanvas.tsx`.
+- **G31 — `GET /orders/{order_id}`.** New endpoint in
+  `app/routers/orders.py` + new `db.fetch_order()` helper that borrows
+  one pooled connection and runs three queries on the same cursor:
+  `orders` header (newest by `ts` if an updated order has multiple rows),
+  then `order_nodes` and `order_edges` joined by `order_pk`, both ordered
+  by `sequence_id`. 404 on unknown order_id, 503 on DB-down — same
+  contract as `/orders`. Three pytest cases added covering header+children,
+  404, 503. Frontend wiring: `api/orders.ts` `getOrder(orderId)` and
+  `types/api.ts` `OrderDetail` / `OrderNode` / `OrderEdge` — wiring an
+  Order History row drill-down is now purely a UI exercise.
+- **G30 — Frontend Dockerised.** New `frontend/Dockerfile` (multi-stage,
+  `node:20-alpine` builder → `nginx:1.27-alpine` static serve) +
+  `frontend/nginx.conf` + `frontend/.dockerignore`. The nginx config
+  gives the SPA fallback so a hard refresh on `/robots/:serial` doesn't
+  404, long-caches `/assets/*` (Vite emits content-hashed filenames),
+  and `no-cache`s `index.html` so the latest bundle hash is always
+  re-fetched. `VITE_*` are exposed as build args because Vite inlines
+  `import.meta.env.*` at build time (runtime config would have meant a
+  config-json fetch + hydration detour). Defaults assume the compose
+  stack — host-published ports, browser hits localhost. New `frontend`
+  service added to `docker-compose.yml` on host port 5173, depends on
+  the `fastapi` healthcheck, has its own `wget /` healthcheck. Rebuild
+  against different endpoints with
+  `docker compose build --build-arg VITE_API_URL=... frontend`.
+- **Verification.** Frontend `npm run typecheck` exits 0; pytest
+  `tests/test_orders.py` reports 11 passed (was 8 — three new G31 cases).
+  Docker build not exercised locally — it's gated on the docker daemon
+  being up; user should `docker compose build frontend` to verify
+  before pushing.
+- **Docs touched.** `gaps.md` (G26 + G27 + G30 + G31 moved to Resolved with
+  detailed notes; at-a-glance trimmed to G32 + G39; header note rewritten),
+  `status.md` (date bumped; Docker & ops paragraph notes the new
+  frontend service; "Not yet implemented" reduced to 2 open),
+  `docs/schema/REST_ENDPOINTS.md` (new `GET /orders/{order_id}` block in
+  ToC + section).
+
+**Open gaps now (2):** G32 (MQTT auth + TLS — deliberate FYP-scope
+deferral) and G39 (Robot Detail connection pill — needs investigation,
+might resolve as EXPECTED VDA5050 contract behaviour). Recommended next
+pass: G39 investigation first (cheap; could be a doc-only resolution),
+then G32 as the last deliberate infra item.
 
 **Housekeeping pass — generated artifacts cleared, tsbuildinfo untracked (2026-05-22, uncommitted).**
 After the G34/G35 patch the working tree had accumulated ~8 MB of

@@ -123,7 +123,7 @@ Almost every non-robot screen is automated by Playwright in
 
 ### Dashboard
 - `[robot]` Each tile fills fields: connection pill, mode, battery, orderId, "last seen", map, rosbridge.
-- `[robot]` After a `state` message arrives, "last seen" resets to "0s ago" and ticks upward.
+- `[robot]` After a `state` message arrives, "last seen" resets to "0s ago" and ticks upward. (G26 fixed 2026-05-25 — pending re-test.)
 - `[UI]` No robots in fleet → "No robots in the fleet" hint with pointer to Admin → Robots. (Hard to engineer without deleting amr001 first.)
 
 ### Robot Detail — Map
@@ -136,7 +136,7 @@ Almost every non-robot screen is automated by Playwright in
 - `[robot]` Resume AMCL → overlay returns to AMCL on next message; arrow back to blue.
 - `[robot]` `/move_base_node/DWAPlannerROS/global_plan` → sky-blue polyline on map.
 - `[robot]` `/move_base_node/DWAPlannerROS/local_plan` → red polyline.
-- `[robot]` Named locations on the robot's map appear as violet pins with labels.
+- `[robot]` Named locations on the robot's map appear as violet pins with labels. (G27 fixed 2026-05-25 — labels render in a slate-900 pill so they read on white free-space cells.)
 
 ### Robot Detail — Side panel
 - `[robot]` **State** tab updates in real time.

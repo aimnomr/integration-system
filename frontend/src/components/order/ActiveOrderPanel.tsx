@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button } from '@mui/material';
+import { Button, CircularProgress } from '@mui/material';
 import { postInstantAction, type InstantAction } from '@/api/robots';
 import type { ApiError } from '@/api/client';
 import type { VdaState } from '@/types/api';
@@ -50,10 +50,12 @@ export function ActiveOrderPanel({ serial, state }: Props) {
     );
   }
 
+  const actions: InstantAction[] = ['cancel', 'retry', 'skip'];
+
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-surface-2 bg-surface-1 p-4">
       <div>
-        <div className="text-[10px] uppercase tracking-widest text-slate-500">Active order</div>
+        <div className="text-[10px] uppercase tracking-widest text-slate-500">Active Order</div>
         <div className="mt-1 font-mono text-sm text-white">{orderId}</div>
         <div className="text-xs text-slate-400">
           {nodeStates.length} node{nodeStates.length === 1 ? '' : 's'} remaining
@@ -61,9 +63,12 @@ export function ActiveOrderPanel({ serial, state }: Props) {
       </div>
 
       {nodeStates.length > 0 && (
-        <ol className="flex flex-col gap-1 font-mono text-xs">
+        <ol className="node-list flex flex-col gap-1 font-mono text-xs">
           {nodeStates.map((n) => (
-            <li key={n.sequenceId} className="flex justify-between rounded bg-surface-2/40 px-2 py-1">
+            <li
+              key={n.sequenceId}
+              className="node-row flex justify-between rounded bg-surface-2/40 px-2 py-1"
+            >
               <span className="text-slate-300">seq {n.sequenceId} — {n.nodeId}</span>
               <span className="text-slate-500">{n.released ? 'released' : 'pending'}</span>
             </li>
@@ -80,15 +85,62 @@ export function ActiveOrderPanel({ serial, state }: Props) {
         still-visible orderId doesn't let an action slip through.
       */}
       <div className="flex gap-2">
-        <Button size="small" variant="outlined" color="error"   disabled={busy !== null || done} onClick={send('cancel')}>{busy === 'cancel' ? '…' : 'Cancel'}</Button>
-        <Button size="small" variant="outlined" color="warning" disabled={busy !== null || done} onClick={send('retry')}>{busy === 'retry' ? '…' : 'Retry'}</Button>
-        <Button size="small" variant="outlined"                 disabled={busy !== null || done} onClick={send('skip')}>{busy === 'skip' ? '…' : 'Skip'}</Button>
+        {actions.map((a) => {
+          const color = a === 'cancel' ? 'error' : a === 'retry' ? 'warning' : undefined;
+          const isBusy = busy === a;
+          return (
+            <Button
+              key={a}
+              size="small"
+              variant="outlined"
+              color={color}
+              disabled={busy !== null || done}
+              onClick={send(a)}
+              startIcon={
+                isBusy ? (
+                  <CircularProgress size={12} color="inherit" />
+                ) : undefined
+              }
+            >
+              {ACTION_LABEL[a]}
+            </Button>
+          );
+        })}
       </div>
       {done && (
-        <p className="text-[11px] text-slate-500">
+        <p className="done-banner text-[11px] text-slate-500">
           Order complete — instant actions disabled. Submit a new order to re-enable.
         </p>
       )}
+
+      <style>{`
+        .node-row {
+          opacity: 1;
+          transform: translateX(0);
+          transition:
+            opacity 180ms var(--ease-out),
+            transform 180ms var(--ease-out);
+        }
+        @starting-style {
+          .node-list .node-row {
+            opacity: 0;
+            transform: translateX(-6px);
+          }
+        }
+        .done-banner {
+          opacity: 1;
+          transform: translateY(0);
+          transition:
+            opacity 200ms var(--ease-out),
+            transform 200ms var(--ease-out);
+        }
+        @starting-style {
+          .done-banner {
+            opacity: 0;
+            transform: translateY(-4px);
+          }
+        }
+      `}</style>
     </div>
   );
 }

@@ -35,7 +35,7 @@ export default function RobotDetail() {
       .map((l) => ({ x: l.x, y: l.y, label: l.label }));
   }, [locations.data, robot?.mapId]);
 
-  if (fleet.isLoading) return <Loading label="Loading fleet…" />;
+  if (fleet.isLoading) return <Loading label="Loading Fleet" />;
   if (!robot) {
     return (
       <div className="text-sm text-red-400">
@@ -57,7 +57,6 @@ export default function RobotDetail() {
           <h1 className="text-2xl font-semibold text-white">{robot.serialNumber}</h1>
           <div className="text-xs text-slate-400">
             map <span className="font-mono">{robot.mapId}</span>
-            {' · '}rosbridge <span className="font-mono">{robot.rosbridgeUrl}</span>
           </div>
         </div>
         <StatusPill state={connState} label={connection?.connectionState ?? 'idle'} />

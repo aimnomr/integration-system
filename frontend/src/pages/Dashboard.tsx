@@ -5,7 +5,7 @@ import { RobotTile } from '@/components/robot/RobotTile';
 export default function Dashboard() {
   const fleet = useFleet();
 
-  if (fleet.isLoading) return <Loading label="Loading fleet…" />;
+  if (fleet.isLoading) return <Loading label="Loading Fleet" />;
   if (fleet.isError) {
     return (
       <div className="text-sm text-red-400">
@@ -21,15 +21,13 @@ export default function Dashboard() {
       <div className="flex items-baseline justify-between">
         <h1 className="text-2xl font-semibold text-white">Dashboard</h1>
         <span className="text-xs text-slate-400">
-          {data.robots.length} robot{data.robots.length === 1 ? '' : 's'} •
-          {' '}{data.interfaceName}/{data.majorVersion}
+          {data.robots.length} robot{data.robots.length === 1 ? '' : 's'}
         </span>
       </div>
 
       {data.robots.length === 0 ? (
         <p className="mt-6 text-sm text-slate-400">
-          No robots in the fleet. Add one via Admin → Robots or
-          <code className="ml-1 rounded bg-surface-2 px-1">POST /robots</code>.
+          No robots in the fleet. Add one in Admin → Robots.
         </p>
       ) : (
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

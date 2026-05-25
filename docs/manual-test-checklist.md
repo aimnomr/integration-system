@@ -547,7 +547,8 @@ RATE_LIMIT_PER_MINUTE=5
 - [x] Each tile fields populate: connection pill, mode, battery, orderId,
       "last seen", map, rosbridge status. Empty fields show `—` (no `undefined`).
 - [ ] After a `state` MQTT message arrives, "last seen" resets to "0s ago" and
-      ticks upward. {Stays 0, bug or because of repeated reset on message arrival}
+      ticks upward. {FIXED 2026-05-25 (G26) — pending re-test. RobotTile now
+      drives a 1 s ticker so the label re-evaluates between messages.}
 - [x] Click a tile → navigates to `/robots/<serial>`.
 - [ ] No robots in fleet → "No robots in the fleet" hint with a pointer to
       Admin → Robots. {Not sure what is asked here}
@@ -591,7 +592,7 @@ RATE_LIMIT_PER_MINUTE=5
 - [x] **[robot]** `/move_base_node/DWAPlannerROS/global_plan` published → sky-blue
       polyline appears on the map.
 - [x] **[robot]** `/move_base_node/DWAPlannerROS/local_plan` → red polyline.
-- [x] Named locations on the robot's map appear as violet pins with labels. {Pins are there, but labels are not visible due to color similarity with background. Make it violet too or change to other than bright colors}
+- [x] Named locations on the robot's map appear as violet pins with labels. {FIXED 2026-05-25 (G27) — pending re-test. Labels now render inside a slate-900 pill with a pin-coloured stroke and slate-100 text; pin circle has a slate-900 outline so it's visible on bright cells too.}
 
 ### Robot Detail — Side panel
 - [x] **State** tab shows the VDA5050 field readout updating in real time.

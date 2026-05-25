@@ -53,6 +53,7 @@ headers are allowed for listed origins; credentials (`X-API-Key`) are permitted.
 - [GET /robots/{serial}/oee/cycles](#get-robotsserialoeecycles)
 - [GET /robots/{serial}/oee/availability](#get-robotsserialoeeavailability)
 - [GET /orders](#get-orders)
+- [GET /orders/{order_id}](#get-ordersorder_id)
 - [GET /system/status](#get-systemstatus)
 
 **Reference-data CRUD (G15)** — `maps`, `named_locations`, `robots`, `fleet_config`
@@ -478,6 +479,62 @@ Rows are newest-first. Paginate by passing the `ts` of the last row back as
 
 ---
 
+### GET /orders/{order_id}
+
+**Purpose:** Detail view for one historical order — header row plus the joined
+`order_nodes` and `order_edges`. Drives the Order History row drill-down (G31).
+
+**Path Parameters:**
+| Name | Type | Description |
+|------|------|-------------|
+| order_id | string | VDA5050 `orderId`, e.g. `amr001-order-7` |
+
+**Request Body:** None
+
+**Response Body:**
+```json
+{
+  "id":               <integer>,
+  "serial_number":    <string>,
+  "ts":               <string (ISO-8601)>,
+  "header_id":        <integer>,
+  "order_id":         <string>,
+  "order_update_id":  <integer>,
+  "nodes": [
+    {
+      "node_id":     <string>,
+      "sequence_id": <integer>,
+      "released":    <boolean>,
+      "pos_x":       <number>,
+      "pos_y":       <number>,
+      "theta":       <number>,
+      "map_id":      <string>
+    }
+  ],
+  "edges": [
+    {
+      "edge_id":       <string>,
+      "sequence_id":   <integer>,
+      "released":      <boolean>,
+      "start_node_id": <string>,
+      "end_node_id":   <string>
+    }
+  ]
+}
+```
+
+If multiple rows share the same `order_id` (an updated order), the newest is
+returned. `nodes` and `edges` are ordered by `sequence_id`.
+
+**Status Codes:**
+| Code | Condition |
+|------|-----------|
+| 200 | Order returned |
+| 404 | `order_id` does not exist |
+| 503 | Database unavailable |
+
+---
+
 ### GET /system/status
 
 **Purpose:** Report gateway health — MQTT broker, database, rosbridge, and Node-RED
@@ -556,10 +613,20 @@ In addition to the existing `GET /robots`:
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/robots/{serial}` | One robot → `{ "serial_number", "rosbridge_url", "map_id" }` |
-| POST | `/robots` | Create. Body: `{ "serial_number": <string>, "rosbridge_url": <string>, "map_id": <string> }` → **201** |
-| PUT | `/robots/{serial}` | Update. Body: `{ "rosbridge_url": <string>, "map_id": <string> }` |
-| DELETE | `/robots/{serial}` | Delete. **409** if the robot still has telemetry / order history |
+| GET | `/robots?include_archived=true` | Admin view — adds archived rows. Each row carries `archivedAt` (ISO-8601 string when archived, `null` when active). |
+| GET | `/robots/{serial}` | One robot → `{ "serial_number", "rosbridge_url", "map_id", "archived_at" }` |
+| POST | `/robots` | Create. Body: `{ "serial_number": <string>, "rosbridge_url": <string>, "map_id": <string> }` → **201**. Returns **409** with `detail.code = "archived_serial"` (plus `serialNumber` + `archivedAt`) if the serial exists but is archived — the admin UI uses this to offer Restore inline. |
+| PUT | `/robots/{serial}` | Update. Body: `{ "rosbridge_url": <string>, "map_id": <string> }`. **409** if the robot is archived — restore it first. |
+| DELETE | `/robots/{serial}` | Hard-delete (no FK references). **409** if the robot still has telemetry / order history — use archive instead. |
+| POST | `/robots/{serial}/archive` | Soft-delete. Hides the robot from operator surfaces and ingest. History rows survive intact. Idempotent. |
+| POST | `/robots/{serial}/restore` | Un-archive a previously archived robot. Idempotent for already-active rows. |
+
+Archive semantics:
+
+- Operator surfaces (`GET /robots`, `GET /fleet`, Dashboard, Dispatch, Teleop, OEE) hide archived robots completely.
+- Command paths (`POST /robots/{serial}/order`, `/instant-actions`, `GET /robots/{serial}/state`) return **410 Gone** for archived robots, naming the archive state.
+- Ingest (`POST /ingest/state`, `/connection`, `/command`, `/oee-cycle`) returns **410** for archived serials, so a bridge that's still publishing for an archived robot does not bloat the database.
+- History endpoints (`GET /orders`, `/oee/*`) still resolve archived serials — their historical rows remain readable.
 
 After any robot write the in-memory `RobotRegistry` is reloaded, so the change is
 visible without a FastAPI restart. **The ROS Bridge Service still needs a restart**

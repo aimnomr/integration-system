@@ -3,6 +3,28 @@
 Open items not yet addressed, consolidated for visibility. For what *is* working see
 [status.md](status.md). Resolved gaps are listed at the bottom.
 
+> Last updated: 2026-05-25 (G40 closed — robot soft-delete (archive) shipped:
+> `robots.archived_at` column, `POST /robots/{serial}/archive` + `/restore`
+> endpoints, `GET /robots?include_archived=true` for admin, archive-aware
+> 409 on `POST /robots` carrying `{code:"archived_serial",serialNumber,
+> archivedAt}` so the UI offers Restore inline, command paths return 410
+> for archived serials, `/ingest/*` rejects archived traffic with 410 via
+> in-memory `registry.is_archived` (O(1), no per-message DB hit). Admin →
+> Robots split into Active + Archived sections with Archive/Restore icon
+> buttons. 15 new pytest cases (`test_robots_archive.py`); 59/59 pass.
+> G41 added (cosmetic test-env note about `app/mqtt.py` connect-at-import).
+>
+> Last updated: 2026-05-25 (G26 + G27 + G30 + G31 closed. RobotTile drives
+> a 1 s ticker so the "last seen" label counts up between MQTT messages;
+> MapCanvas pin labels now render inside a slate-900 pill with a pin-coloured
+> stroke so they read against both white free-space cells and the black
+> out-of-map background; `GET /orders/{id}` added with joined nodes/edges,
+> frontend `getOrder` + `OrderDetail` type wired; new `frontend/Dockerfile`
+> (multi-stage Node 20 builder → nginx 1.27) + `frontend/nginx.conf`
+> (SPA fallback + asset cache) + `frontend/.dockerignore`, `frontend`
+> service added to `docker-compose.yml` on host port 5173. Three new
+> pytest cases cover the order-detail router (header+children, 404, 503);
+> frontend `npm run typecheck` exits 0, pytest 11/11 in `test_orders.py`.
 > Last updated: 2026-05-22 (housekeeping pass — `frontend/tsconfig.tsbuildinfo`
 > untracked from git (was tracked despite the G33-era `.gitignore` rule),
 > ~8 MB of stale generated artifacts removed from `docs/postman/reports/`,
@@ -43,12 +65,9 @@ Open items not yet addressed, consolidated for visibility. For what *is* working
 
 | # | Gap | Area | Severity |
 |---|---|---|---|
-| G26 | Dashboard tile "last seen" timer stuck at `0s ago`; doesn't tick upward | Frontend | Low |
-| G27 | Named-location pin labels invisible vs the dark MapCanvas background | Frontend | Low |
-| G30 | Frontend has no Dockerfile / not in `docker-compose.yml` — local-dev only | Docker | Low |
 | G39 | Robot Detail "connection" pill stuck at ONLINE when simulator stops (only flips on rosbridge death) — needs investigation | Frontend | Low |
-| G31 | No `GET /orders/{id}` detail endpoint — blocks Order History click-to-expand drill-down | FastAPI | Low |
 | G32 | MQTT broker anonymous on both `:1883` and `:9001` — no auth / no TLS | Mosquitto | Low |
+| G41 | `app/mqtt.py` calls `mqtt_client.connect()` at module import — pytest fails without a live Mosquitto. Now worked-around in `tests/conftest.py` (paho client mocked) but the import-time side-effect should ideally move into a lifespan hook. | Backend / tests | Low |
 
 See [manual-test-remarks.md](manual-test-remarks.md) for the full walkthrough
 notes that surfaced G24–G27 — including items that looked like bugs but turned
@@ -68,14 +87,8 @@ out to be expected behaviour or test-setup issues.
   the disconnect, so the pill could plausibly bind to that signal.
   **Needs investigation** before fixing — could resolve as EXPECTED.
 
-### Detail — G30–G32 (untracked → tracked, 2026-05-22)
+### Detail — G32 (untracked → tracked, 2026-05-22)
 
-- **G30 — Frontend Dockerfile + compose service.** Multi-stage build (Node
-  builder → nginx static serve) plus a `frontend` service in
-  `docker-compose.yml`. Phase 5 of the frontend plan, deferred.
-- **G31 — `GET /orders/{id}`.** Detail endpoint returning the order header +
-  joined `order_nodes` / `order_edges`. The list endpoint `GET /orders`
-  already exists; the React Order History grid has no row drill-down yet.
 - **G32 — MQTT auth + TLS.** Both Mosquitto listeners (`:1883` backend,
   `:9001` browser) are anonymous; password file + TLS cert config needed,
   plus credentials wired through FastAPI / ROS Bridge / Node-RED / frontend
@@ -114,11 +127,16 @@ out to be expected behaviour or test-setup issues.
 | G24 | DB-down returns HTTP 500 instead of 503 from `GET /robots/{serial}/state` and `GET /system/status` | 2026-05-22 |
 | G25 | Health pills don't degrade live when `/system/status` poll fails — DB / ROS stay green until refresh | 2026-05-22 |
 | G33 | `frontend/tsconfig.json` lacks `"noEmit": true` — `npm run build` emits stray `.js` next to every `.ts` source | 2026-05-22 |
+| G40 | Operators have no path to remove a robot once it has telemetry / order history — `DELETE /robots/{serial}` returns 409 with no UI alternative; archived robots stay visible on the Dashboard | 2026-05-25 |
 | G36 | Numeric inputs (manual dispatch x/y/θ, location editor) concat placeholder "0" — typing "2" yields "02" | 2026-05-22 |
 | G37 | Instant-action buttons (Cancel / Retry / Skip) stay clickable after order completes — risk of stray instant action | 2026-05-22 |
 | G38 | Negative coordinates rejected by manual dispatch + named-location editor — world frame supports them | 2026-05-22 |
 | G34 | Instant-action toast renders `[object Object]` instead of action name (Cancel / Retry / Skip) | 2026-05-22 |
 | G35 | Admin DataGrid row-actions menu (triple-dot) unreachable — Delete inaccessible | 2026-05-22 |
+| G26 | Dashboard tile "last seen" timer stuck at `0s ago`; doesn't tick upward | 2026-05-25 |
+| G27 | Named-location pin labels invisible vs the dark MapCanvas background | 2026-05-25 |
+| G31 | No `GET /orders/{id}` detail endpoint — blocks Order History click-to-expand drill-down | 2026-05-25 |
+| G30 | Frontend has no Dockerfile / not in `docker-compose.yml` — local-dev only | 2026-05-25 |
 
 G1–G3 — the ROS Bridge Service consumes `/move_base` feedback and the VDA5050
 `OrderStateMachine` auto-advances orders node-by-node. G12 — JSON-line logging in the
@@ -327,6 +345,60 @@ Closes the "stray instant action" risk that pairs with G34 — together
 with G34's later fix (wire format + readable error formatter + success
 toasts), the operator now has clear feedback on every Cancel / Retry /
 Skip click and can't fire one by accident against a finished order.
+
+**G26** — `RobotTile` now drives a 1 s ticker via
+`useEffect` + `setInterval` + a throwaway `setTick` state. Root cause:
+`agoLabel(lastSeen)` is pure, but `lastSeen` only changes when a new
+MQTT `state` or `connection` message arrives — between messages there is
+nothing to re-render the tile, so the displayed `Xs ago` sat frozen.
+The interval fires `setTick((n) => n + 1)` every second, forcing a
+re-render that re-evaluates the label off `Date.now()`. The interval is
+cleared on unmount. Memory cost is one timer per visible tile, which is
+the same shape as the existing `lastSeen` per-robot state.
+
+**G27** — Named-location pin labels now render inside a slate-900
+(`rgba(15,23,42,0.85)`) rounded pill with a thin pin-coloured stroke,
+positioned to the right of the pin marker. Root cause: the old text
+draw was `ctx.fillStyle = 'rgba(255,255,255,0.85)'` with no background,
+so the label was white-on-white when the pin landed on a free-space
+occupancy cell (rasterised as `v = 255` / pure white) and barely visible
+on the dark map chrome too. The pill gives the label a guaranteed dark
+backdrop independent of what's underneath; the pin-coloured border ties
+it visually back to its marker when there are multiple pins close
+together. Text colour is `slate-100` (`#f1f5f9`) for AA contrast against
+the slate-900 fill. Also added a slate-900 stroke around the pin circle
+itself so the marker reads against bright free-space areas.
+
+**G31** — `GET /orders/{order_id}` added (`fastapi-service/app/routers/orders.py`).
+Returns the `orders` header row plus joined `order_nodes` (ordered by
+`sequence_id`) and `order_edges`. New `db.fetch_order(order_id)` borrows a
+pooled connection, runs three queries in sequence on the same cursor, and
+returns the assembled dict. If multiple rows share the same `order_id`
+(an updated order), the newest by `ts` wins. Returns 404 for unknown
+order IDs, 503 if the database is unreachable (same shape as the existing
+`/orders` list endpoint). Three new pytest cases in `tests/test_orders.py`
+cover the happy path, 404, and 503. On the frontend, `api/orders.ts`
+exposes `getOrder(orderId)` and `types/api.ts` declares `OrderDetail`,
+`OrderNode`, `OrderEdge` — wiring an Order History click-through is now
+purely a UI exercise.
+
+**G30** — Frontend is now containerised. New `frontend/Dockerfile`:
+multi-stage build, `node:20-alpine` builder runs `npm ci` + `npm run
+build`, output is copied into a `nginx:1.27-alpine` stage that serves
+`/usr/share/nginx/html`. `VITE_API_URL`, `VITE_MQTT_WS_URL`, and
+`VITE_API_KEY` are exposed as build args (defaults `http://localhost:8000`,
+`ws://localhost:9001`, empty) because Vite inlines `import.meta.env.*` at
+build time — runtime config would have meant a config-json fetch + hydration
+detour. New `frontend/nginx.conf` gives the SPA fallback
+(`try_files $uri $uri/ /index.html`) so a hard refresh on `/robots/:serial`
+doesn't 404, long-caches `/assets/*` (Vite emits content-hashed
+filenames), and `no-cache`s `index.html` so the latest bundle hash is
+always re-fetched. New `frontend/.dockerignore` keeps `node_modules`,
+`dist`, `playwright-report`, and tsbuildinfo out of the build context. A
+`frontend` service was added to `docker-compose.yml` on host port `5173`,
+depends on the `fastapi` healthcheck, has its own `wget /` healthcheck.
+Rebuild against different endpoints with
+`docker compose build --build-arg VITE_API_URL=... frontend`.
 
 **G25** — Health pills now degrade live when `/system/status` fails. Root
 cause: `useSystemStatus` returns TanStack Query's default `data` retention

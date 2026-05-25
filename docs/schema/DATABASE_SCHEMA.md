@@ -142,12 +142,19 @@ CREATE TABLE maps (
 
 -- ------------------------------------------------------------
 -- 3. robots — the fleet roster (single source of truth)
+--
+-- archived_at supports soft-delete: when set, the row is hidden from operator
+-- surfaces and rejected at ingest, but history (orders, state_snapshots,
+-- oee_cycles, …) remains intact and the serial can be restored later.
 -- ------------------------------------------------------------
 CREATE TABLE robots (
     serial_number TEXT PRIMARY KEY,
     rosbridge_url TEXT NOT NULL,
-    map_id        TEXT NOT NULL REFERENCES maps (map_id)
+    map_id        TEXT NOT NULL REFERENCES maps (map_id),
+    archived_at   TIMESTAMPTZ                       -- NULL = active
 );
+
+CREATE INDEX idx_robots_active ON robots (serial_number) WHERE archived_at IS NULL;
 
 -- ------------------------------------------------------------
 -- 4. named_locations — named navigation targets

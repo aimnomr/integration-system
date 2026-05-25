@@ -1,3 +1,4 @@
+import { Tooltip } from '@mui/material';
 import { BRAND } from '@/branding/branding';
 import { StatusPill, type PillState } from '@/components/common/StatusPill';
 import { useMqttStatus } from '@/hooks/useMqttStatus';
@@ -41,10 +42,10 @@ export function AppBar() {
       </span>
 
       <div className="ml-6 flex items-center gap-2">
-        <StatusPill
+        <PillWithTooltip
           state={apiState}
           label="API"
-          title={
+          tooltip={
             sys.isError
               ? `FastAPI unreachable: ${sys.error?.message ?? 'error'}`
               : sys.isSuccess
@@ -52,34 +53,49 @@ export function AppBar() {
                 : 'Awaiting first /system/status response'
           }
         />
-        <StatusPill
+        <PillWithTooltip
           state={mqttState}
           label="MQTT"
-          title={`Mosquitto WebSocket: ${mqtt}`}
+          tooltip={`Mosquitto WebSocket: ${mqtt}`}
         />
-        <StatusPill
+        <PillWithTooltip
           state={dbState}
           label="DB"
-          title={
+          tooltip={
             sys.isError
               ? 'PostgreSQL: unknown (API unreachable)'
               : `PostgreSQL: ${sys.data?.database.status ?? 'unknown'}`
           }
         />
-        <StatusPill
+        <PillWithTooltip
           state={rosState}
           label="ROS"
-          title={
+          tooltip={
             sys.isError
               ? 'rosbridge: unknown (API unreachable)'
               : `rosbridge (via backend MQTT): ${sys.data?.roslib.status ?? 'unknown'}`
           }
         />
       </div>
-
-      <div className="ml-auto text-xs text-slate-400">
-        {/* Reserved for fleet selector + user menu. */}
-      </div>
     </header>
+  );
+}
+
+function PillWithTooltip({
+  state, label, tooltip,
+}: { state: PillState; label: string; tooltip: string }) {
+  return (
+    <Tooltip
+      title={tooltip}
+      enterDelay={150}
+      enterNextDelay={0}
+      leaveDelay={0}
+      arrow
+    >
+      {/* Tooltip needs a focusable child; the pill is a <span>, so wrap in a span with tabIndex for keyboard reachability. */}
+      <span tabIndex={0} className="rounded-full focus:outline-none">
+        <StatusPill state={state} label={label} />
+      </span>
+    </Tooltip>
   );
 }
