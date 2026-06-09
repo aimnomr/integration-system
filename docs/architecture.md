@@ -62,13 +62,22 @@ ROS Bridge Service — Robot's StateBuilder + OrderStateMachine
   ↓ MQTT publish → amr/v2/moverobotic/{serial}/state | connection
 Mosquitto
   ↓
-Node-RED — ingests state/connection, derives OEE cycles
-  ↓ HTTP POST  /ingest/state | /ingest/connection | /ingest/oee-cycle
-FastAPI  →  PostgreSQL
+FastAPI — subscribes state / connection / order / instantActions over MQTT,
+          derives OEE cycles, writes directly to PostgreSQL
+  ↓
+PostgreSQL
 ```
 
-Node-RED also taps `order` / `instantActions` and POSTs them to `/ingest/command` as a
-passive audit log — parallel to the command path, it cannot block delivery.
+**Telemetry persistence lives in FastAPI.** Its own MQTT client subscribes the four
+telemetry topics and persists each message via `app/ingest_service.py`
+(`app/mqtt.py` is the subscriber; the SQL is in `app/db.py`). The same logic backs
+the HTTP `/ingest/*` routes, which are now a secondary path kept for manual
+injection, the Node-RED Test Harness, and the smoke suite.
+
+**Node-RED is a passive viewer.** It subscribes the same telemetry topics purely to
+display them live (node status + debug sidebar) for development; it no longer writes
+to the database. The stack therefore fully functions whether Node-RED is running or
+not — see [failure-matrix.md](failure-matrix.md).
 
 ---
 
@@ -77,8 +86,8 @@ passive audit log — parallel to the command path, it cannot block delivery.
 | Service | Does |
 |---|---|
 | **React Frontend** | Operator console; consumes the REST + MQTT-over-WS + rosbridge contracts. See [services/frontend.md](services/frontend.md) |
-| **FastAPI** | FMS gateway — builds & publishes VDA5050 `order`/`instantActions`; serves state/OEE/order history from PostgreSQL; `/ingest/*` writes telemetry; reference-data CRUD. See [services/fastapi-service.md](services/fastapi-service.md) |
-| **Node-RED** | Subscribes the VDA5050 telemetry topics, derives OEE, persists via the `/ingest/*` API. DB Admin tab for schema reset + ad-hoc SQL. See [services/node-red.md](services/node-red.md) |
+| **FastAPI** | FMS gateway — builds & publishes VDA5050 `order`/`instantActions`; **subscribes the telemetry topics over MQTT and persists state/connection/command/OEE to PostgreSQL**; serves state/OEE/order history; reference-data CRUD. See [services/fastapi-service.md](services/fastapi-service.md) |
+| **Node-RED** | **Passive viewer** — subscribes the VDA5050 telemetry topics for live display only (no DB writes). DB Admin tab for schema reset + ad-hoc SQL. Optional: the stack functions with it off. See [services/node-red.md](services/node-red.md) |
 | **ROS Bridge Service** | One `Robot` per registry entry; translates VDA5050 ↔ ROS. See [services/ros-bridge-service.md](services/ros-bridge-service.md) |
 | **Mosquitto** | MQTT broker — routes all messages between services (TCP `:1883`) and between Mosquitto and the browser (WS `:9001`) |
 | **PostgreSQL** | Persistent storage. See [schema/DATABASE_SCHEMA.md](schema/DATABASE_SCHEMA.md) |
@@ -95,8 +104,10 @@ passive audit log — parallel to the command path, it cannot block delivery.
 - `order` / `instantActions` are QoS 0; `connection` is QoS 1 and retained.
 - The `state` message is published on a significant position/order/error change plus a
   5 s heartbeat (distance >0.05 m or heading >5°).
-- Node-RED persists via the FastAPI `/ingest/*` API rather than holding its own
-  database connection — a documented refinement of migration plan §5.3.
+- Telemetry persistence is triggered by FastAPI's own MQTT subscriber
+  (`app/mqtt.py` → `app/ingest_service.py` → `app/db.py`), not by Node-RED. This
+  makes Node-RED an optional passive viewer — refinement of migration plan §5.3
+  (2026-06-09; Node-RED previously POSTed to `/ingest/*`).
 
 ---
 

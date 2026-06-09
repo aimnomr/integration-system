@@ -86,7 +86,9 @@ async def _start_retention():
 
 
 # G10 — API-key auth guards the client-facing API. /ingest is left unguarded:
-# it is the internal Node-RED → DB telemetry boundary (see app/auth.py).
+# it is the internal telemetry-ingest boundary (manual injection / Test Harness /
+# smoke tests). The live ingest path is FastAPI's own MQTT subscriber, not these
+# routes — see app/mqtt.py + app/ingest_service.py (app/auth.py).
 _auth = [Depends(require_api_key)]
 app.include_router(robots.router, dependencies=_auth)
 app.include_router(fleet.router, dependencies=_auth)

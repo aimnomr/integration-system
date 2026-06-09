@@ -2,9 +2,9 @@
     {
         "id": "tab-ingest",
         "type": "tab",
-        "label": "Telemetry Ingestion",
+        "label": "Telemetry (view-only)",
         "disabled": false,
-        "info": "Subscribes the VDA5050 `state` and `connection` topics (amr/v2/+/+/...) for every robot and persists each message by POSTing it to the FastAPI ingestion API, which writes to PostgreSQL.",
+        "info": "PASSIVE VIEWER. Subscribes the VDA5050 `state` / `connection` / `order` / `instantActions` topics (amr/v2/+/+/...) for every robot and shows each message live (node status + debug sidebar). It no longer writes to the database — FastAPI now ingests these topics directly over MQTT (app/mqtt.py + app/ingest_service.py), so Node-RED can run or be stopped without affecting persistence. This tab is here for observation and development only.",
         "env": []
     },
     {
@@ -256,30 +256,6 @@
         "y": 100,
         "wires": [
             [
-                "ingest-http-state"
-            ]
-        ]
-    },
-    {
-        "id": "ingest-http-state",
-        "type": "http request",
-        "z": "tab-ingest",
-        "name": "POST /ingest/state",
-        "method": "POST",
-        "ret": "obj",
-        "paytoqs": "ignore",
-        "url": "",
-        "tls": "",
-        "persist": false,
-        "proxy": "",
-        "insecureHTTPParser": false,
-        "authType": "",
-        "senderr": false,
-        "headers": [],
-        "x": 620,
-        "y": 100,
-        "wires": [
-            [
                 "ingest-dbg-state"
             ]
         ]
@@ -288,7 +264,7 @@
         "id": "ingest-dbg-state",
         "type": "debug",
         "z": "tab-ingest",
-        "name": "state persisted",
+        "name": "state seen (view-only)",
         "active": true,
         "tosidebar": true,
         "console": false,
@@ -338,30 +314,6 @@
         "y": 200,
         "wires": [
             [
-                "ingest-http-conn"
-            ]
-        ]
-    },
-    {
-        "id": "ingest-http-conn",
-        "type": "http request",
-        "z": "tab-ingest",
-        "name": "POST /ingest/connection",
-        "method": "POST",
-        "ret": "obj",
-        "paytoqs": "ignore",
-        "url": "",
-        "tls": "",
-        "persist": false,
-        "proxy": "",
-        "insecureHTTPParser": false,
-        "authType": "",
-        "senderr": false,
-        "headers": [],
-        "x": 630,
-        "y": 200,
-        "wires": [
-            [
                 "ingest-dbg-conn"
             ]
         ]
@@ -370,7 +322,7 @@
         "id": "ingest-dbg-conn",
         "type": "debug",
         "z": "tab-ingest",
-        "name": "connection persisted",
+        "name": "connection seen (view-only)",
         "active": true,
         "tosidebar": true,
         "console": false,
@@ -420,30 +372,6 @@
         "y": 300,
         "wires": [
             [
-                "audit-http-order"
-            ]
-        ]
-    },
-    {
-        "id": "audit-http-order",
-        "type": "http request",
-        "z": "tab-ingest",
-        "name": "POST /ingest/command",
-        "method": "POST",
-        "ret": "obj",
-        "paytoqs": "ignore",
-        "url": "",
-        "tls": "",
-        "persist": false,
-        "proxy": "",
-        "insecureHTTPParser": false,
-        "authType": "",
-        "senderr": false,
-        "headers": [],
-        "x": 600,
-        "y": 300,
-        "wires": [
-            [
                 "audit-dbg-order"
             ]
         ]
@@ -452,7 +380,7 @@
         "id": "audit-dbg-order",
         "type": "debug",
         "z": "tab-ingest",
-        "name": "order logged",
+        "name": "order seen (view-only)",
         "active": true,
         "tosidebar": true,
         "console": false,
@@ -502,30 +430,6 @@
         "y": 400,
         "wires": [
             [
-                "audit-http-ia"
-            ]
-        ]
-    },
-    {
-        "id": "audit-http-ia",
-        "type": "http request",
-        "z": "tab-ingest",
-        "name": "POST /ingest/command",
-        "method": "POST",
-        "ret": "obj",
-        "paytoqs": "ignore",
-        "url": "",
-        "tls": "",
-        "persist": false,
-        "proxy": "",
-        "insecureHTTPParser": false,
-        "authType": "",
-        "senderr": false,
-        "headers": [],
-        "x": 620,
-        "y": 400,
-        "wires": [
-            [
                 "audit-dbg-ia"
             ]
         ]
@@ -534,7 +438,7 @@
         "id": "audit-dbg-ia",
         "type": "debug",
         "z": "tab-ingest",
-        "name": "instantActions logged",
+        "name": "instantActions seen (view-only)",
         "active": true,
         "tosidebar": true,
         "console": false,
@@ -584,30 +488,6 @@
         "y": 480,
         "wires": [
             [
-                "oee-http-cycle"
-            ]
-        ]
-    },
-    {
-        "id": "oee-http-cycle",
-        "type": "http request",
-        "z": "tab-ingest",
-        "name": "POST /ingest/oee-cycle",
-        "method": "POST",
-        "ret": "obj",
-        "paytoqs": "ignore",
-        "url": "",
-        "tls": "",
-        "persist": false,
-        "proxy": "",
-        "insecureHTTPParser": false,
-        "authType": "",
-        "senderr": false,
-        "headers": [],
-        "x": 600,
-        "y": 480,
-        "wires": [
-            [
                 "oee-dbg-cycle"
             ]
         ]
@@ -616,7 +496,7 @@
         "id": "oee-dbg-cycle",
         "type": "debug",
         "z": "tab-ingest",
-        "name": "cycle persisted",
+        "name": "cycle derived (view-only)",
         "active": true,
         "tosidebar": true,
         "console": false,

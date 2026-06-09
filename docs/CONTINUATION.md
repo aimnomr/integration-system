@@ -2,6 +2,39 @@
 
 > A point-in-time handoff snapshot so work can resume without re-deriving context.
 > **This decays** — trust the code and the canonical docs over this page.
+> Last updated: 2026-06-09 (**Node-RED demoted to a passive viewer; telemetry
+> persistence moved into FastAPI**). Goal: make the stack fully function whether
+> Node-RED runs or not. What changed:
+> 1. **New `fastapi-service/app/ingest_service.py`** — the single persistence layer
+>    (`persist_state` / `persist_connection` / `persist_command` /
+>    `persist_oee_cycle`) shared by the MQTT subscriber and the HTTP `/ingest/*`
+>    routes. Includes the OEE `deriveCycle` state machine ported from Node-RED
+>    (per-robot tracker, emits SUCCEEDED when `nodeStates` empties / ABORTED when
+>    `orderId` clears mid-order). Archive cutoff via `ArchivedRobot`.
+> 2. **`app/mqtt.py`** now subscribes the four telemetry topics
+>    (`state`/`connection`/`order`/`instantActions`) and dispatches each to
+>    `ingest_service`; DB/archive errors are swallowed on the paho loop thread so a
+>    bad message can't kill it. Still keeps `_connection_states` for `/system/status`.
+> 3. **`app/routers/ingest.py`** refactored to delegate to `ingest_service` (kept as
+>    a secondary path for manual injection / Test Harness / Newman). 410/503 mapping
+>    preserved.
+> 4. **`node-red/flows.json`** — runtime tabs 1–3 had their 5 `http request`
+>    POST-to-`/ingest` nodes stripped; functions now wire straight to debug
+>    (view-only). Tab relabelled "Telemetry (view-only)"; debug nodes renamed
+>    "… seen (view-only)". DB Admin tab untouched.
+> 5. **Docs**: architecture.md (outbound flow), services/node-red.md (passive
+>    viewer), services/fastapi-service.md (MQTT ingestion + new module),
+>    failure-matrix.md (Node-RED row now ✅✅✅; FastAPI is sole ingester), gaps.md.
+>
+> Verification: `python -m pytest` in `fastapi-service` → **66 passed, 1 skipped**
+> (new `test_ingest_service.py`, 8 cases); `flows.json` validates as JSON;
+> changed Python `py_compile`s clean. **No Docker changes** — `fastapi` compose
+> service already has MQTT+DB env + `depends_on` mosquitto/postgres, `COPY . .`
+> ships the new module. Safe to `docker compose up --build`.
+>
+> Open trade-off: FastAPI is now the **sole** telemetry ingester, so its outage
+> stops persistence (no parallel writer anymore); no store-and-forward buffer.
+>
 > Last updated: 2026-06-09 (Docker: slimmed images + scope reversed to a
 > supported run/deploy path). **The user changed their mind: Docker is now a
 > first-class run AND deployment path, superseding the 2026-06-08 CI-only

@@ -3,8 +3,11 @@
 > As-built reference for the current implementation (VDA5050 FMS gateway).
 
 FastAPI is the **FMS gateway**: it builds and publishes VDA5050 `order` /
-`instantActions`, serves PostgreSQL-backed state/OEE, and accepts telemetry ingestion
-from Node-RED.
+`instantActions`, serves PostgreSQL-backed state/OEE, and **ingests telemetry by
+subscribing the VDA5050 topics over MQTT** (state / connection / order /
+instantActions) and persisting them to PostgreSQL. This ingestion used to be
+Node-RED's job (it POSTed to `/ingest/*`); as of 2026-06-09 FastAPI's own MQTT
+client does it, so Node-RED is an optional passive viewer.
 
 ## Structure
 
@@ -17,7 +20,10 @@ fastapi-service/
     ├── __init__.py
     ├── robots.py             # RobotRegistry — loads the fleet from the DB + counters
     ├── vda5050.py            # build_order(), build_instant_actions(), topic_for()
-    ├── mqtt.py               # MQTT client + publish_order / publish_instant_actions
+    ├── mqtt.py               # MQTT client: publish_order / publish_instant_actions
+    │                         #   + subscribes & ingests the 4 telemetry topics
+    ├── ingest_service.py     # shared persistence (state/connection/command/OEE)
+    │                         #   — called by mqtt.py AND routers/ingest.py
     ├── db.py                 # PostgreSQL access (lazy psycopg2) — reads + writes
     ├── config.py             # startup env-var validation (validate_env)
     ├── schemas.py            # Pydantic request models
@@ -28,7 +34,7 @@ fastapi-service/
         ├── fleet.py          # /fleet — fleet definition (read by the ROS Bridge)
         ├── system.py         # /system/status
         ├── oee.py            # /robots/{serial}/oee/*
-        └── ingest.py         # /ingest/* — telemetry ingestion from Node-RED
+        └── ingest.py         # /ingest/* — HTTP ingest (secondary; tests/manual)
 ```
 
 ## Module Responsibilities
@@ -48,8 +54,19 @@ monotonic counters — `headerId` (per topic) and `orderId`.
 `build_instant_actions()`, `topic_for()`, and the shared-header builder.
 
 ### `app/mqtt.py`
-The MQTT client (`loop_start`) plus `publish_order(serial, order)` and
+The MQTT client (`loop_start`). Publishes — `publish_order(serial, order)` and
 `publish_instant_actions(serial, message)` → `amr/v2/moverobotic/{serial}/...`.
+**Subscribes & ingests** — the four telemetry topics (`state`, `connection`,
+`order`, `instantActions`); `_on_message` dispatches each to `app/ingest_service.py`.
+DB / archive errors are swallowed on this thread so one bad message can't kill the
+loop (telemetry is best-effort). Also keeps `_connection_states` current for
+`/system/status`.
+
+### `app/ingest_service.py`
+The single persistence layer shared by the MQTT subscriber and the HTTP `/ingest/*`
+routes: `persist_state` / `persist_connection` / `persist_command` /
+`persist_oee_cycle`, plus the OEE `deriveCycle` state machine ported from Node-RED.
+Refuses archived serials (`ArchivedRobot`). The SQL itself stays in `app/db.py`.
 
 ### `app/db.py`
 PostgreSQL access. `psycopg2` is imported **lazily**; queries raise
@@ -77,8 +94,10 @@ disconnect` endpoints were removed — the rosbridge URL is fixed config.)
 `/robots/{serial}/oee/summary|cycles|availability` — PostgreSQL-backed.
 
 ### `app/routers/ingest.py`
-`/ingest/state|connection|command|oee-cycle` — Node-RED POSTs VDA5050 telemetry here;
-the router delegates to `app/db.py`.
+`/ingest/state|connection|command|oee-cycle` — a **secondary** HTTP path (manual
+injection, the Node-RED Test Harness, the Newman smoke suite). The live ingest path
+is the MQTT subscriber above; both delegate to `app/ingest_service.py`. Maps
+`ArchivedRobot` → 410 and `DatabaseUnavailable` → 503.
 
 ## Dependency Graph (no cycles)
 

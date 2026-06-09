@@ -3,6 +3,27 @@
 Open items not yet addressed, consolidated for visibility. For what *is* working see
 [status.md](status.md). Resolved gaps are listed at the bottom.
 
+> Last updated: 2026-06-09 (**Node-RED demoted to a passive viewer — telemetry
+> persistence moved into FastAPI**). FastAPI's own MQTT client now subscribes the
+> four telemetry topics (`state` / `connection` / `order` / `instantActions`) and
+> persists each — including OEE cycle derivation (the Node-RED `deriveCycle` state
+> machine ported to Python) — via a new `fastapi-service/app/ingest_service.py`
+> shared by `app/mqtt.py` and the HTTP `/ingest/*` routes. Node-RED's runtime tabs
+> (1–3) had their `http request` POST-to-`/ingest` nodes stripped; they are now
+> MQTT-in → function → debug (live display only). **Net effect: the stack fully
+> functions with Node-RED off** — losing it costs only the in-editor debug view.
+> The `/ingest/*` endpoints remain for manual injection / Test Harness / the Newman
+> smoke suite. Docs updated: architecture.md, services/node-red.md,
+> services/fastapi-service.md, failure-matrix.md. Tests: new
+> `test_ingest_service.py` (8 cases — OEE SUCCEEDED/ABORTED derivation, archive
+> cutoff, fan-out); full FastAPI suite 66/67 pass (1 pre-existing skip). **No
+> Docker change needed** — the `fastapi` compose service already has MQTT + DB env
+> and `depends_on` mosquitto+postgres, and `COPY . .` ships the new module.
+> Trade-off logged: FastAPI is now also the **sole telemetry ingester**, so a
+> FastAPI outage stops persistence (previously Node-RED was a parallel writer) —
+> see the SPOF note in failure-matrix.md. No store-and-forward buffer (G-level
+> resilience gap unchanged).
+>
 > Last updated: 2026-06-09 (**Docker scope reversed — Docker is now a supported
 > run AND deployment path**, superseding the 2026-06-08 CI-only decision below).
 > `docker compose up --build` brings up the full stack (Postgres → Mosquitto →

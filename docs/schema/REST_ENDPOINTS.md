@@ -1,9 +1,12 @@
 # REST Endpoints
 
 FastAPI is the **FMS gateway**: robot-scoped routes that publish VDA5050 `order` /
-`instantActions`, read PostgreSQL-backed state/OEE, and accept telemetry ingestion
-from Node-RED. The legacy flat `/amr/*` and `/system/connect|disconnect` routes have
-been **removed**.
+`instantActions`, read PostgreSQL-backed state/OEE, and expose telemetry-ingest
+routes. **Live telemetry persistence is no longer driven by these HTTP routes** —
+FastAPI's own MQTT subscriber ingests the topics directly (`app/mqtt.py` +
+`app/ingest_service.py`). The `/ingest/*` routes remain as a secondary path for
+manual injection, the Node-RED Test Harness, and the Newman smoke suite. The legacy
+flat `/amr/*` and `/system/connect|disconnect` routes have been **removed**.
 
 ## Authentication & rate limiting
 
@@ -18,7 +21,7 @@ is rejected with **401**.
 | Scope | Endpoints | Guarded? |
 |---|---|---|
 | Client-facing | `/robots/*`, `/fleet`, `/system/*` | Yes — `X-API-Key` required when `API_KEY` is set |
-| Internal ingestion | `/ingest/*` | No — internal Node-RED → DB boundary, left open |
+| Internal ingestion | `/ingest/*` | No — internal telemetry-ingest boundary (secondary to the MQTT path), left open |
 
 When `API_KEY` is set, the ROS Bridge Service must also send it (set `API_KEY` in
 `ros-bridge-service/.env`) so its `GET /fleet` call still succeeds.
@@ -169,7 +172,7 @@ headers are allowed for listed origins; credentials (`X-API-Key`) are permitted.
 
 ### POST /ingest/state
 
-**Purpose:** Internal ingestion — Node-RED POSTs a VDA5050 `state` message here to be persisted to `state_snapshots`.
+**Purpose:** Internal ingestion (secondary path) — accepts a VDA5050 `state` message and persists it to `state_snapshots`. The live path is FastAPI's MQTT subscriber; this route is for manual injection / Test Harness / smoke tests.
 
 **Request Body:**
 ```json
@@ -192,7 +195,7 @@ headers are allowed for listed origins; credentials (`X-API-Key`) are permitted.
 
 ### POST /ingest/connection
 
-**Purpose:** Internal ingestion — Node-RED POSTs a VDA5050 `connection` message here to be persisted to `connection_log`.
+**Purpose:** Internal ingestion (secondary path) — accepts a VDA5050 `connection` message and persists it to `connection_log`. The live path is FastAPI's MQTT subscriber.
 
 **Request Body:**
 ```json
@@ -215,7 +218,7 @@ headers are allowed for listed origins; credentials (`X-API-Key`) are permitted.
 
 ### POST /ingest/command
 
-**Purpose:** Internal ingestion — Node-RED's command-audit tap POSTs each `order` / `instantActions` message here to be persisted to `order_log`.
+**Purpose:** Internal ingestion (secondary path) — persists an `order` / `instantActions` message to the command-audit tables. The live path is FastAPI's MQTT subscriber, which taps the command topics directly.
 
 **Request Body:**
 ```json
@@ -241,7 +244,7 @@ headers are allowed for listed origins; credentials (`X-API-Key`) are permitted.
 
 ### POST /ingest/oee-cycle
 
-**Purpose:** Internal ingestion — Node-RED POSTs a derived OEE trip cycle here to be persisted to `oee_cycles`.
+**Purpose:** Internal ingestion (secondary path) — persists a pre-derived OEE trip cycle to `oee_cycles`. The live path derives cycles inside FastAPI's MQTT subscriber (`app/ingest_service.py`).
 
 **Request Body:**
 ```json

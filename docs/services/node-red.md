@@ -1,54 +1,68 @@
 # Service Reference: Node-RED
 
-Node-RED is the **telemetry sink**: it ingests the VDA5050 `state` / `connection`
-topics, audits commands, derives OEE, and persists everything to PostgreSQL via the
-FastAPI `/ingest/*` API. It is **no longer in the command path** — FastAPI publishes
-`order` / `instantActions` directly.
+Node-RED is a **passive viewer / dev tool**. It subscribes the VDA5050 `state` /
+`connection` / `order` / `instantActions` topics to **display them live** (node
+status + debug sidebar) for observation and debugging — it **no longer writes to
+the database**. Telemetry persistence (state, connection, command audit, OEE
+derivation) moved into FastAPI's own MQTT subscriber on 2026-06-09
+(`fastapi-service/app/mqtt.py` → `app/ingest_service.py`), so **the stack fully
+functions whether Node-RED is running or not**. It was already out of the command
+path — FastAPI publishes `order` / `instantActions` directly.
 
 The flow lives in `node-red/flows.json`, organised into **5 tabs**. Run it with
 `node-red --settings settings.js --userDir .` (UI at `http://localhost:1880`). All
 MQTT nodes use the shared `Local MQTT` broker config (`localhost:1883`); all topic
 subscriptions use `+` wildcards so they capture every robot.
 
-> **Persistence design:** the runtime telemetry tabs (1–3) write by POSTing to
-> FastAPI `/ingest/*` (core `http request` node) rather than holding their own
-> PostgreSQL connection — this keeps the SQL in one place (`fastapi-service/app/db.py`).
-> The **DB Admin** tab is the one exception: it uses the `node-red-contrib-postgresql`
+> **No DB writes from the runtime tabs (1–3).** They subscribe, validate/derive for
+> the live status display, and end at a debug node — the former `http request`
+> POST-to-`/ingest/*` nodes were removed. The `deriveCycle` node still computes OEE
+> cycles for display, but nothing is persisted from here.
+>
+> **The DB Admin tab is the one exception:** it uses the `node-red-contrib-postgresql`
 > palette node to talk to Postgres directly for schema reset and ad-hoc admin SQL,
 > bypassing FastAPI entirely. See migration plan §8a.
 
 ---
 
-## Tab 1 — Telemetry Ingestion
+> **Tabs 1–3 are view-only.** They end at a debug node, not an HTTP POST — FastAPI
+> persists these same topics over MQTT (see `app/ingest_service.py`). The `validate*`
+> / `tag*` / `deriveCycle` function nodes are kept only for the live status display.
+
+## Tab 1 — Telemetry (view-only)
 
 ```
-amr/v2/+/+/state       → validateState      → POST /ingest/state       → debug
-amr/v2/+/+/connection  → validateConnection → POST /ingest/connection  → debug
+amr/v2/+/+/state       → validateState      → debug   (state seen)
+amr/v2/+/+/connection  → validateConnection → debug   (connection seen)
 ```
 
-Validates each VDA5050 `state` / `connection` message, shows live status, and POSTs
-it to FastAPI for persistence (`state_snapshots`, `connection_log`).
+Validates each VDA5050 `state` / `connection` message and shows live status. **No DB
+write** — FastAPI persists `state_snapshots` / `connection_log` from its own MQTT
+subscriber.
 
-## Tab 2 — Command Audit
-
-```
-amr/v2/+/+/order           → tagOrder          → POST /ingest/command → debug
-amr/v2/+/+/instantActions  → tagInstantActions → POST /ingest/command → debug
-```
-
-A **passive tap** on the command topics — it observes a copy of every `order` /
-`instantActions` message and logs it to `order_log`. Because MQTT is pub/sub, this
-sits *parallel* to the command path and cannot block or delay delivery to the robot.
-
-## Tab 3 — OEE
+## Tab 2 — Command Audit (view-only)
 
 ```
-amr/v2/+/+/state → deriveCycle → POST /ingest/oee-cycle → debug
+amr/v2/+/+/order           → tagOrder          → debug   (order seen)
+amr/v2/+/+/instantActions  → tagInstantActions → debug   (instantActions seen)
 ```
 
-`deriveCycle` tracks per-robot order state in flow context. It emits one trip cycle
+A **passive tap** on the command topics — observes a copy of every `order` /
+`instantActions` message for live display. Because MQTT is pub/sub, this sits
+*parallel* to the command path and cannot block delivery. The command audit log
+(`orders` / `instant_action_messages`) is now written by FastAPI's MQTT subscriber.
+
+## Tab 3 — OEE (view-only)
+
+```
+amr/v2/+/+/state → deriveCycle → debug   (cycle derived)
+```
+
+`deriveCycle` tracks per-robot order state in flow context and emits one trip cycle
 when an active order's `nodeStates` empties (`SUCCEEDED`) or its `orderId` clears
-mid-order (`ABORTED`), and POSTs it to `oee_cycles`.
+mid-order (`ABORTED`) — for display only. The authoritative copy of this logic is
+ported to Python in `fastapi-service/app/ingest_service.py`, which persists
+`oee_cycles`.
 
 ## Tab 4 — Test Harness
 
@@ -117,9 +131,9 @@ user=postgres, password=admin — matching `docker-compose.yml`):
 
 ## Notes
 
-- The `/ingest/*` calls target `http://localhost:8000` — edit the `http request` node
-  URLs if FastAPI runs elsewhere.
-- If FastAPI or PostgreSQL is down the `http request` nodes error quietly
-  (`senderr: false`); telemetry is simply not persisted — nothing else is affected.
+- Tabs 1–3 no longer make HTTP calls — they are MQTT-in → function → debug only.
+  Persistence is FastAPI's job now (`app/mqtt.py` + `app/ingest_service.py`), so
+  whether Node-RED is up, down, or disconnected from FastAPI has **no effect on what
+  gets recorded**.
 - The legacy Command Router, State/Health/OEE handler tabs, the orphaned
   `handleBattery` tab, and the Library Init tab have all been removed.
