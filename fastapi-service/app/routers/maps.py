@@ -12,7 +12,7 @@ from .. import db
 from ..db import DatabaseUnavailable, IntegrityConflict
 from ..schemas import MapIn, MapUpdate
 
-router = APIRouter(prefix="/maps")
+router = APIRouter(prefix="/maps", tags=["maps"])
 
 
 def _unavailable(exc: DatabaseUnavailable) -> JSONResponse:

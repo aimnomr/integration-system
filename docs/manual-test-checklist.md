@@ -451,11 +451,10 @@ RATE_LIMIT_PER_MINUTE=5
       and grep for `listener 9001`; you should see two `listener` directives —
       one for `1883` and one for `9001` — with the 9001 block carrying
       `protocol websockets` and `allow_anonymous true`.)_
-- [ ] Mosquitto logs (or `docker compose logs mosquitto`) show two listeners.
+- [ ] Mosquitto logs show two listeners.
       _(How to check: in the Mosquitto window at startup, you'll see two
       `Opening ipv4 listen socket on port …` lines — one for 1883, one for
-      9001. If running via docker compose: `docker compose logs mosquitto |
-      Select-String "listen socket"`.)_
+      9001.)_
 - [x] `netstat -an | findstr ":9001"` (or `ss -lnt | grep 9001` in WSL) shows
       mosquitto listening.
 - [ ] Browser → DevTools → Network → WS tab: with the React app open, you see
@@ -885,7 +884,7 @@ RATE_LIMIT_PER_MINUTE=5
 
 A scripted "everything works together" run.
 
-- [x] Start the full stack (`docker compose up --build` or the manual route).
+- [x] Start the full stack (the manual route, or `start-all.ps1`).
 - [x] React app loads at `http://localhost:5173/`. All four pills green within 10 s.
 - [x] **[robot]** Robot is publishing; Dashboard tile shows ONLINE + battery. {No battery topic to sub to, battery is -}
 - [ ] **[robot]** Open Robot Detail; map + arrow + pins render. {/dashboard and /robots is showing the same page? /robot/serial is working as usual}

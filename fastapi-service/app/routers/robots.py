@@ -26,7 +26,7 @@ from ..schemas import (
 )
 from ..vda5050 import build_instant_actions, build_order
 
-router = APIRouter(prefix="/robots")
+router = APIRouter(prefix="/robots", tags=["robots"])
 
 
 def _require_robot(serial: str) -> dict:

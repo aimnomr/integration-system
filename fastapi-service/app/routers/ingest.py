@@ -28,7 +28,7 @@ from ..schemas import (
     IngestStateMessage,
 )
 
-router = APIRouter(prefix="/ingest")
+router = APIRouter(prefix="/ingest", tags=["ingest"])
 
 
 def _unavailable(exc: DatabaseUnavailable) -> JSONResponse:

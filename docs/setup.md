@@ -1,25 +1,12 @@
 # Setup & Running
 
-## TL;DR — Docker (the whole stack in one command)
-
-```bash
-docker compose up --build
-```
-
-This builds and starts all six services in the correct order (PostgreSQL →
-Mosquitto → FastAPI → ROS Bridge → Node-RED → Frontend), with healthcheck-gated
-dependencies, and auto-applies `docs/schema/schema.sql` to a fresh database.
-Re-seed the database with `docker compose down -v` (drops the volume) then `up`
-again. A real robot's `rosbridge_server` still has to be reachable from the
-`ros-bridge` container for navigation to run.
-
-The frontend container (G30, 2026-05-25) is a multi-stage build (Node 20 →
-nginx 1.27) exposed on host port `5173`. The `VITE_*` endpoints are baked in
-at build time via Compose build args, with defaults that work out of the box.
-Rebuild against different endpoints with
-`docker compose build --build-arg VITE_API_URL=https://api.example.com frontend`.
-
 ## TL;DR — run each service manually
+
+> **Docker is not used to run or deploy this project.** The repo's
+> `docker-compose.yml` and per-service `Dockerfile`s exist solely to support
+> the CI Newman smoke job (see [`testing.md`](testing.md)). They are not the
+> recommended way to run the stack locally, and there is no Docker-based
+> deployment. Run the services directly, as below, or via `start-all.ps1`.
 
 You already know the project and have prerequisites + `.env` files in place. Start
 each service in its own terminal:
@@ -70,8 +57,9 @@ robot in the `robots` database table (default `ws://localhost:9090`).
 | PostgreSQL | persistence | install separately; create the DB (below) |
 | ROS robot + `rosbridge_server` | — | external; exposes a WebSocket (default port 9090) |
 
-A root `docker-compose.yml` runs the whole stack (see the Docker TL;DR above);
-running the services manually, as below, is the alternative for development.
+The repo includes a `docker-compose.yml` and per-service `Dockerfile`s, but they
+exist only to support the CI Newman smoke job — not to run or deploy the stack.
+Run the services manually (below) or via `start-all.ps1` for local development.
 
 ### Tests
 
@@ -189,8 +177,7 @@ psql -U postgres -d amr_integration -f docs/schema/schema.sql
 > **DB Admin** tab — the *Reset DB* inject button runs the same `schema.sql`
 > against the live database via the `postgresql` node. The *Run custom SQL* inject
 > next to it lets you fire ad-hoc inserts (sample payloads included). Useful for
-> Docker setups where re-seeding via `docker compose down -v` would also wipe
-> Mosquitto state.
+> re-seeding the database without restarting any other service.
 
 ---
 

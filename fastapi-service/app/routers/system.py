@@ -14,7 +14,7 @@ from fastapi import APIRouter
 from ..db import ping as db_ping
 from ..mqtt import mqtt_client, roslib_status
 
-router = APIRouter(prefix="/system")
+router = APIRouter(prefix="/system", tags=["system"])
 
 _NODE_RED_URL = os.getenv("NODE_RED_URL", "http://localhost:1880")
 

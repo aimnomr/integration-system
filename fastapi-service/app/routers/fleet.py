@@ -13,7 +13,7 @@ from ..db import DatabaseUnavailable
 from ..robots import registry
 from ..schemas import FleetConfigIn
 
-router = APIRouter()
+router = APIRouter(tags=["fleet"])
 
 
 @router.get("/fleet")

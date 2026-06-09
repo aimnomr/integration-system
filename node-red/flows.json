@@ -8,22 +8,6 @@
         "env": []
     },
     {
-        "id": "tab-audit",
-        "type": "tab",
-        "label": "Command Audit",
-        "disabled": false,
-        "info": "Passive tap on the VDA5050 `order` and `instantActions` topics. Logs every command to PostgreSQL via the FastAPI ingestion API. Sits parallel to the command path — it cannot block or delay delivery to the robot.",
-        "env": []
-    },
-    {
-        "id": "tab-oee",
-        "type": "tab",
-        "label": "OEE",
-        "disabled": false,
-        "info": "Derives OEE trip cycles from order-completion transitions observed in the VDA5050 `state` stream. A cycle is emitted when an active order's nodeStates empties (SUCCEEDED) or its orderId clears mid-order (ABORTED).",
-        "env": []
-    },
-    {
         "id": "tab-test",
         "type": "tab",
         "label": "Test Harness",
@@ -402,7 +386,7 @@
     {
         "id": "audit-in-order",
         "type": "mqtt in",
-        "z": "tab-audit",
+        "z": "tab-ingest",
         "name": "amr/v2/+/+/order",
         "topic": "amr/v2/+/+/order",
         "qos": "0",
@@ -412,8 +396,8 @@
         "rap": true,
         "rh": 0,
         "inputs": 0,
-        "x": 150,
-        "y": 100,
+        "x": 140,
+        "y": 300,
         "wires": [
             [
                 "audit-fn-order"
@@ -423,7 +407,7 @@
     {
         "id": "audit-fn-order",
         "type": "function",
-        "z": "tab-audit",
+        "z": "tab-ingest",
         "name": "tagOrder",
         "func": "var m = msg.payload;\nif (!m || typeof m.serialNumber !== 'string' || typeof m.orderId !== 'string') {\n    node.error('Invalid order message', msg);\n    return null;\n}\nnode.status({ fill: 'blue', shape: 'dot', text: m.serialNumber + ' ' + m.orderId });\nmsg.headers = { 'content-type': 'application/json' };\nmsg.payload = { kind: 'order', message: m };\nmsg.url = 'http://' + (env.get('FASTAPI_HOST') || 'localhost') + ':8000/ingest/command';\nreturn msg;",
         "outputs": 1,
@@ -432,8 +416,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 370,
-        "y": 100,
+        "x": 360,
+        "y": 300,
         "wires": [
             [
                 "audit-http-order"
@@ -443,7 +427,7 @@
     {
         "id": "audit-http-order",
         "type": "http request",
-        "z": "tab-audit",
+        "z": "tab-ingest",
         "name": "POST /ingest/command",
         "method": "POST",
         "ret": "obj",
@@ -456,8 +440,8 @@
         "authType": "",
         "senderr": false,
         "headers": [],
-        "x": 610,
-        "y": 100,
+        "x": 600,
+        "y": 300,
         "wires": [
             [
                 "audit-dbg-order"
@@ -467,7 +451,7 @@
     {
         "id": "audit-dbg-order",
         "type": "debug",
-        "z": "tab-audit",
+        "z": "tab-ingest",
         "name": "order logged",
         "active": true,
         "tosidebar": true,
@@ -477,14 +461,14 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 840,
-        "y": 100,
+        "x": 830,
+        "y": 300,
         "wires": []
     },
     {
         "id": "audit-in-ia",
         "type": "mqtt in",
-        "z": "tab-audit",
+        "z": "tab-ingest",
         "name": "amr/v2/+/+/instantActions",
         "topic": "amr/v2/+/+/instantActions",
         "qos": "0",
@@ -494,8 +478,8 @@
         "rap": true,
         "rh": 0,
         "inputs": 0,
-        "x": 170,
-        "y": 200,
+        "x": 160,
+        "y": 400,
         "wires": [
             [
                 "audit-fn-ia"
@@ -505,7 +489,7 @@
     {
         "id": "audit-fn-ia",
         "type": "function",
-        "z": "tab-audit",
+        "z": "tab-ingest",
         "name": "tagInstantActions",
         "func": "var m = msg.payload;\nif (!m || typeof m.serialNumber !== 'string' || !Array.isArray(m.actions)) {\n    node.error('Invalid instantActions message', msg);\n    return null;\n}\nvar types = m.actions.map(function (a) { return a.actionType; }).join(',');\nnode.status({ fill: 'blue', shape: 'dot', text: m.serialNumber + ' ' + types });\nmsg.headers = { 'content-type': 'application/json' };\nmsg.payload = { kind: 'instantActions', message: m };\nmsg.url = 'http://' + (env.get('FASTAPI_HOST') || 'localhost') + ':8000/ingest/command';\nreturn msg;",
         "outputs": 1,
@@ -514,8 +498,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 400,
-        "y": 200,
+        "x": 390,
+        "y": 400,
         "wires": [
             [
                 "audit-http-ia"
@@ -525,7 +509,7 @@
     {
         "id": "audit-http-ia",
         "type": "http request",
-        "z": "tab-audit",
+        "z": "tab-ingest",
         "name": "POST /ingest/command",
         "method": "POST",
         "ret": "obj",
@@ -538,8 +522,8 @@
         "authType": "",
         "senderr": false,
         "headers": [],
-        "x": 630,
-        "y": 200,
+        "x": 620,
+        "y": 400,
         "wires": [
             [
                 "audit-dbg-ia"
@@ -549,7 +533,7 @@
     {
         "id": "audit-dbg-ia",
         "type": "debug",
-        "z": "tab-audit",
+        "z": "tab-ingest",
         "name": "instantActions logged",
         "active": true,
         "tosidebar": true,
@@ -559,14 +543,14 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 860,
-        "y": 200,
+        "x": 850,
+        "y": 400,
         "wires": []
     },
     {
         "id": "oee-in-state",
         "type": "mqtt in",
-        "z": "tab-oee",
+        "z": "tab-ingest",
         "name": "amr/v2/+/+/state",
         "topic": "amr/v2/+/+/state",
         "qos": "0",
@@ -576,8 +560,8 @@
         "rap": true,
         "rh": 0,
         "inputs": 0,
-        "x": 150,
-        "y": 120,
+        "x": 140,
+        "y": 480,
         "wires": [
             [
                 "oee-fn-cycle"
@@ -587,7 +571,7 @@
     {
         "id": "oee-fn-cycle",
         "type": "function",
-        "z": "tab-oee",
+        "z": "tab-ingest",
         "name": "deriveCycle",
         "func": "var s = msg.payload;\nif (!s || typeof s.serialNumber !== 'string') { return null; }\nvar serial = s.serialNumber;\nvar key = 'oee_' + serial;\nvar ctx = flow.get(key) || { orderId: '', startTime: null, active: false };\nvar cur = s.orderId || '';\nvar remaining = (s.nodeStates || []).length;\nvar cycle = null;\n\nif (cur && cur !== ctx.orderId) {\n    // a new order has started\n    ctx = { orderId: cur, startTime: s.timestamp, active: true };\n} else if (cur && cur === ctx.orderId && ctx.active && remaining === 0) {\n    // the active order has finished all of its nodes\n    cycle = { serialNumber: serial, orderId: cur, startTime: ctx.startTime, endTime: s.timestamp, result: 'SUCCEEDED' };\n    ctx.active = false;\n} else if (!cur && ctx.active) {\n    // the order was cleared (cancelled) while still active\n    cycle = { serialNumber: serial, orderId: ctx.orderId, startTime: ctx.startTime, endTime: s.timestamp, result: 'ABORTED' };\n    ctx = { orderId: '', startTime: null, active: false };\n}\n\nflow.set(key, ctx);\nif (!cycle) { return null; }\n\nvar dur = (new Date(cycle.endTime) - new Date(cycle.startTime)) / 1000;\ncycle.durationS = Math.max(0, Math.round(dur * 10) / 10);\nnode.status({ fill: cycle.result === 'SUCCEEDED' ? 'green' : 'red', shape: 'dot', text: cycle.orderId + ' ' + cycle.result + ' (' + cycle.durationS + 's)' });\nmsg.headers = { 'content-type': 'application/json' };\nmsg.payload = cycle;\nmsg.url = 'http://' + (env.get('FASTAPI_HOST') || 'localhost') + ':8000/ingest/oee-cycle';\nreturn msg;",
         "outputs": 1,
@@ -596,8 +580,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 370,
-        "y": 120,
+        "x": 360,
+        "y": 480,
         "wires": [
             [
                 "oee-http-cycle"
@@ -607,7 +591,7 @@
     {
         "id": "oee-http-cycle",
         "type": "http request",
-        "z": "tab-oee",
+        "z": "tab-ingest",
         "name": "POST /ingest/oee-cycle",
         "method": "POST",
         "ret": "obj",
@@ -620,8 +604,8 @@
         "authType": "",
         "senderr": false,
         "headers": [],
-        "x": 610,
-        "y": 120,
+        "x": 600,
+        "y": 480,
         "wires": [
             [
                 "oee-dbg-cycle"
@@ -631,7 +615,7 @@
     {
         "id": "oee-dbg-cycle",
         "type": "debug",
-        "z": "tab-oee",
+        "z": "tab-ingest",
         "name": "cycle persisted",
         "active": true,
         "tosidebar": true,
@@ -641,8 +625,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 840,
-        "y": 120,
+        "x": 830,
+        "y": 480,
         "wires": []
     },
     {

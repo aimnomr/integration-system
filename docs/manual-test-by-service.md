@@ -191,7 +191,7 @@ Almost every non-robot screen is automated by Playwright in
 
 These touch ≥3 services so live by themselves:
 
-- `[ops]` `docker compose up --build` or `start-all.ps1` brings the whole stack up cleanly. React app loads at `http://localhost:5173/`; all four pills green within 10 s.
+- `[ops]` `start-all.ps1` (or the manual run order) brings the whole stack up cleanly. React app loads at `http://localhost:5173/`; all four pills green within 10 s.
 - `[robot]` Robot is publishing; Dashboard tile shows ONLINE + battery.
 - `[robot]` Robot Detail: map + arrow + pins render.
 - `[robot]` Dispatch → send a named-location order → ActiveOrderPanel shows orderId; robot moves; no errors during clean run.

@@ -11,7 +11,7 @@ from .. import db
 from ..db import DatabaseUnavailable, IntegrityConflict
 from ..schemas import NamedLocationIn, NamedLocationUpdate
 
-router = APIRouter(prefix="/locations")
+router = APIRouter(prefix="/locations", tags=["locations"])
 
 
 def _unavailable(exc: DatabaseUnavailable) -> JSONResponse:

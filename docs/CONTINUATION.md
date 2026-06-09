@@ -2,6 +2,23 @@
 
 > A point-in-time handoff snapshot so work can resume without re-deriving context.
 > **This decays** — trust the code and the canonical docs over this page.
+> Last updated: 2026-06-08 (Docker scope decision — docs-only pass). The user
+> confirmed Docker is **not** adopted as a run or deployment path for this
+> project. It was never a required deliverable (logged as gap G14/G30, no ADR in
+> `decisions.md`), and there is no deploy pipeline — the only consumer is the CI
+> Newman smoke job, which boots Postgres + Mosquitto + FastAPI via
+> `docker compose` (`.github/workflows/ci.yml`). **Decision: keep all Docker
+> files** (`docker-compose.yml`, the three service `Dockerfile`s + `.dockerignore`s,
+> `frontend/nginx.conf`) so CI stays green, but **reframe every doc** so Docker
+> reads as a CI-only dependency, not a local-dev or deployment path. No files
+> were deleted, no code changed. Docs touched: setup.md (Docker TL;DR removed,
+> manual run is now the headline), status.md + thesis-brief/03-status.md
+> ("Docker & ops"), thesis-brief/07-comparison.md, PROJECT_DETAIL.md §8.1,
+> testing.md, postman/README.md, manual-test-checklist.md,
+> manual-test-by-service.md, gaps.md (G14/G30 annotated + dated note), CLAUDE.md.
+> If Docker should later be fully removed, the alternative was to rewrite the CI
+> Newman job to boot the backend natively (postgres service container +
+> mosquitto + uvicorn) and then delete the Docker files.
 > Last updated: 2026-05-25 (typography + copy consistency pass — all labels,
 > headings, buttons, drawer/dialog titles, menu items, and metric cards
 > converted to Title Case ("Order History", "System Health", "Admin — Fleet

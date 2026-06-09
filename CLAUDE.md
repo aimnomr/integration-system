@@ -64,8 +64,9 @@ Documentation format standards are in `docs/convention/`.
 - `amr/state/odom` is published on distance (>0.05 m) or heading (>5°) change, plus a
   5 s heartbeat.
 
-A root `docker-compose.yml` runs the full stack; services can also be started
-manually. Tests are per-service: `npm test` (ROS Bridge, `node:test`) and `pytest`
-(FastAPI). See `docs/setup.md`.
+Services are started manually (or via `start-all.ps1`). A root `docker-compose.yml`
+and per-service `Dockerfile`s exist **only to support the CI Newman smoke job** —
+Docker is not used to run the stack locally or to deploy. Tests are per-service:
+`npm test` (ROS Bridge, `node:test`) and `pytest` (FastAPI). See `docs/setup.md`.
 
 

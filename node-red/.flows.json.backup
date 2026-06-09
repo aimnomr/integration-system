@@ -8,14 +8,6 @@
         "env": []
     },
     {
-        "id": "tab-audit",
-        "type": "tab",
-        "label": "Command Audit",
-        "disabled": false,
-        "info": "Passive tap on the VDA5050 `order` and `instantActions` topics. Logs every command to PostgreSQL via the FastAPI ingestion API. Sits parallel to the command path — it cannot block or delay delivery to the robot.",
-        "env": []
-    },
-    {
         "id": "tab-oee",
         "type": "tab",
         "label": "OEE",
@@ -268,7 +260,7 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 380,
+        "x": 370,
         "y": 100,
         "wires": [
             [
@@ -402,7 +394,7 @@
     {
         "id": "audit-in-order",
         "type": "mqtt in",
-        "z": "tab-audit",
+        "z": "tab-ingest",
         "name": "amr/v2/+/+/order",
         "topic": "amr/v2/+/+/order",
         "qos": "0",
@@ -412,8 +404,8 @@
         "rap": true,
         "rh": 0,
         "inputs": 0,
-        "x": 150,
-        "y": 100,
+        "x": 140,
+        "y": 300,
         "wires": [
             [
                 "audit-fn-order"
@@ -423,7 +415,7 @@
     {
         "id": "audit-fn-order",
         "type": "function",
-        "z": "tab-audit",
+        "z": "tab-ingest",
         "name": "tagOrder",
         "func": "var m = msg.payload;\nif (!m || typeof m.serialNumber !== 'string' || typeof m.orderId !== 'string') {\n    node.error('Invalid order message', msg);\n    return null;\n}\nnode.status({ fill: 'blue', shape: 'dot', text: m.serialNumber + ' ' + m.orderId });\nmsg.headers = { 'content-type': 'application/json' };\nmsg.payload = { kind: 'order', message: m };\nmsg.url = 'http://' + (env.get('FASTAPI_HOST') || 'localhost') + ':8000/ingest/command';\nreturn msg;",
         "outputs": 1,
@@ -432,8 +424,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 370,
-        "y": 100,
+        "x": 360,
+        "y": 300,
         "wires": [
             [
                 "audit-http-order"
@@ -443,7 +435,7 @@
     {
         "id": "audit-http-order",
         "type": "http request",
-        "z": "tab-audit",
+        "z": "tab-ingest",
         "name": "POST /ingest/command",
         "method": "POST",
         "ret": "obj",
@@ -456,8 +448,8 @@
         "authType": "",
         "senderr": false,
         "headers": [],
-        "x": 610,
-        "y": 100,
+        "x": 600,
+        "y": 300,
         "wires": [
             [
                 "audit-dbg-order"
@@ -467,7 +459,7 @@
     {
         "id": "audit-dbg-order",
         "type": "debug",
-        "z": "tab-audit",
+        "z": "tab-ingest",
         "name": "order logged",
         "active": true,
         "tosidebar": true,
@@ -477,14 +469,14 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 840,
-        "y": 100,
+        "x": 830,
+        "y": 300,
         "wires": []
     },
     {
         "id": "audit-in-ia",
         "type": "mqtt in",
-        "z": "tab-audit",
+        "z": "tab-ingest",
         "name": "amr/v2/+/+/instantActions",
         "topic": "amr/v2/+/+/instantActions",
         "qos": "0",
@@ -494,8 +486,8 @@
         "rap": true,
         "rh": 0,
         "inputs": 0,
-        "x": 170,
-        "y": 200,
+        "x": 160,
+        "y": 400,
         "wires": [
             [
                 "audit-fn-ia"
@@ -505,7 +497,7 @@
     {
         "id": "audit-fn-ia",
         "type": "function",
-        "z": "tab-audit",
+        "z": "tab-ingest",
         "name": "tagInstantActions",
         "func": "var m = msg.payload;\nif (!m || typeof m.serialNumber !== 'string' || !Array.isArray(m.actions)) {\n    node.error('Invalid instantActions message', msg);\n    return null;\n}\nvar types = m.actions.map(function (a) { return a.actionType; }).join(',');\nnode.status({ fill: 'blue', shape: 'dot', text: m.serialNumber + ' ' + types });\nmsg.headers = { 'content-type': 'application/json' };\nmsg.payload = { kind: 'instantActions', message: m };\nmsg.url = 'http://' + (env.get('FASTAPI_HOST') || 'localhost') + ':8000/ingest/command';\nreturn msg;",
         "outputs": 1,
@@ -514,8 +506,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 400,
-        "y": 200,
+        "x": 390,
+        "y": 400,
         "wires": [
             [
                 "audit-http-ia"
@@ -525,7 +517,7 @@
     {
         "id": "audit-http-ia",
         "type": "http request",
-        "z": "tab-audit",
+        "z": "tab-ingest",
         "name": "POST /ingest/command",
         "method": "POST",
         "ret": "obj",
@@ -538,8 +530,8 @@
         "authType": "",
         "senderr": false,
         "headers": [],
-        "x": 630,
-        "y": 200,
+        "x": 620,
+        "y": 400,
         "wires": [
             [
                 "audit-dbg-ia"
@@ -549,7 +541,7 @@
     {
         "id": "audit-dbg-ia",
         "type": "debug",
-        "z": "tab-audit",
+        "z": "tab-ingest",
         "name": "instantActions logged",
         "active": true,
         "tosidebar": true,
@@ -559,14 +551,14 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 860,
-        "y": 200,
+        "x": 850,
+        "y": 400,
         "wires": []
     },
     {
         "id": "oee-in-state",
         "type": "mqtt in",
-        "z": "tab-oee",
+        "z": "tab-ingest",
         "name": "amr/v2/+/+/state",
         "topic": "amr/v2/+/+/state",
         "qos": "0",
@@ -576,8 +568,8 @@
         "rap": true,
         "rh": 0,
         "inputs": 0,
-        "x": 150,
-        "y": 120,
+        "x": 140,
+        "y": 480,
         "wires": [
             [
                 "oee-fn-cycle"
@@ -587,7 +579,7 @@
     {
         "id": "oee-fn-cycle",
         "type": "function",
-        "z": "tab-oee",
+        "z": "tab-ingest",
         "name": "deriveCycle",
         "func": "var s = msg.payload;\nif (!s || typeof s.serialNumber !== 'string') { return null; }\nvar serial = s.serialNumber;\nvar key = 'oee_' + serial;\nvar ctx = flow.get(key) || { orderId: '', startTime: null, active: false };\nvar cur = s.orderId || '';\nvar remaining = (s.nodeStates || []).length;\nvar cycle = null;\n\nif (cur && cur !== ctx.orderId) {\n    // a new order has started\n    ctx = { orderId: cur, startTime: s.timestamp, active: true };\n} else if (cur && cur === ctx.orderId && ctx.active && remaining === 0) {\n    // the active order has finished all of its nodes\n    cycle = { serialNumber: serial, orderId: cur, startTime: ctx.startTime, endTime: s.timestamp, result: 'SUCCEEDED' };\n    ctx.active = false;\n} else if (!cur && ctx.active) {\n    // the order was cleared (cancelled) while still active\n    cycle = { serialNumber: serial, orderId: ctx.orderId, startTime: ctx.startTime, endTime: s.timestamp, result: 'ABORTED' };\n    ctx = { orderId: '', startTime: null, active: false };\n}\n\nflow.set(key, ctx);\nif (!cycle) { return null; }\n\nvar dur = (new Date(cycle.endTime) - new Date(cycle.startTime)) / 1000;\ncycle.durationS = Math.max(0, Math.round(dur * 10) / 10);\nnode.status({ fill: cycle.result === 'SUCCEEDED' ? 'green' : 'red', shape: 'dot', text: cycle.orderId + ' ' + cycle.result + ' (' + cycle.durationS + 's)' });\nmsg.headers = { 'content-type': 'application/json' };\nmsg.payload = cycle;\nmsg.url = 'http://' + (env.get('FASTAPI_HOST') || 'localhost') + ':8000/ingest/oee-cycle';\nreturn msg;",
         "outputs": 1,
@@ -596,8 +588,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 370,
-        "y": 120,
+        "x": 360,
+        "y": 480,
         "wires": [
             [
                 "oee-http-cycle"
@@ -607,7 +599,7 @@
     {
         "id": "oee-http-cycle",
         "type": "http request",
-        "z": "tab-oee",
+        "z": "tab-ingest",
         "name": "POST /ingest/oee-cycle",
         "method": "POST",
         "ret": "obj",
@@ -620,8 +612,8 @@
         "authType": "",
         "senderr": false,
         "headers": [],
-        "x": 610,
-        "y": 120,
+        "x": 600,
+        "y": 480,
         "wires": [
             [
                 "oee-dbg-cycle"
@@ -631,7 +623,7 @@
     {
         "id": "oee-dbg-cycle",
         "type": "debug",
-        "z": "tab-oee",
+        "z": "tab-ingest",
         "name": "cycle persisted",
         "active": true,
         "tosidebar": true,
@@ -641,8 +633,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 840,
-        "y": 120,
+        "x": 830,
+        "y": 480,
         "wires": []
     },
     {
@@ -971,7 +963,7 @@
         "z": "tab-db-admin",
         "g": "e3a60dadd01f56a8",
         "name": "Reset Schema",
-        "query": "-- ============================================================\n-- AMR Integration System — database schema (VDA5050-aligned)\n-- Fully normalized: 1NF-strict, BCNF. 15 tables.\n-- Re-running this script DROPS and recreates all tables.\n--\n-- The database is the single source of truth — both FastAPI and the ROS Bridge\n-- read the fleet definition (fleet_config + robots) from here.\n--\n-- This file is the canonical, runnable copy of the schema in\n-- docs/schema/DATABASE_SCHEMA.md — keep the two in sync.\n--\n-- Apply:\n--   psql -U postgres -c \"CREATE DATABASE amr_integration;\"\n--   psql -U postgres -d amr_integration -f docs/schema/schema.sql\n-- ============================================================\n\n-- Drop children before parents (CASCADE also covers it).\nDROP TABLE IF EXISTS state_node_states       CASCADE;\nDROP TABLE IF EXISTS state_action_states     CASCADE;\nDROP TABLE IF EXISTS state_errors            CASCADE;\nDROP TABLE IF EXISTS state_snapshots         CASCADE;\nDROP TABLE IF EXISTS order_nodes             CASCADE;\nDROP TABLE IF EXISTS order_edges             CASCADE;\nDROP TABLE IF EXISTS orders                  CASCADE;\nDROP TABLE IF EXISTS instant_actions         CASCADE;\nDROP TABLE IF EXISTS instant_action_messages CASCADE;\nDROP TABLE IF EXISTS connection_log          CASCADE;\nDROP TABLE IF EXISTS oee_cycles              CASCADE;\nDROP TABLE IF EXISTS named_locations         CASCADE;\nDROP TABLE IF EXISTS robots                  CASCADE;\nDROP TABLE IF EXISTS maps                    CASCADE;\nDROP TABLE IF EXISTS fleet_config            CASCADE;\n\n-- Legacy table from the pre-normalization JSONB schema — dropped if present.\nDROP TABLE IF EXISTS order_log               CASCADE;\n\n-- ============================================================\n-- Reference tables\n-- ============================================================\n\n-- ------------------------------------------------------------\n-- 1. fleet_config — fleet-wide VDA5050 identity (single row).\n-- The CHECK (id = 1) constraint enforces exactly one row.\n-- ------------------------------------------------------------\nCREATE TABLE fleet_config (\n    id             INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),\n    interface_name TEXT NOT NULL,\n    major_version  TEXT NOT NULL,\n    version        TEXT NOT NULL,\n    manufacturer   TEXT NOT NULL\n);\n\n-- ------------------------------------------------------------\n-- 2. maps\n-- ------------------------------------------------------------\nCREATE TABLE maps (\n    map_id TEXT PRIMARY KEY,\n    label  TEXT NOT NULL\n);\n\n-- ------------------------------------------------------------\n-- 3. robots — the fleet roster (single source of truth)\n-- ------------------------------------------------------------\nCREATE TABLE robots (\n    serial_number TEXT PRIMARY KEY,\n    rosbridge_url TEXT NOT NULL,\n    map_id        TEXT NOT NULL REFERENCES maps (map_id)\n);\n\n-- ------------------------------------------------------------\n-- 4. named_locations — named navigation targets\n-- ------------------------------------------------------------\nCREATE TABLE named_locations (\n    id     INTEGER PRIMARY KEY,\n    map_id TEXT    NOT NULL REFERENCES maps (map_id),\n    label  TEXT    NOT NULL,\n    x      DOUBLE PRECISION NOT NULL,\n    y      DOUBLE PRECISION NOT NULL,\n    theta  DOUBLE PRECISION NOT NULL DEFAULT 0   -- heading, radians, map frame\n);\n\n-- ============================================================\n-- Orders — VDA5050 `order` message (header + nodes + edges)\n-- ============================================================\n\n-- ------------------------------------------------------------\n-- 5. orders — one row per `order` message (header / audit tap)\n-- ------------------------------------------------------------\nCREATE TABLE orders (\n    id              BIGSERIAL   PRIMARY KEY,\n    serial_number   TEXT        NOT NULL REFERENCES robots (serial_number),\n    ts              TIMESTAMPTZ NOT NULL,\n    header_id       INTEGER     NOT NULL,\n    order_id        TEXT        NOT NULL,\n    order_update_id INTEGER     NOT NULL\n);\nCREATE INDEX idx_orders_serial_ts ON orders (serial_number, ts DESC);\n\n-- ------------------------------------------------------------\n-- 6. order_nodes — child of orders; nodePosition flattened in\n-- ------------------------------------------------------------\nCREATE TABLE order_nodes (\n    id          BIGSERIAL PRIMARY KEY,\n    order_pk    BIGINT  NOT NULL REFERENCES orders (id) ON DELETE CASCADE,\n    node_id     TEXT    NOT NULL,\n    sequence_id INTEGER NOT NULL,\n    released    BOOLEAN NOT NULL,\n    pos_x       DOUBLE PRECISION,\n    pos_y       DOUBLE PRECISION,\n    theta       DOUBLE PRECISION,\n    map_id      TEXT\n);\nCREATE INDEX idx_order_nodes_order ON order_nodes (order_pk);\n\n-- ------------------------------------------------------------\n-- 7. order_edges — child of orders\n-- ------------------------------------------------------------\nCREATE TABLE order_edges (\n    id            BIGSERIAL PRIMARY KEY,\n    order_pk      BIGINT  NOT NULL REFERENCES orders (id) ON DELETE CASCADE,\n    edge_id       TEXT    NOT NULL,\n    sequence_id   INTEGER NOT NULL,\n    released      BOOLEAN NOT NULL,\n    start_node_id TEXT    NOT NULL,\n    end_node_id   TEXT    NOT NULL\n);\nCREATE INDEX idx_order_edges_order ON order_edges (order_pk);\n\n-- ============================================================\n-- Instant actions — VDA5050 `instantActions` message\n-- ============================================================\n\n-- ------------------------------------------------------------\n-- 8. instant_action_messages — one row per `instantActions` message\n-- ------------------------------------------------------------\nCREATE TABLE instant_action_messages (\n    id            BIGSERIAL   PRIMARY KEY,\n    serial_number TEXT        NOT NULL REFERENCES robots (serial_number),\n    ts            TIMESTAMPTZ NOT NULL,\n    header_id     INTEGER     NOT NULL\n);\nCREATE INDEX idx_instant_msg_serial_ts\n    ON instant_action_messages (serial_number, ts DESC);\n\n-- ------------------------------------------------------------\n-- 9. instant_actions — child of instant_action_messages\n-- ------------------------------------------------------------\nCREATE TABLE instant_actions (\n    id          BIGSERIAL PRIMARY KEY,\n    message_pk  BIGINT NOT NULL\n        REFERENCES instant_action_messages (id) ON DELETE CASCADE,\n    action_id     TEXT NOT NULL,\n    action_type   TEXT NOT NULL\n        CHECK (action_type IN ('cancelOrder', 'retryNode', 'skipNode')),\n    blocking_type TEXT NOT NULL\n        CHECK (blocking_type IN ('NONE', 'SOFT', 'HARD'))\n);\nCREATE INDEX idx_instant_actions_message ON instant_actions (message_pk);\n\n-- ============================================================\n-- State — VDA5050 `state` message (scalar header + child arrays)\n-- ============================================================\n\n-- ------------------------------------------------------------\n-- 10. state_snapshots — scalar fields of one `state` message\n-- ------------------------------------------------------------\nCREATE TABLE state_snapshots (\n    id                     BIGSERIAL   PRIMARY KEY,\n    serial_number          TEXT        NOT NULL REFERENCES robots (serial_number),\n    ts                     TIMESTAMPTZ NOT NULL,\n    header_id              INTEGER     NOT NULL,\n    order_id               TEXT,\n    order_update_id        INTEGER,\n    last_node_id           TEXT,\n    last_node_sequence_id  INTEGER,\n    pos_x                  DOUBLE PRECISION,\n    pos_y                  DOUBLE PRECISION,\n    theta                  DOUBLE PRECISION,\n    map_id                 TEXT,\n    position_initialized   BOOLEAN,\n    vel_vx                 DOUBLE PRECISION,\n    vel_vy                 DOUBLE PRECISION,\n    vel_omega              DOUBLE PRECISION,\n    driving                BOOLEAN,\n    operating_mode         TEXT,\n    e_stop                 TEXT,\n    field_violation        BOOLEAN\n);\nCREATE INDEX idx_state_serial_ts ON state_snapshots (serial_number, ts DESC);\n\n-- ------------------------------------------------------------\n-- 11. state_node_states — child of state_snapshots\n-- ------------------------------------------------------------\nCREATE TABLE state_node_states (\n    id          BIGSERIAL PRIMARY KEY,\n    snapshot_id BIGINT  NOT NULL REFERENCES state_snapshots (id) ON DELETE CASCADE,\n    node_id     TEXT    NOT NULL,\n    sequence_id INTEGER NOT NULL,\n    released    BOOLEAN NOT NULL\n);\nCREATE INDEX idx_state_node_states_snapshot ON state_node_states (snapshot_id);\n\n-- ------------------------------------------------------------\n-- 12. state_action_states — child of state_snapshots\n-- ------------------------------------------------------------\nCREATE TABLE state_action_states (\n    id            BIGSERIAL PRIMARY KEY,\n    snapshot_id   BIGINT NOT NULL REFERENCES state_snapshots (id) ON DELETE CASCADE,\n    action_id     TEXT NOT NULL,\n    action_type   TEXT NOT NULL,\n    action_status TEXT NOT NULL\n);\nCREATE INDEX idx_state_action_states_snapshot ON state_action_states (snapshot_id);\n\n-- ------------------------------------------------------------\n-- 13. state_errors — child of state_snapshots\n-- ------------------------------------------------------------\nCREATE TABLE state_errors (\n    id                BIGSERIAL PRIMARY KEY,\n    snapshot_id       BIGINT NOT NULL REFERENCES state_snapshots (id) ON DELETE CASCADE,\n    error_type        TEXT NOT NULL,\n    error_level       TEXT,\n    error_description TEXT\n);\nCREATE INDEX idx_state_errors_snapshot ON state_errors (snapshot_id);\n\n-- ============================================================\n-- Connection + OEE\n-- ============================================================\n\n-- ------------------------------------------------------------\n-- 14. connection_log — VDA5050 `connection` — robot liveness\n-- ------------------------------------------------------------\nCREATE TABLE connection_log (\n    id               BIGSERIAL   PRIMARY KEY,\n    serial_number    TEXT        NOT NULL REFERENCES robots (serial_number),\n    ts               TIMESTAMPTZ NOT NULL,\n    header_id        INTEGER     NOT NULL,\n    connection_state TEXT        NOT NULL\n        CHECK (connection_state IN ('ONLINE', 'OFFLINE', 'CONNECTIONBROKEN'))\n);\nCREATE INDEX idx_connection_serial_ts ON connection_log (serial_number, ts DESC);\n\n-- ------------------------------------------------------------\n-- 15. oee_cycles — derived trip cycles. duration_s is GENERATED\n-- (keeps the table in BCNF — no free-standing derived column).\n-- ------------------------------------------------------------\nCREATE TABLE oee_cycles (\n    id            BIGSERIAL   PRIMARY KEY,\n    serial_number TEXT        NOT NULL REFERENCES robots (serial_number),\n    ts            TIMESTAMPTZ NOT NULL DEFAULT now(),\n    order_id      TEXT        NOT NULL,\n    start_time    TIMESTAMPTZ NOT NULL,\n    end_time      TIMESTAMPTZ NOT NULL,\n    duration_s    DOUBLE PRECISION\n        GENERATED ALWAYS AS (EXTRACT(EPOCH FROM (end_time - start_time))) STORED,\n    result        TEXT        NOT NULL CHECK (result IN ('SUCCEEDED', 'ABORTED'))\n);\nCREATE INDEX idx_oee_serial_ts ON oee_cycles (serial_number, ts DESC);\n\n-- ============================================================\n-- Seed data\n-- ============================================================\n",
+        "query": "-- ============================================================\n-- AMR Integration System — database schema (VDA5050-aligned)\n-- Fully normalized: 1NF-strict, BCNF. 15 tables.\n-- Re-running this script DROPS and recreates all tables.\n--\n-- The database is the single source of truth — both FastAPI and the ROS Bridge\n-- read the fleet definition (fleet_config + robots) from here.\n--\n-- This file is the canonical, runnable copy of the schema in\n-- docs/schema/DATABASE_SCHEMA.md — keep the two in sync.\n--\n-- Apply:\n--   psql -U postgres -c \"CREATE DATABASE amr_integration;\"\n--   psql -U postgres -d amr_integration -f docs/schema/schema.sql\n-- ============================================================\n\n-- Drop children before parents (CASCADE also covers it).\nDROP TABLE IF EXISTS state_node_states       CASCADE;\nDROP TABLE IF EXISTS state_action_states     CASCADE;\nDROP TABLE IF EXISTS state_errors            CASCADE;\nDROP TABLE IF EXISTS state_snapshots         CASCADE;\nDROP TABLE IF EXISTS order_nodes             CASCADE;\nDROP TABLE IF EXISTS order_edges             CASCADE;\nDROP TABLE IF EXISTS orders                  CASCADE;\nDROP TABLE IF EXISTS instant_actions         CASCADE;\nDROP TABLE IF EXISTS instant_action_messages CASCADE;\nDROP TABLE IF EXISTS connection_log          CASCADE;\nDROP TABLE IF EXISTS oee_cycles              CASCADE;\nDROP TABLE IF EXISTS named_locations         CASCADE;\nDROP TABLE IF EXISTS robots                  CASCADE;\nDROP TABLE IF EXISTS maps                    CASCADE;\nDROP TABLE IF EXISTS fleet_config            CASCADE;\n\n-- Legacy table from the pre-normalization JSONB schema — dropped if present.\nDROP TABLE IF EXISTS order_log               CASCADE;\n\n-- ============================================================\n-- Reference tables\n-- ============================================================\n\n-- ------------------------------------------------------------\n-- 1. fleet_config — fleet-wide VDA5050 identity (single row).\n-- The CHECK (id = 1) constraint enforces exactly one row.\n-- ------------------------------------------------------------\nCREATE TABLE fleet_config (\n    id             INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),\n    interface_name TEXT NOT NULL,\n    major_version  TEXT NOT NULL,\n    version        TEXT NOT NULL,\n    manufacturer   TEXT NOT NULL\n);\n\n-- ------------------------------------------------------------\n-- 2. maps\n-- ------------------------------------------------------------\nCREATE TABLE maps (\n    map_id TEXT PRIMARY KEY,\n    label  TEXT NOT NULL\n);\n\n-- ------------------------------------------------------------\n-- 3. robots — the fleet roster (single source of truth)\n--\n-- archived_at supports soft-delete: when set, the row is hidden from operator\n-- surfaces and rejected at ingest, but history (orders, state_snapshots,\n-- oee_cycles, …) remains intact and the serial can be restored later.\n-- ------------------------------------------------------------\nCREATE TABLE robots (\n    serial_number TEXT PRIMARY KEY,\n    rosbridge_url TEXT NOT NULL,\n    map_id        TEXT NOT NULL REFERENCES maps (map_id),\n    archived_at   TIMESTAMPTZ                       -- NULL = active\n);\n\nCREATE INDEX idx_robots_active ON robots (serial_number) WHERE archived_at IS NULL;\n\n-- ------------------------------------------------------------\n-- 4. named_locations — named navigation targets\n-- ------------------------------------------------------------\nCREATE TABLE named_locations (\n    id     INTEGER PRIMARY KEY,\n    map_id TEXT    NOT NULL REFERENCES maps (map_id),\n    label  TEXT    NOT NULL,\n    x      DOUBLE PRECISION NOT NULL,\n    y      DOUBLE PRECISION NOT NULL,\n    theta  DOUBLE PRECISION NOT NULL DEFAULT 0   -- heading, radians, map frame\n);\n\n-- ============================================================\n-- Orders — VDA5050 `order` message (header + nodes + edges)\n-- ============================================================\n\n-- ------------------------------------------------------------\n-- 5. orders — one row per `order` message (header / audit tap)\n-- ------------------------------------------------------------\nCREATE TABLE orders (\n    id              BIGSERIAL   PRIMARY KEY,\n    serial_number   TEXT        NOT NULL REFERENCES robots (serial_number),\n    ts              TIMESTAMPTZ NOT NULL,\n    header_id       INTEGER     NOT NULL,\n    order_id        TEXT        NOT NULL,\n    order_update_id INTEGER     NOT NULL\n);\nCREATE INDEX idx_orders_serial_ts ON orders (serial_number, ts DESC);\n\n-- ------------------------------------------------------------\n-- 6. order_nodes — child of orders; nodePosition flattened in\n-- ------------------------------------------------------------\nCREATE TABLE order_nodes (\n    id          BIGSERIAL PRIMARY KEY,\n    order_pk    BIGINT  NOT NULL REFERENCES orders (id) ON DELETE CASCADE,\n    node_id     TEXT    NOT NULL,\n    sequence_id INTEGER NOT NULL,\n    released    BOOLEAN NOT NULL,\n    pos_x       DOUBLE PRECISION,\n    pos_y       DOUBLE PRECISION,\n    theta       DOUBLE PRECISION,\n    map_id      TEXT\n);\nCREATE INDEX idx_order_nodes_order ON order_nodes (order_pk);\n\n-- ------------------------------------------------------------\n-- 7. order_edges — child of orders\n-- ------------------------------------------------------------\nCREATE TABLE order_edges (\n    id            BIGSERIAL PRIMARY KEY,\n    order_pk      BIGINT  NOT NULL REFERENCES orders (id) ON DELETE CASCADE,\n    edge_id       TEXT    NOT NULL,\n    sequence_id   INTEGER NOT NULL,\n    released      BOOLEAN NOT NULL,\n    start_node_id TEXT    NOT NULL,\n    end_node_id   TEXT    NOT NULL\n);\nCREATE INDEX idx_order_edges_order ON order_edges (order_pk);\n\n-- ============================================================\n-- Instant actions — VDA5050 `instantActions` message\n-- ============================================================\n\n-- ------------------------------------------------------------\n-- 8. instant_action_messages — one row per `instantActions` message\n-- ------------------------------------------------------------\nCREATE TABLE instant_action_messages (\n    id            BIGSERIAL   PRIMARY KEY,\n    serial_number TEXT        NOT NULL REFERENCES robots (serial_number),\n    ts            TIMESTAMPTZ NOT NULL,\n    header_id     INTEGER     NOT NULL\n);\nCREATE INDEX idx_instant_msg_serial_ts\n    ON instant_action_messages (serial_number, ts DESC);\n\n-- ------------------------------------------------------------\n-- 9. instant_actions — child of instant_action_messages\n-- ------------------------------------------------------------\nCREATE TABLE instant_actions (\n    id          BIGSERIAL PRIMARY KEY,\n    message_pk  BIGINT NOT NULL\n        REFERENCES instant_action_messages (id) ON DELETE CASCADE,\n    action_id     TEXT NOT NULL,\n    action_type   TEXT NOT NULL\n        CHECK (action_type IN ('cancelOrder', 'retryNode', 'skipNode')),\n    blocking_type TEXT NOT NULL\n        CHECK (blocking_type IN ('NONE', 'SOFT', 'HARD'))\n);\nCREATE INDEX idx_instant_actions_message ON instant_actions (message_pk);\n\n-- ============================================================\n-- State — VDA5050 `state` message (scalar header + child arrays)\n-- ============================================================\n\n-- ------------------------------------------------------------\n-- 10. state_snapshots — scalar fields of one `state` message\n-- ------------------------------------------------------------\nCREATE TABLE state_snapshots (\n    id                     BIGSERIAL   PRIMARY KEY,\n    serial_number          TEXT        NOT NULL REFERENCES robots (serial_number),\n    ts                     TIMESTAMPTZ NOT NULL,\n    header_id              INTEGER     NOT NULL,\n    order_id               TEXT,\n    order_update_id        INTEGER,\n    last_node_id           TEXT,\n    last_node_sequence_id  INTEGER,\n    pos_x                  DOUBLE PRECISION,\n    pos_y                  DOUBLE PRECISION,\n    theta                  DOUBLE PRECISION,\n    map_id                 TEXT,\n    position_initialized   BOOLEAN,\n    vel_vx                 DOUBLE PRECISION,\n    vel_vy                 DOUBLE PRECISION,\n    vel_omega              DOUBLE PRECISION,\n    driving                BOOLEAN,\n    operating_mode         TEXT,\n    e_stop                 TEXT,\n    field_violation        BOOLEAN\n);\nCREATE INDEX idx_state_serial_ts ON state_snapshots (serial_number, ts DESC);\n\n-- ------------------------------------------------------------\n-- 11. state_node_states — child of state_snapshots\n-- ------------------------------------------------------------\nCREATE TABLE state_node_states (\n    id          BIGSERIAL PRIMARY KEY,\n    snapshot_id BIGINT  NOT NULL REFERENCES state_snapshots (id) ON DELETE CASCADE,\n    node_id     TEXT    NOT NULL,\n    sequence_id INTEGER NOT NULL,\n    released    BOOLEAN NOT NULL\n);\nCREATE INDEX idx_state_node_states_snapshot ON state_node_states (snapshot_id);\n\n-- ------------------------------------------------------------\n-- 12. state_action_states — child of state_snapshots\n-- ------------------------------------------------------------\nCREATE TABLE state_action_states (\n    id            BIGSERIAL PRIMARY KEY,\n    snapshot_id   BIGINT NOT NULL REFERENCES state_snapshots (id) ON DELETE CASCADE,\n    action_id     TEXT NOT NULL,\n    action_type   TEXT NOT NULL,\n    action_status TEXT NOT NULL\n);\nCREATE INDEX idx_state_action_states_snapshot ON state_action_states (snapshot_id);\n\n-- ------------------------------------------------------------\n-- 13. state_errors — child of state_snapshots\n-- ------------------------------------------------------------\nCREATE TABLE state_errors (\n    id                BIGSERIAL PRIMARY KEY,\n    snapshot_id       BIGINT NOT NULL REFERENCES state_snapshots (id) ON DELETE CASCADE,\n    error_type        TEXT NOT NULL,\n    error_level       TEXT,\n    error_description TEXT\n);\nCREATE INDEX idx_state_errors_snapshot ON state_errors (snapshot_id);\n\n-- ============================================================\n-- Connection + OEE\n-- ============================================================\n\n-- ------------------------------------------------------------\n-- 14. connection_log — VDA5050 `connection` — robot liveness\n-- ------------------------------------------------------------\nCREATE TABLE connection_log (\n    id               BIGSERIAL   PRIMARY KEY,\n    serial_number    TEXT        NOT NULL REFERENCES robots (serial_number),\n    ts               TIMESTAMPTZ NOT NULL,\n    header_id        INTEGER     NOT NULL,\n    connection_state TEXT        NOT NULL\n        CHECK (connection_state IN ('ONLINE', 'OFFLINE', 'CONNECTIONBROKEN'))\n);\nCREATE INDEX idx_connection_serial_ts ON connection_log (serial_number, ts DESC);\n\n-- ------------------------------------------------------------\n-- 15. oee_cycles — derived trip cycles. duration_s is GENERATED\n-- (keeps the table in BCNF — no free-standing derived column).\n-- ------------------------------------------------------------\nCREATE TABLE oee_cycles (\n    id            BIGSERIAL   PRIMARY KEY,\n    serial_number TEXT        NOT NULL REFERENCES robots (serial_number),\n    ts            TIMESTAMPTZ NOT NULL DEFAULT now(),\n    order_id      TEXT        NOT NULL,\n    start_time    TIMESTAMPTZ NOT NULL,\n    end_time      TIMESTAMPTZ NOT NULL,\n    duration_s    DOUBLE PRECISION\n        GENERATED ALWAYS AS (EXTRACT(EPOCH FROM (end_time - start_time))) STORED,\n    result        TEXT        NOT NULL CHECK (result IN ('SUCCEEDED', 'ABORTED'))\n);\nCREATE INDEX idx_oee_serial_ts ON oee_cycles (serial_number, ts DESC);\n\n-- ============================================================\n-- Seed data\n-- ============================================================\n",
         "postgreSQLConfig": "db-pg-config",
         "split": false,
         "rowsPerMsg": 1,

@@ -14,7 +14,7 @@ from ..db import (
 )
 from ..robots import registry
 
-router = APIRouter(prefix="/robots/{serial}/oee")
+router = APIRouter(prefix="/robots/{serial}/oee", tags=["oee"])
 
 
 def _require_robot(serial: str) -> None:

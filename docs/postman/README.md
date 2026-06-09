@@ -22,7 +22,7 @@ replays every assertion in seconds and produces an HTML report.
 # Backend has API_KEY set
 .\docs\postman\run-newman.ps1 -ApiKey "your-key"
 
-# Different host (e.g. docker compose on another box)
+# Different host (e.g. the backend running on another box)
 .\docs\postman\run-newman.ps1 -BaseUrl "http://192.168.1.50:8000"
 
 # CLI-only output, skip the HTML report
@@ -95,7 +95,8 @@ backend turns auth on, set `-ApiKey` once and everything works.
 
 ## CI
 
-This collection is the right artifact to wire into `.github/workflows/ci.yml`
-once the backend stack can run inside Actions (Docker compose recipe in
-`docker-compose.yml` already exists). A `newman run` step against the booted
-stack gives you green/red on every PR.
+This collection is wired into `.github/workflows/ci.yml` as the **Newman API
+smoke** job: it boots Postgres + Mosquitto + FastAPI via `docker compose`, waits
+for the FastAPI healthcheck, then runs `newman` against the booted stack for
+green/red on every PR. This CI smoke job is the **only** thing the repo's Docker
+config is used for — Docker is not used to run the stack locally or to deploy.

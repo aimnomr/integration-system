@@ -1,11 +1,13 @@
-# start-all.ps1 — launch every microservice, each in its own terminal window.
+# start-all.ps1 — launch every service, each in its own terminal window.
 #
 # Usage (from the repo root):
 #   .\start-all.ps1
 #
-# PostgreSQL is assumed to be already running (it is normally a Windows service).
-# Services start in dependency order: Mosquitto -> FastAPI -> ROS Bridge -> Node-RED.
-# Close a service by closing its window (or Ctrl+C inside it).
+# PostgreSQL is assumed to be already running (it is normally a Windows service)
+# — FastAPI loads the fleet from it at startup and will not start otherwise.
+#
+# Start order (see docs/setup.md): Mosquitto -> FastAPI -> ROS Bridge ->
+# Node-RED -> Frontend. Close a service by closing its window (or Ctrl+C inside).
 
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
@@ -42,8 +44,14 @@ Start-Service-Window -Title 'ROS Bridge' -WorkDir 'ros-bridge-service' `
     -Command 'node index.js'
 Start-Sleep -Seconds 1
 
-# 4. Node-RED — can start any time after Mosquitto.
+# 4. Node-RED — can start any time after Mosquitto. --userDir . loads project flows.
 Start-Service-Window -Title 'Node-RED' -WorkDir 'node-red' `
     -Command 'node-red --settings settings.js --userDir .'
+Start-Sleep -Seconds 1
+
+# 5. Frontend — Vite dev server (http://localhost:5173); talks to FastAPI + Mosquitto WS.
+Start-Service-Window -Title 'Frontend' -WorkDir 'frontend' `
+    -Command 'npm run dev'
 
 Write-Host "All services launched in separate windows." -ForegroundColor Green
+Write-Host "FastAPI: http://localhost:8000/docs  |  Node-RED: http://localhost:1880  |  Frontend: http://localhost:5173" -ForegroundColor DarkGray
