@@ -26,6 +26,7 @@ All project documentation lives under `docs/`. Start at
 | What the project is + doc map | `docs/overview.md` |
 | How services connect, message pathways | `docs/architecture.md` |
 | Prerequisites and how to run everything | `docs/setup.md` |
+| Docker command cheatsheet (dev → deployment) | `docs/docker-cheatsheet/` |
 | What is implemented | `docs/status.md` |
 | Gaps tracker (G24–G27 open as of 2026-05-22) | `docs/gaps.md` |
 | Handoff snapshot — recent work + current state | `docs/CONTINUATION.md` |
@@ -64,9 +65,10 @@ Documentation format standards are in `docs/convention/`.
 - `amr/state/odom` is published on distance (>0.05 m) or heading (>5°) change, plus a
   5 s heartbeat.
 
-Services are started manually (or via `start-all.ps1`). A root `docker-compose.yml`
-and per-service `Dockerfile`s exist **only to support the CI Newman smoke job** —
-Docker is not used to run the stack locally or to deploy. Tests are per-service:
-`npm test` (ROS Bridge, `node:test`) and `pytest` (FastAPI). See `docs/setup.md`.
+Services can be started manually (or via `start-all.ps1`) for development, or
+brought up together with `docker compose up --build` — Docker is a supported run
+and deployment path. The root `docker-compose.yml` and per-service `Dockerfile`s
+also back the CI Newman smoke job. Tests are per-service: `npm test` (ROS Bridge,
+`node:test`) and `pytest` (FastAPI). See `docs/setup.md`.
 
 

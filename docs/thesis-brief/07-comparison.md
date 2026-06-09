@@ -68,7 +68,7 @@ a code change.
 | Reference data | Hardcoded in `mock-data.js` | CRUD UI for Maps, Locations, Robots, Fleet Config |
 | Auth | — | Opt-in `X-API-Key` header |
 | Tests / CI | None | pytest (41), node:test (~15), Newman (61 requests), Playwright (24), GitHub Actions |
-| Docker | — | `docker-compose.yml` + Dockerfiles present, but only to support the CI smoke job — not used to run or deploy |
+| Docker | — | `docker-compose.yml` + Dockerfiles — full stack via `docker compose up`, a supported run/deploy path; also backs the CI smoke job |
 | Robot archive | — | Soft-delete (`robots.archived_at`) with restore-on-collision UX |
 
 ---

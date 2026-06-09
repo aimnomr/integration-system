@@ -592,13 +592,17 @@ pathway).
 
 ## 8. Setup, prerequisites, environment
 
-### 8.1 Docker — CI support only
+### 8.1 Docker — supported run & deployment path
 
 The repo ships a root `docker-compose.yml`, per-service `Dockerfile`s, and a
-frontend `nginx.conf`. These exist **solely to support the CI Newman smoke
-job**, which boots Postgres + Mosquitto + FastAPI via compose. Docker is **not**
-the way to run the project locally and is **not** used for deployment — use the
-manual run order below (or `start-all.ps1`).
+frontend `nginx.conf`. `docker compose up --build` brings up the whole stack
+(Postgres → Mosquitto → FastAPI → ROS Bridge → Node-RED → frontend), so Docker
+is a supported way to run the project self-contained and to deploy it. The same
+compose stack also backs the CI Newman smoke job. The manual run order below (or
+`start-all.ps1`) remains the convenient path for active development with
+hot-reload. Images are lean — Alpine for ROS Bridge and the frontend,
+`python:3.12-slim` for FastAPI (glibc, required by `psycopg2-binary`), all
+running as non-root.
 
 ### 8.2 Manual run order
 

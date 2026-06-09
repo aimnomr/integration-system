@@ -3,17 +3,26 @@
 Open items not yet addressed, consolidated for visibility. For what *is* working see
 [status.md](status.md). Resolved gaps are listed at the bottom.
 
-> Last updated: 2026-06-08 (Docker scope clarified — **decision: Docker is not
-> adopted as a run or deployment path for this project**). Docker was never a
-> required deliverable — it was logged as gap G14/G30 and built as forward
-> progress; `decisions.md` records no ADR for it. The `docker-compose.yml`,
-> per-service `Dockerfile`s, and `frontend/nginx.conf` are **kept**, but only
-> because the CI Newman smoke job (`.github/workflows/ci.yml`) boots Postgres +
-> Mosquitto + FastAPI through compose. They are **not** the recommended way to
-> run the stack locally (use the manual route / `start-all.ps1`) and there is
-> **no Docker-based deployment**. Docs reframed accordingly (setup.md,
-> status.md, PROJECT_DETAIL.md, thesis-brief, testing.md, postman/README.md,
-> manual-test-*, CLAUDE.md). No files were deleted.
+> Last updated: 2026-06-09 (**Docker scope reversed — Docker is now a supported
+> run AND deployment path**, superseding the 2026-06-08 CI-only decision below).
+> `docker compose up --build` brings up the full stack (Postgres → Mosquitto →
+> FastAPI → ROS Bridge → Node-RED → frontend); the same compose stack still
+> backs the CI Newman smoke job. Images were also slimmed: ROS Bridge moved to
+> `node:22-alpine` (pure-JS deps, musl-safe) and runs as the `node` user;
+> FastAPI stays on `python:3.12-slim` (glibc — `psycopg2-binary` ships no musl
+> wheel) with pyc/pip-cache disabled and a non-root `appuser`; the frontend
+> builder bumped to `node:22-alpine`; `.dockerignore`s tightened. All three
+> images build green. Docs reframed (setup.md gained a "Run with Docker"
+> section, status.md, PROJECT_DETAIL.md 8.1, thesis-brief 03/07, testing.md,
+> postman/README.md, CLAUDE.md). No application code changed.
+>
+> Last updated: 2026-06-08 (Docker scope clarified — decision: Docker is not
+> adopted as a run or deployment path for this project — **SUPERSEDED 2026-06-09,
+> see above**). Docker was logged as gap G14/G30 and built as forward progress;
+> `decisions.md` records no ADR for it. The `docker-compose.yml`, per-service
+> `Dockerfile`s, and `frontend/nginx.conf` were kept for the CI Newman smoke job
+> and, at the time, not recommended for local run or deployment. No files were
+> deleted.
 >
 > Last updated: 2026-05-25 (G40 closed — robot soft-delete (archive) shipped:
 > `robots.archived_at` column, `POST /robots/{serial}/archive` + `/restore`
@@ -187,13 +196,13 @@ navigation-error path. FastAPI has `pytest` tests (`fastapi-service/tests/`) for
 `config.py`, `auth.py`, `ratelimit.py`, and the ingest / CRUD schemas (`test_schemas.py`);
 install `requirements-dev.txt` and run `pytest`. Both run in CI (G14).
 
-**G14** — CI, plus Docker config kept for CI only. `.github/workflows/ci.yml`
-syntax-checks every service and runs both test suites on push / PR. Each service
-also has a `Dockerfile` and there is a root `docker-compose.yml` (PostgreSQL →
-Mosquitto → FastAPI → ROS Bridge → Node-RED), **but per the 2026-06-08 decision
-these are retained solely to support the CI Newman smoke job** — Docker is not
-the local run path (use the manual route / `start-all.ps1`) and is not used for
-deployment.
+**G14** — CI plus full Docker support. `.github/workflows/ci.yml` syntax-checks
+every service and runs both test suites on push / PR. Each service has a
+`Dockerfile` and there is a root `docker-compose.yml` (PostgreSQL → Mosquitto →
+FastAPI → ROS Bridge → Node-RED → frontend); `docker compose up --build` is a
+supported run and deployment path (per the 2026-06-09 decision), and the same
+stack also backs the CI Newman smoke job. The manual route / `start-all.ps1`
+remains the convenient hot-reload path for development.
 
 **G15** — reference-data CRUD API. `GET/POST/PUT/DELETE` for `maps`
 (`routers/maps.py`), `named_locations` (`routers/locations.py`), and `robots`
@@ -396,10 +405,9 @@ exposes `getOrder(orderId)` and `types/api.ts` declares `OrderDetail`,
 `OrderNode`, `OrderEdge` — wiring an Order History click-through is now
 purely a UI exercise.
 
-**G30** — Frontend Docker image exists (but unused for run/deploy — see the
-2026-06-08 decision; kept only alongside the rest of the CI-support Docker
-config). New `frontend/Dockerfile`:
-multi-stage build, `node:20-alpine` builder runs `npm ci` + `npm run
+**G30** — Frontend Docker image, part of the full `docker compose` stack
+(supported run/deploy path per the 2026-06-09 decision). `frontend/Dockerfile`:
+multi-stage build, `node:22-alpine` builder runs `npm ci` + `npm run
 build`, output is copied into a `nginx:1.27-alpine` stage that serves
 `/usr/share/nginx/html`. `VITE_API_URL`, `VITE_MQTT_WS_URL`, and
 `VITE_API_KEY` are exposed as build args (defaults `http://localhost:8000`,

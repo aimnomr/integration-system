@@ -3,6 +3,11 @@ __pycache__/
 *.pyo
 .pytest_cache/
 tests/
+requirements-dev.txt
+pytest.ini
 .env
 .env.*
 venv/
+Dockerfile
+.dockerignore
+*.md

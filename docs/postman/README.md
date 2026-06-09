@@ -98,5 +98,5 @@ backend turns auth on, set `-ApiKey` once and everything works.
 This collection is wired into `.github/workflows/ci.yml` as the **Newman API
 smoke** job: it boots Postgres + Mosquitto + FastAPI via `docker compose`, waits
 for the FastAPI healthcheck, then runs `newman` against the booted stack for
-green/red on every PR. This CI smoke job is the **only** thing the repo's Docker
-config is used for — Docker is not used to run the stack locally or to deploy.
+green/red on every PR. The same compose stack also doubles as a run/deploy path
+for the full stack (see [`../setup.md`](../setup.md)).

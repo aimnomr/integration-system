@@ -3,7 +3,8 @@
     "allow": [
       "Read(//d/d/FYP/integration-system/**)",
       "Bash(node *)",
-      "Bash(python -m pytest -q)"
+      "Bash(python -m pytest -q)",
+      "Bash(docker compose *)"
     ]
   }
 }

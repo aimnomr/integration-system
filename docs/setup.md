@@ -1,12 +1,63 @@
 # Setup & Running
 
-## TL;DR — run each service manually
+There are two ways to run the stack:
 
-> **Docker is not used to run or deploy this project.** The repo's
-> `docker-compose.yml` and per-service `Dockerfile`s exist solely to support
-> the CI Newman smoke job (see [`testing.md`](testing.md)). They are not the
-> recommended way to run the stack locally, and there is no Docker-based
-> deployment. Run the services directly, as below, or via `start-all.ps1`.
+- **Docker Compose** — one command brings up the whole stack (Postgres,
+  Mosquitto, FastAPI, ROS Bridge, Node-RED, frontend). This is the recommended
+  path for a self-contained run or a deployment. See
+  [Run with Docker](#run-with-docker) below.
+- **Manually** (or via `start-all.ps1`) — start each service in its own
+  terminal. Best for active development where you want hot-reload and direct
+  access to each process. See [Run each service manually](#run-each-service-manually).
+
+The same Compose stack also backs the CI Newman smoke job (see
+[`testing.md`](testing.md)).
+
+---
+
+## Run with Docker
+
+From the repo root, build the images and start everything:
+
+```bash
+docker compose up --build          # build + start the full stack (foreground)
+docker compose up --build -d       # ...detached (runs in the background)
+```
+
+Then:
+
+```bash
+docker compose ps                  # service health / status
+docker compose logs -f fastapi     # tail one service's logs
+docker compose down                # stop and remove the containers
+docker compose down -v             # ...and wipe the Postgres volume to re-seed
+```
+
+Published ports once up: FastAPI `:8000` (docs at `/docs`), Node-RED `:1880`,
+frontend `:5173`, Mosquitto `:1883` (TCP) / `:9001` (WebSocket), Postgres
+`:5432`. PostgreSQL auto-applies `docs/schema/schema.sql` on the **first** run
+(when the data volume is empty); `docker compose down -v` clears it so the next
+`up` re-seeds.
+
+Compose enforces start order with healthchecks (`postgres → fastapi →
+ros-bridge`). The images are intentionally lean — ROS Bridge and the frontend
+build on Alpine, FastAPI on `python:3.12-slim` (glibc, required by the
+`psycopg2-binary` wheel), and all run as non-root.
+
+> A real robot's `rosbridge_server` must be reachable **from the ros-bridge
+> container** for navigation to actually run; the per-robot `rosbridge_url`
+> comes from the database. To rebuild the frontend against non-default
+> endpoints: `docker compose build --build-arg VITE_API_URL=... frontend`.
+
+Quick check: `curl http://localhost:8000/openapi.json` and open
+`http://localhost:5173/`.
+
+For a fuller command reference (images, volumes, debugging, cleanup,
+deployment), see the [Docker cheatsheet](docker-cheatsheet/README.md).
+
+---
+
+## Run each service manually
 
 You already know the project and have prerequisites + `.env` files in place. Start
 each service in its own terminal:
@@ -57,9 +108,10 @@ robot in the `robots` database table (default `ws://localhost:9090`).
 | PostgreSQL | persistence | install separately; create the DB (below) |
 | ROS robot + `rosbridge_server` | — | external; exposes a WebSocket (default port 9090) |
 
-The repo includes a `docker-compose.yml` and per-service `Dockerfile`s, but they
-exist only to support the CI Newman smoke job — not to run or deploy the stack.
-Run the services manually (below) or via `start-all.ps1` for local development.
+The prerequisites above are only needed for the **manual** run path. To run with
+Docker instead, you just need Docker (with Compose) — `docker compose up --build`
+brings up every service in a container, including Postgres and Mosquitto. See
+[Run with Docker](#run-with-docker).
 
 ### Tests
 

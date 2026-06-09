@@ -124,13 +124,15 @@ each, where reports land). Short version:
 
 ### Docker & ops
 
-- Per-service `Dockerfile`s and a root `docker-compose.yml` exist **only to
-  support the CI Newman smoke job**, which boots Postgres → Mosquitto → FastAPI
-  via compose. Docker is **not** used to run the stack locally or to deploy —
-  the run path is manual / `start-all.ps1`. There is no deployment pipeline.
-- A frontend `Dockerfile` + `nginx.conf` (G30, 2026-05-25; multi-stage Node 20
-  → nginx 1.27) were added at the same time, but are likewise not wired to any
-  deployment.
+- Per-service `Dockerfile`s and a root `docker-compose.yml` bring up the full
+  stack (Postgres → Mosquitto → FastAPI → ROS Bridge → Node-RED → frontend)
+  with `docker compose up --build`. Docker is a **supported run and deployment
+  path** alongside the manual / `start-all.ps1` route, and the same compose
+  stack also backs the CI Newman smoke job.
+- Images are lean: ROS Bridge and the frontend build on Alpine, FastAPI on
+  `python:3.12-slim` (glibc — required by the `psycopg2-binary` wheel), the
+  frontend is multi-stage (Node builder → `nginx:1.27-alpine`, G30), and every
+  service runs as a non-root user.
 
 ---
 

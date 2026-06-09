@@ -2,7 +2,31 @@
 
 > A point-in-time handoff snapshot so work can resume without re-deriving context.
 > **This decays** — trust the code and the canonical docs over this page.
-> Last updated: 2026-06-08 (Docker scope decision — docs-only pass). The user
+> Last updated: 2026-06-09 (Docker: slimmed images + scope reversed to a
+> supported run/deploy path). **The user changed their mind: Docker is now a
+> first-class run AND deployment path, superseding the 2026-06-08 CI-only
+> decision below.** Two work items this session:
+> 1. **Image hygiene** — `ros-bridge-service/Dockerfile` moved `node:22-slim` →
+>    `node:22-alpine` (deps `mqtt`/`roslib`/`dotenv` are pure JS, musl-safe),
+>    added `NODE_ENV=production`, `--no-audit --no-fund`, and `USER node`.
+>    `fastapi-service/Dockerfile` stays on `python:3.12-slim` (glibc —
+>    `psycopg2-binary` ships no musl wheel, alpine would force a source build),
+>    added `PYTHONDONTWRITEBYTECODE`/`PYTHONUNBUFFERED`/`PIP_NO_CACHE_DIR`/
+>    `PIP_DISABLE_PIP_VERSION_CHECK` and a non-root `appuser`.
+>    `frontend/Dockerfile` builder bumped `node:20` → `node:22-alpine`,
+>    `npm ci --no-audit --no-fund`. All three `.dockerignore`s tightened (the
+>    Dockerfiles themselves, `*.md`, dev-only files; **kept** `frontend/nginx.conf`
+>    since stage 2 copies it from context). Validated: `docker compose config`
+>    OK and all three images build green (frontend 75.8 MB, fastapi 211 MB,
+>    ros-bridge 263 MB). No app code or compose topology changed.
+> 2. **Docs reframed** from "CI-only" to "supported run/deploy path": setup.md
+>    (new "Run with Docker" section with the `docker compose up --build` step),
+>    status.md + thesis-brief/03-status.md ("Docker & ops"),
+>    thesis-brief/07-comparison.md, PROJECT_DETAIL.md §8.1, testing.md,
+>    postman/README.md, gaps.md (new dated note + G14/G30 entries), CLAUDE.md.
+>
+> Last updated: 2026-06-08 (Docker scope decision — docs-only pass —
+> **SUPERSEDED 2026-06-09, see above**). The user
 > confirmed Docker is **not** adopted as a run or deployment path for this
 > project. It was never a required deliverable (logged as gap G14/G30, no ADR in
 > `decisions.md`), and there is no deploy pipeline — the only consumer is the CI

@@ -11,12 +11,12 @@
 #                -t amr-frontend ./frontend
 
 # ---- Stage 1: build the static bundle ------------------------------------
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 
 # Install deps first so the layer caches across source-only changes.
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN npm ci --no-audit --no-fund
 
 # Bake the runtime endpoints into the bundle. Defaults are wired for the
 # compose stack — the browser talks to host-published ports, so localhost

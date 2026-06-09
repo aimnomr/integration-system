@@ -80,8 +80,8 @@ All report folders are in `.gitignore`.
 ## CI hookup
 
 CI runs the Tier 1 unit suites plus the **Newman API smoke** job (see
-`.github/workflows/ci.yml`). The Newman job is the **sole** use of the repo's
-Docker config: it boots Postgres + Mosquitto + FastAPI via `docker compose`,
-waits for the FastAPI healthcheck, then replays the collection. Docker is not
-used to run the stack locally or to deploy. The rest of Tier 2 (the PowerShell
-MQTT-pipeline scripts) still needs Node-RED + a robot, so it stays local-only.
+`.github/workflows/ci.yml`). The Newman job boots Postgres + Mosquitto + FastAPI
+via `docker compose`, waits for the FastAPI healthcheck, then replays the
+collection — the same compose stack that also serves as a run/deploy path (see
+[`setup.md`](setup.md)). The rest of Tier 2 (the PowerShell MQTT-pipeline
+scripts) still needs Node-RED + a robot, so it stays local-only.
