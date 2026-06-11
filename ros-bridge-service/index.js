@@ -5,7 +5,7 @@ import FleetManager from './src/fleetManager.js'
 // Entry point: fetch the fleet definition from FastAPI (the database is the single
 // source of truth — FastAPI serves it at GET /fleet), then start the fleet. The
 // FleetManager instantiates one Robot per entry; each Robot owns its own rosbridge
-// connection and bridges. See docs/plans/vda5050-migration.md.
+// connection and bridges. See docs/schema/VDA5050_MESSAGES.md.
 
 const FLEET_API_URL = process.env.FLEET_API_URL || 'http://localhost:8000/fleet'
 

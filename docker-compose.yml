@@ -3,7 +3,7 @@
 # Start order matters and is enforced with healthchecks + depends_on:
 #   postgres -> fastapi -> ros-bridge
 # FastAPI loads the fleet from the database at boot; the ROS Bridge fetches
-# GET /fleet from FastAPI at boot. See docs/setup.md.
+# GET /fleet from FastAPI at boot. See docs/user-guide/quickstart.md.
 #
 #   docker compose up --build
 #

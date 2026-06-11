@@ -32,13 +32,12 @@ the FastAPI `/order` endpoint use VDA5050 conventions (radians, `frame_id =
 >   `/amcl_node/*`, and `/particlecloud`.
 >
 > **For the integration:** `/amcl_pose` (the map-frame pose) is available **only** in
-> `mapping:=false` mode. It is the AGV pose source for the planned VDA5050
-> `state.agvPosition` — see
-> [../plans/vda5050-migration.md](../plans/vda5050-migration.md) §9-A.
+> `mapping:=false` mode. It is the AGV pose source for the VDA5050
+> `state.agvPosition` — see [VDA5050_MESSAGES.md](VDA5050_MESSAGES.md).
 >
 > Integration-relevant topics today — present in both modes: `/diff_controller/odom`
 > (subscribed), `/move_base_simple/goal` and `/move_base/cancel` (published).
-> See [architecture.md](../architecture.md) and [MQTT_TOPICS.md](MQTT_TOPICS.md).
+> See [architecture.md](../reference/architecture.md) and [MQTT_TOPICS.md](MQTT_TOPICS.md).
 
 ---
 

@@ -6,7 +6,7 @@ directly to each robot's rosbridge for the high-frequency lane (live
 occupancy grid, AMCL/EKF pose, camera, teleop).
 
 Lives in **`frontend/`**. Run with `npm install && npm run dev` (Vite dev
-server on `http://localhost:5173`). See [`frontend/README.md`](../../frontend/README.md)
+server on `http://localhost:5173`). See [`frontend/README.md`](../../../frontend/README.md)
 for stack details, conventions, and how the branding file works.
 
 ---
@@ -108,8 +108,8 @@ All have sensible defaults — `.env.local` is optional for local dev.
 
 ## Conventions inherited from the v1 interface
 
-The pre-VDA5050 single-robot UI (`docs/old-interface/PROJECT_OVERVIEW.md`)
-established a few contracts that the v2 keeps verbatim:
+The pre-VDA5050 single-robot UI (a separate, earlier codebase) established a
+few contracts that the v2 keeps verbatim:
 
 - **Angles are degrees at the UI layer.** Convert to quaternion only at the
   rosbridge boundary. `src/helper/angleHelper.ts` is a near-direct TS port.
@@ -119,7 +119,7 @@ established a few contracts that the v2 keeps verbatim:
 - **ROS topics consumed:** `/reference/map`, `/amcl_pose`,
   `/robot_pose_ekf_node/odom_combined`, the two DWA plan topics,
   `/camera/front/image_raw/compressed`. Published: `/web_teleop/cmd_vel`. See
-  [`schema/ROS_TOPICS.md`](../schema/ROS_TOPICS.md) for the full picture.
+  [`ROS_TOPICS.md`](../../schema/ROS_TOPICS.md) for the full picture.
 
 ---
 

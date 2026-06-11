@@ -1,12 +1,9 @@
 # VDA5050 Messages
 
-The message and topic contract for the VDA5050 migration
-([../plans/vda5050-migration.md](../plans/vda5050-migration.md)).
-
-> **Status:** Phase 0 contract — **agreed, not yet implemented.** This file is the
-> source of truth for the four VDA5050 messages and the topic hierarchy. The legacy
-> `amr/*` scheme is still live; see [MQTT_TOPICS.md](MQTT_TOPICS.md). MQTT_TOPICS.md is
-> rewritten against this contract in migration Phases 2–3.
+The message and topic contract for the system's VDA5050 communication —
+**implemented**; this file is the source of truth for the four VDA5050
+messages and the topic hierarchy. Topic-level details (QoS, retained flags)
+are in [MQTT_TOPICS.md](MQTT_TOPICS.md).
 
 This project implements a **structural subset** of VDA5050 2.0.0 — real topic
 hierarchy, real envelopes, real `order` / `instantActions` / `state` / `connection`

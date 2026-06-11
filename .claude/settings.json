@@ -1,30 +1,3 @@
 {
-  "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "shell": "powershell",
-            "command": "$c = (Get-Content docs\\CONTINUATION.md -TotalCount 40 -Encoding UTF8 -ErrorAction SilentlyContinue) -join \"`n\"; if (-not $c) { $c = \"(docs/CONTINUATION.md not found)\" }; @{ hookSpecificOutput = @{ hookEventName = \"SessionStart\"; additionalContext = \"## Recent project status (docs/CONTINUATION.md, first 40 lines)`n`n$c\" } } | ConvertTo-Json -Depth 4 -Compress",
-            "timeout": 10,
-            "statusMessage": "Loading project handoff notes"
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "shell": "powershell",
-            "command": "'{\"systemMessage\":\"Reminder: did you ask Claude to update docs/CONTINUATION.md and docs/gaps.md before ending? If meaningful work happened this session, do that before /clear or exit.\"}'",
-            "timeout": 5
-          }
-        ]
-      }
-    ]
-  }
+  "$schema": "https://json.schemastore.org/claude-code-settings.json"
 }

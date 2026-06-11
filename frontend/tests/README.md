@@ -1,8 +1,8 @@
 # frontend/tests/ — Playwright E2E suite
 
-End-to-end tests covering the non-robot parts of `docs/manual-test-checklist.md`
-phases 10–12. The suite hits a real backend (FastAPI + Mosquitto + Postgres);
-nothing is mocked. The Vite dev server is started automatically by
+End-to-end tests covering the non-robot frontend surface (AppShell, Health,
+Dashboard, Dispatch, Admin CRUD, Orders, OEE). The suite hits a real backend
+(FastAPI + Mosquitto + Postgres); nothing is mocked. The Vite dev server is started automatically by
 `playwright.config.ts`.
 
 ## First-time setup

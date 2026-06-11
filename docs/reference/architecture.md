@@ -1,12 +1,12 @@
 # Architecture
 
-The single source for how the AMR Integration System fits together. For *what* the
-project is, see [overview.md](overview.md); for *what is built so far*, see
-[status.md](status.md).
+> **Who this is for:** maintainers and integrators — the terse, complete
+> topology. For a gentler, narrated version see the
+> [architecture tour](../getting-started/architecture-tour.md).
 
 The system speaks **VDA5050** — the open MQTT interface between a fleet management
-system (FMS) and AGVs/AMRs. See [plans/vda5050-migration.md](plans/vda5050-migration.md)
-and [schema/VDA5050_MESSAGES.md](schema/VDA5050_MESSAGES.md).
+system (FMS) and AGVs/AMRs. Message schemas:
+[VDA5050_MESSAGES.md](../schema/VDA5050_MESSAGES.md).
 
 ---
 
@@ -90,7 +90,7 @@ not — see [failure-matrix.md](failure-matrix.md).
 | **Node-RED** | **Passive viewer** — subscribes the VDA5050 telemetry topics for live display only (no DB writes). DB Admin tab for schema reset + ad-hoc SQL. Optional: the stack functions with it off. See [services/node-red.md](services/node-red.md) |
 | **ROS Bridge Service** | One `Robot` per registry entry; translates VDA5050 ↔ ROS. See [services/ros-bridge-service.md](services/ros-bridge-service.md) |
 | **Mosquitto** | MQTT broker — routes all messages between services (TCP `:1883`) and between Mosquitto and the browser (WS `:9001`) |
-| **PostgreSQL** | Persistent storage. See [schema/DATABASE_SCHEMA.md](schema/DATABASE_SCHEMA.md) |
+| **PostgreSQL** | Persistent storage. See [DATABASE_SCHEMA.md](../schema/DATABASE_SCHEMA.md) |
 
 ---
 
@@ -106,19 +106,18 @@ not — see [failure-matrix.md](failure-matrix.md).
   5 s heartbeat (distance >0.05 m or heading >5°).
 - Telemetry persistence is triggered by FastAPI's own MQTT subscriber
   (`app/mqtt.py` → `app/ingest_service.py` → `app/db.py`), not by Node-RED. This
-  makes Node-RED an optional passive viewer — refinement of migration plan §5.3
-  (2026-06-09; Node-RED previously POSTed to `/ingest/*`).
+  makes Node-RED an optional passive viewer (Node-RED previously POSTed to
+  `/ingest/*`; see [decisions.md](decisions.md)).
 
 ---
 
 ## Contracts (source of truth)
 
-When adding endpoints or topics, update the contract docs in [`schema/`](schema/):
+When adding endpoints or topics, update the contract docs in
+[`docs/schema/`](../schema/):
 
-- [schema/REST_ENDPOINTS.md](schema/REST_ENDPOINTS.md) — REST API
-- [schema/MQTT_TOPICS.md](schema/MQTT_TOPICS.md) — MQTT topics
-- [schema/VDA5050_MESSAGES.md](schema/VDA5050_MESSAGES.md) — VDA5050 message schemas
-- [schema/ROS_TOPICS.md](schema/ROS_TOPICS.md) — ROS topics exposed by the robot
-- [schema/DATABASE_SCHEMA.md](schema/DATABASE_SCHEMA.md) — PostgreSQL schema
-
-Documentation format standards live in [`convention/`](convention/).
+- [REST_ENDPOINTS.md](../schema/REST_ENDPOINTS.md) — REST API
+- [MQTT_TOPICS.md](../schema/MQTT_TOPICS.md) — MQTT topics
+- [VDA5050_MESSAGES.md](../schema/VDA5050_MESSAGES.md) — VDA5050 message schemas
+- [ROS_TOPICS.md](../schema/ROS_TOPICS.md) — ROS topics exposed by the robot
+- [DATABASE_SCHEMA.md](../schema/DATABASE_SCHEMA.md) — PostgreSQL schema

@@ -1,50 +1,45 @@
 # AMR Integration System
 
-Middleware that bridges a ROS-based Autonomous Mobile Robot to external REST clients,
-using **VDA5050** over MQTT as the central messaging backbone across four services.
-Fleet-capable — one robot or many, by configuration alone.
+A full-stack **fleet console for ROS-based autonomous mobile robots**: a React
+operator console and a fleet-management backend, speaking the **VDA5050**
+industry standard over MQTT. One robot or many — by configuration alone.
 
 ```
-Commands:   React / client ──HTTP──> FastAPI ──VDA5050/MQTT──> ROS Bridge ──> Robot
-Telemetry:  Robot ──VDA5050/MQTT──> FastAPI ──> PostgreSQL
-            (Mosquitto broker throughout; Node-RED is a passive viewer)
+Commands:   Browser / client ──HTTP──> FastAPI ──VDA5050/MQTT──> ROS Bridge ──rosbridge──> Robot
+Telemetry:  Robot ──rosbridge──> ROS Bridge ──VDA5050/MQTT──> Browser (live) + FastAPI ──> PostgreSQL
+            (Mosquitto is the broker throughout; Node-RED is an optional passive viewer)
 ```
 
-## Getting started
+## Run it (Docker)
 
-New to the project? Read in this order:
+```bash
+cp .env.example .env            # optional — defaults work on one machine
+docker compose up --build -d
+```
 
-1. [docs/overview.md](docs/overview.md) — what this project is
-2. [docs/architecture.md](docs/architecture.md) — how the services connect
-3. [docs/setup.md](docs/setup.md) — prerequisites and how to run it
+Console at `http://localhost:5173`, API docs at `http://localhost:8000/docs`.
+Full steps: [Quickstart](docs/user-guide/quickstart.md).
 
-## Documentation map
+## Documentation
 
-All documentation lives under `docs/`.
+The knowledge base lives in [`docs/`](docs/README.md), organised by audience:
 
-| Area | Location |
+| You are… | Start at |
 |---|---|
-| Overview & doc map | [docs/overview.md](docs/overview.md) |
-| Architecture & message pathways | [docs/architecture.md](docs/architecture.md) |
-| Setup & running | [docs/setup.md](docs/setup.md) |
-| Implementation status | [docs/status.md](docs/status.md) |
-| Gaps & flagged items | [docs/gaps.md](docs/gaps.md) |
-| Continuation / handoff notes | [docs/CONTINUATION.md](docs/CONTINUATION.md) |
-| Decision log (the *why*) | [docs/decisions.md](docs/decisions.md) |
-| Glossary | [docs/glossary.md](docs/glossary.md) |
-| Per-service reference | [docs/services/](docs/services/) |
-| Contracts — REST, MQTT, ROS, database | [docs/schema/](docs/schema/) |
-| Documentation format standards | [docs/convention/](docs/convention/) |
-| Forward-looking plans (e.g. VDA5050) | [docs/plans/](docs/plans/) |
+| 🟢 **Using the system as-is** | [User Guide](docs/user-guide/quickstart.md) — quickstart, configuration, console tour, connecting a robot, troubleshooting |
+| 🟡 **New and learning the project** | [Getting Started](docs/getting-started/introduction.md) — introduction, concepts, architecture tour, local dev setup |
+| 🔴 **Building on or integrating with it** | [Reference](docs/README.md#-im-building-on-it--reference) — architecture, per-service internals, contracts ([`docs/schema/`](docs/schema/)), decisions, failure matrix, testing |
 
 ## Services
 
 | Service | Tech | Address |
 |---|---|---|
-| FastAPI Service | Python, FastAPI | `:8000` |
-| Mosquitto | MQTT broker | `:1883` |
-| Node-RED | Node-RED | `:1880` |
-| ROS Bridge Service | Node.js, roslib | — |
+| Frontend (operator console) | Vite + React 19 + TS | `:5173` |
+| FastAPI (FMS gateway) | Python, FastAPI | `:8000` |
+| Mosquitto (MQTT broker) | Mosquitto | `:1883` TCP / `:9001` WS |
+| ROS Bridge (VDA5050 ↔ ROS) | Node.js, roslib | — |
+| Node-RED (optional viewer) | Node-RED | `:1880` |
 | PostgreSQL | PostgreSQL | `:5432` |
 
-`CLAUDE.md` holds guidance for the Claude Code agent.
+`CLAUDE.md` holds guidance for the Claude Code agent. `thesis/` is a
+thesis-writing snapshot, separate from the live documentation.

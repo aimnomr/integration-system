@@ -78,7 +78,8 @@ One client per robot (MQTT permits only one Will per connection).
 - **One `Robot` instance per robot** — the scalability primitive. Adding a robot is a
   database edit (a `robots` row), no code change.
 - **Per-robot MQTT client** — needed for a per-robot retained `CONNECTIONBROKEN`
-  Last-Will (deviation from migration plan §5.1).
+  Last-Will (MQTT allows only one Last-Will per connection); see
+  [decisions.md](../decisions.md).
 - The `OrderStateMachine` sends one node goal at a time and waits for the move_base
   result — `SUCCEEDED` advances, `ABORTED`/`PREEMPTED` pauses for retry/skip.
 - All collaborators take `ros` / dependencies explicitly — no module singletons.

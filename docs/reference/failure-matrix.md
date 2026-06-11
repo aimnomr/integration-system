@@ -97,7 +97,7 @@ that decoupling is the headline resilience property of this design.
   bridge). Confirm in `ros-bridge-service/src/orderStateMachine.js`.
 - Telemetry lost during a **FastAPI or Postgres** outage is **not** replayed — there's
   no store-and-forward buffer. (Node-RED outages no longer lose data — it's a viewer.)
-  Worth logging as a resilience gap if it isn't already (see [gaps.md](gaps.md)).
+  This is a known, accepted limitation.
 - This matrix assumes a single robot for the "drive" column; with a fleet, a ROS
   Bridge process loss takes down **all** robots it hosts (one process, many `Robot`
   instances).

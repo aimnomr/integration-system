@@ -375,7 +375,7 @@ This schema replaces an earlier design that stored VDA5050's `nodeStates`,
 `edgeStates`, `actionStates`, `errors`, and the whole `order` / `instantActions`
 message as **JSONB columns**. JSONB columns hold repeating groups inside a single
 field, which **violates 1NF**. The schema was rewritten (decision 2026-05-17, see
-[../decisions.md](../decisions.md)) so every multi-valued attribute is its own table:
+[decisions.md](../reference/decisions.md)) so every multi-valued attribute is its own table:
 
 | Old (JSONB) | New (normalized) |
 |---|---|

@@ -22,7 +22,7 @@ subscriptions use `+` wildcards so they capture every robot.
 >
 > **The DB Admin tab is the one exception:** it uses the `node-red-contrib-postgresql`
 > palette node to talk to Postgres directly for schema reset and ad-hoc admin SQL,
-> bypassing FastAPI entirely. See migration plan §8a.
+> bypassing FastAPI entirely.
 
 ---
 

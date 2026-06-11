@@ -6,7 +6,7 @@
 # PostgreSQL is assumed to be already running (it is normally a Windows service)
 # — FastAPI loads the fleet from it at startup and will not start otherwise.
 #
-# Start order (see docs/setup.md): Mosquitto -> FastAPI -> ROS Bridge ->
+# Start order (see docs/getting-started/running-locally.md): Mosquitto -> FastAPI -> ROS Bridge ->
 # Node-RED -> Frontend. Close a service by closing its window (or Ctrl+C inside).
 
 $ErrorActionPreference = 'Stop'

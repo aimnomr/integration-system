@@ -28,8 +28,8 @@ docker compose down -v             # ...and wipe the Postgres volume to re-seed
 ```
 
 Ports once up: FastAPI `:8000`, Node-RED `:1880`, frontend `:5173`,
-Mosquitto `:1883`/`:9001`, Postgres `:5432`. See [`../setup.md`](../setup.md)
-for the full run guide.
+Mosquitto `:1883`/`:9001`, Postgres `:5432`. See the
+[Quickstart](../../user-guide/quickstart.md) for the full run guide.
 
 > **Compose v2 syntax** — these pages use `docker compose` (space, the modern
 > plugin). Older installs use the hyphenated `docker-compose`; the subcommands

@@ -29,7 +29,8 @@ author) don't have to re-derive them. Newest decisions first.
 - **Trade-off:** start order is now constrained — PostgreSQL must be up before FastAPI
   (FastAPI loads the fleet at boot and will not start without it), and FastAPI before
   the ROS Bridge (it fetches `GET /fleet`). These are startup dependencies, not
-  retried. Documented in [setup.md](setup.md).
+  retried. Documented in
+  [running-locally.md](../getting-started/running-locally.md).
 - **Status:** Implemented — `schema.sql`/`DATABASE_SCHEMA.md`, `app/robots.py`,
   `app/db.py`, `app/routers/fleet.py`, ROS Bridge `index.js`/`fleetManager.js`.
   `robots.config.json` + `robots.config.example.json` deleted. Not yet runtime-tested.
@@ -51,9 +52,10 @@ author) don't have to re-derive them. Newest decisions first.
   which violates 1NF. A normalized schema is correct relational design and makes the
   data queryable per node / action / error without JSON operators — appropriate for an
   FYP that is partly graded on database modelling.
+  *(Note: the schema has since grown to 15 tables.)*
 - **Trade-off:** Persisting one `state` message becomes a multi-row transaction (one
   snapshot + N child rows); `state_node_states` is the fastest-growing table. Accepted
-  for the FYP scope and documented in [schema/DATABASE_SCHEMA.md](schema/DATABASE_SCHEMA.md).
+  for the FYP scope and documented in [DATABASE_SCHEMA.md](../schema/DATABASE_SCHEMA.md).
 - **Status:** Implemented — `docs/schema/DATABASE_SCHEMA.md` and
   `fastapi-service/app/db.py` rewritten; `routers/ingest.py` and `node-red/flows.json`
   unchanged (the DB layer absorbs the schema change). Not yet runtime-tested.
@@ -85,7 +87,8 @@ author) don't have to re-derive them. Newest decisions first.
 - **Why:** MQTT permits only one Last-Will per connection. The VDA5050 `connection`
   topic needs a per-robot retained `CONNECTIONBROKEN` Will, which is only possible with
   a client per robot. It also gives cleaner per-robot isolation.
-- **Status:** Implemented — deviation from migration plan §5.1.
+- **Status:** Implemented. (The original migration plan had one shared client;
+  this superseded it.)
 
 ---
 
@@ -98,10 +101,14 @@ author) don't have to re-derive them. Newest decisions first.
 - **Why:** VDA5050 is the industry-standard AGV/AMR fleet interface; aligning with it
   makes the project credible and fleet-ready. VDA5050's per-robot topic namespace
   means the standard-alignment work and the multi-robot work are largely the same.
-- **Status:** Implemented (Phases 0–7) — see
-  [plans/vda5050-migration.md](plans/vda5050-migration.md). A structural subset of
-  VDA5050 2.0.0; documented deviations (battery omitted, custom retry/skip) are in that
-  plan's §8.
+- **Status:** Implemented (migration completed 2026-05-17 in phases 0–7).
+- **Deviations from the standard:** this is a structural subset of VDA5050
+  2.0.0. The notable departures: the battery fields are omitted (the robot
+  doesn't expose battery state); `retryNode` / `skipNode` are custom
+  instantActions (the standard has no per-node retry/skip); and `order` /
+  `instantActions` / `state` use auto-generated straight-line edges rather
+  than a pre-mapped route graph. The exact message shapes as implemented are
+  the contract in [VDA5050_MESSAGES.md](../schema/VDA5050_MESSAGES.md).
 
 ---
 

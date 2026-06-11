@@ -1,22 +1,23 @@
 # scripts/test/ — Automated regression scripts
 
-These PowerShell scripts cover the parts of `docs/manual-test-checklist.md`
-that don't need a real robot or manual UI interaction. Each script is
+PowerShell integration scripts for the parts of the stack that need live
+services but no real robot or manual UI interaction. Each script is
 self-contained, prints `PASS` / `FAIL` per assertion, and exits non-zero if
-anything fails — so they wire cleanly into CI.
+anything fails — so they wire cleanly into CI. The full test pyramid is
+described in `docs/reference/testing.md`.
 
-| Script | Manual-checklist phases covered |
+| Script | Covers |
 |---|---|
-| [`test-ingest.ps1`](test-ingest.ps1) | Phase 4 (telemetry MQTT → DB), part of Phase 6 (G20 ingest happy + bad), part of Phase 8 (malformed MQTT dropped) |
-| [`test-retention.ps1`](test-retention.ps1) | Phase 6 G19 (prune SQL deletes old, keeps recent) |
-| [`test-misc.ps1`](test-misc.ps1) | Phase 8 (5 rapid orders distinct), Phase 9 (G21 legacy suffix tolerated, Mosquitto :9001 reachable) |
+| [`test-ingest.ps1`](test-ingest.ps1) | Telemetry pipeline: MQTT publish → FastAPI ingest → Postgres row; malformed payloads dropped; direct `/ingest/state` happy path |
+| [`test-retention.ps1`](test-retention.ps1) | Retention: prune SQL deletes old telemetry, keeps recent |
+| [`test-misc.ps1`](test-misc.ps1) | Rapid orders get distinct IDs; legacy order-ID suffixes tolerated; Mosquitto `:9001` reachable |
 | [`run-all.ps1`](run-all.ps1) | Wrapper — runs every PS test + Newman + pytest + node:test |
 
 Also automated, but living elsewhere:
 
 | What | Where |
 |---|---|
-| FastAPI HTTP smoke (Phases 2/3/5/6/7/8/9 backend) | `docs/postman/amr-integration.postman_collection.json` (run via `docs/postman/run-newman.ps1`) |
+| FastAPI HTTP smoke (every REST endpoint) | `docs/postman/amr-integration.postman_collection.json` (run via `docs/postman/run-newman.ps1`) |
 | FastAPI unit tests (auth, CORS, rate limit, orders, config, retention lifecycle) | `fastapi-service/tests/` (run with `pytest`) |
 | ROS Bridge unit tests (state builder, order state machine, VDA5050) | `ros-bridge-service/test/` (run with `npm test`) |
 | Frontend E2E (AppShell, health pills, dispatch, admin CRUD) | `frontend/tests/e2e/` (Playwright — see `frontend/tests/README.md`) |
@@ -62,10 +63,9 @@ it automatically and never prompts.
 
 ## What's *not* automated (and why)
 
-Some manual-checklist items are intentionally left manual — re-running them
-under automation gives less signal than running them by hand once a release.
-See `docs/manual-test-by-service.md` for the curated by-service spot-check
-list. Examples:
+Some checks are intentionally left manual — re-running them under automation
+gives less signal than running them by hand once a release (see
+`docs/reference/testing.md` § Tier 3). Examples:
 
 - Anything tagged **[robot]** — needs a real robot or sim.
 - Stopping PostgreSQL / Mosquitto / FastAPI mid-flight to verify the 503 /
