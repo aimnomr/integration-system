@@ -2,6 +2,44 @@
 
 > A point-in-time handoff snapshot so work can resume without re-deriving context.
 > **This decays** — trust the code and the canonical docs over this page.
+> Last updated: 2026-06-11 (**G42 + G43 — ros-bridge crash + Docker robot
+> reachability**). Diagnosed from a user-supplied `docker compose up` log
+> (`logs.txt`, UTF-16): dispatching an order → `ros-bridge-1 exited with code 1`
+> right after `Order accepted`. Cause: `OrderStateMachine._sendCurrentNode`
+> published on a `null` `_goalTopic` because `setup()` only runs on rosbridge
+> connect, and the bridge never connected — the seeded URL `ws://localhost:9090`
+> is the container itself inside Docker. **G42 fix** (`orderStateMachine.js`):
+> guard `_sendCurrentNode` on `!this._goalTopic`; `_cancelOrder` uses `?.publish?.`.
+> **G43 fix**: `Robot.applyHostOverride` + `ROSBRIDGE_HOST_OVERRIDE` env
+> (compose sets `host.docker.internal`, plus `extra_hosts` host-gateway)
+> rewrites a loopback rosbridge host for the container only — the browser still
+> gets `localhost`. `node:test` 19/19. **User must confirm the sim's rosbridge
+> is actually listening on host:9090.** Rebuild: `docker compose build
+> ros-bridge && docker compose up -d ros-bridge`. Still-open frontend items from
+> errors.txt: status stuck "idle" (consistent w/ ROS never connecting), teleop
+> hold-to-send not reaching robot (code looks correct — recheck after rosbridge
+> connects, or cmd_vel topic mismatch). See gaps.md G42/G43.
+>
+> Last updated: 2026-06-10 (**G41 — frontend Docker blank-page fixed**). The
+> production bundle threw `Cannot read properties of undefined (reading
+> 'ROSLIB')` `at Joe (...)` at import time, so React never mounted (only the
+> body background painted). Cause: `roslib`'s CJS entry
+> (`node_modules/roslib/src/RosLib.js`) does `var ROSLIB = this.ROSLIB || {…}`;
+> `@rollup/plugin-commonjs` rewrites that top-level `this` to the module's
+> lazily-initialised exports var, still `undefined` when the line runs (bundle
+> showed `var e = wb.ROSLIB || {...}`, `wb` unassigned). Fix: a `pre`-enforced
+> Vite transform plugin (`fixRoslibThis` in `frontend/vite.config.ts`) patches
+> that line before the commonjs plugin runs, making it
+> `globalThis.ROSLIB` (always defined, no `ROSLIB` prop → `|| {…}` fallback
+> runs). NOTE: a first attempt using `build.rollupOptions.moduleContext` was
+> **inert** (commonjs plugin overrode it → byte-identical bundle, same hash
+> `index-B4-jYDby.js`); the working fix changes the hash (Docker image now
+> `index-Dt_rQ_Rg.js`) and emits `typeof globalThis<"u"&&globalThis.ROSLIB||…`.
+> **Next step for the user: `docker compose build frontend` then
+> `docker compose up -d frontend`, and hard-refresh (Ctrl+Shift+R)** — Vite
+> inlines env at build time so the image must be rebuilt; verify the served
+> bundle hash is NOT `index-B4-jYDby.js`. Docs: gaps.md (G41 closed).
+>
 > Last updated: 2026-06-09 (**Node-RED demoted to a passive viewer; telemetry
 > persistence moved into FastAPI**). Goal: make the stack fully function whether
 > Node-RED runs or not. What changed:

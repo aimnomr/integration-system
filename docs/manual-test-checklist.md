@@ -147,11 +147,12 @@ PostgreSQL) works end-to-end without needing a robot.
    ```
 4. Now run the four assertions below.
 
-- [x] **In Node-RED** (<http://localhost:1880>) → **Telemetry Ingestion** tab:
-      the `validateState` node briefly shows a green status; the
-      `state persisted` debug pane prints `{"status":"ok"}`.
-      _(Visual UI check — automation can't see the debug pane, but the
-      end-to-end row-count delta is verified by `test-ingest.ps1`.)_
+- [x] **In Node-RED** (<http://localhost:1880>) → **Telemetry (view-only)** tab:
+      the `validateState` node briefly shows a green status and the
+      `state seen (view-only)` debug pane prints the message. _(Node-RED is a
+      passive viewer — persistence is done by FastAPI's own MQTT subscriber, not
+      Node-RED. This is a visual check; the end-to-end row-count delta is verified
+      by `test-ingest.ps1`.)_
 - [x] Open another terminal: `psql -U postgres -d amr_integration -c "SELECT count(*) FROM state_snapshots;"`
       → count is **higher** than before the publish.
 - [x] Repeat with a connection message:

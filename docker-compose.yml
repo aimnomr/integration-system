@@ -75,7 +75,15 @@ services:
     environment:
       MQTT_BROKER: mqtt://mosquitto:1883
       FLEET_API_URL: http://fastapi:8000/fleet
+      # The DB stores the robot's rosbridge URL as ws://localhost:9090 (correct
+      # for the browser). Inside this container `localhost` is the container, so
+      # rewrite a loopback host to the Docker host. Comment this out if the
+      # robot is reachable by a real hostname/IP from the DB value.
+      ROSBRIDGE_HOST_OVERRIDE: host.docker.internal
       # API_KEY: change-me            # must match fastapi's API_KEY if auth is on
+    extra_hosts:
+      # Lets `host.docker.internal` resolve on Linux too (auto on Docker Desktop).
+      - "host.docker.internal:host-gateway"
     depends_on:
       fastapi:
         condition: service_healthy

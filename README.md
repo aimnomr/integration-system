@@ -6,8 +6,8 @@ Fleet-capable — one robot or many, by configuration alone.
 
 ```
 Commands:   React / client ──HTTP──> FastAPI ──VDA5050/MQTT──> ROS Bridge ──> Robot
-Telemetry:  Robot ──VDA5050/MQTT──> Node-RED ──HTTP──> FastAPI ──> PostgreSQL
-            (Mosquitto broker throughout)
+Telemetry:  Robot ──VDA5050/MQTT──> FastAPI ──> PostgreSQL
+            (Mosquitto broker throughout; Node-RED is a passive viewer)
 ```
 
 ## Getting started

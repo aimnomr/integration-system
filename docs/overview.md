@@ -15,7 +15,7 @@ over MQTT to a Node.js ROS bridge that translates them into ROS actions),
 subscribes to live VDA5050 `state` / `connection` over MQTT-over-WebSockets, and
 talks **directly to each robot's rosbridge** for the high-frequency lane
 (occupancy grid, camera, teleop). Robot state flows back as VDA5050 messages,
-which Node-RED ingests and persists to PostgreSQL.
+which FastAPI's own MQTT subscriber ingests and persists to PostgreSQL.
 
 ## The components
 
@@ -23,11 +23,14 @@ which Node-RED ingests and persists to PostgreSQL.
   Detail (live map), Dispatch, Teleop (camera + keyboard pad), Order History,
   OEE, Admin CRUD, Health. See [services/frontend.md](services/frontend.md).
 - **FastAPI Service** — FMS gateway; builds & publishes VDA5050 messages, serves
-  state / OEE / order history, ingests telemetry, exposes reference-data CRUD.
+  state / OEE / order history, **subscribes the telemetry topics over MQTT and
+  persists `state`/`connection`/command-audit/OEE to PostgreSQL**, exposes
+  reference-data CRUD.
 - **Mosquitto** — MQTT broker; the central message bus. TCP on `:1883` (backend
   services) + WebSocket on `:9001` (browser frontend).
-- **Node-RED** — telemetry sink; ingests `state`/`connection`, audits commands,
-  derives OEE, persists to PostgreSQL. Also hosts a DB Admin tab.
+- **Node-RED** — passive viewer / dev tool; subscribes the VDA5050 telemetry
+  topics for live display only (no DB writes since 2026-06-09). Hosts a DB Admin
+  tab for schema reset + ad-hoc SQL. The stack functions with it off.
 - **ROS Bridge Service** — per-robot VDA5050 ↔ ROS bridge over rosbridge.
 
 PostgreSQL provides persistent storage (state, connection, command audit, OEE,

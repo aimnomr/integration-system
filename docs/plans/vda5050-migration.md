@@ -32,7 +32,7 @@ These were agreed during planning. Listed here so they can be verified.
 | Order-model fidelity | **Structural subset** — real VDA5050 topic hierarchy, real message envelopes, real `order`/`state`/`instantActions`/`connection` structures; `order` carries node positions used like waypoints; edges/actions kept minimal. |
 | ros-bridge-service runtime | **Single process with a robot registry** — one process holds a `FleetManager` with a `Map<serial, Robot>`; each `Robot` owns its own rosbridge connection + order state. |
 | Topic migration | **Replace `amr/*` entirely** with the VDA5050 hierarchy. No parallel scheme. |
-| Component roles | **FastAPI = FMS gateway** (publishes `order`/`instantActions` directly); **Node-RED = state ingestion + persistence**, command-routing role removed. |
+| Component roles | **FastAPI = FMS gateway** (publishes `order`/`instantActions` directly); **Node-RED = state ingestion + persistence** _(later demoted to passive viewer 2026-06-09 — FastAPI now ingests; see §5.3 note)_, command-routing role removed. |
 | `visualization` topic | **Out of scope** — see §3.3; React reads live pose directly from rosbridge. |
 | `factsheet` topic | **Out of scope.** |
 
@@ -381,6 +381,8 @@ everything else and carries no behaviour risk.
   to FastAPI `/ingest/*`, which owns the SQL (`app/db.py`). Node-RED remains the
   ingestion and OEE-derivation layer — only the final INSERT moved one hop, into the
   service that already owns the database connection.
+  _(Superseded 2026-06-09: FastAPI's own MQTT subscriber now ingests and derives OEE
+  via `app/ingest_service.py`; Node-RED is a passive viewer. See decisions.md.)_
 - **`amr/system/connect|disconnect` dropped.** The rosbridge URL is now fixed
   configuration (`robots.config.json`); the bridge auto-connects and auto-reconnects,
   so manual connect/disconnect commands no longer apply.

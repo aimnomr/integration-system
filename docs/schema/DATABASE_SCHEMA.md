@@ -5,9 +5,9 @@ multi-robot**: every telemetry and log table carries a `serial_number`, so the s
 scales from one robot to a fleet without change.
 
 > **Status:** the database is **not yet runtime-integrated** — the code paths exist
-> (Node-RED → FastAPI `/ingest/*` → PostgreSQL) but no live database has been stood up.
-> This schema is the agreed target. It backs the VDA5050 `state` / `connection` topics,
-> the command audit log, and OEE.
+> (FastAPI's MQTT subscriber → `app/ingest_service.py` → PostgreSQL) but no live
+> database has been stood up. This schema is the agreed target. It backs the VDA5050
+> `state` / `connection` topics, the command audit log, and OEE.
 
 This schema is **fully normalized — 1NF-strict and BCNF**. VDA5050's variable-length
 arrays (`nodes`, `edges`, `actions`, `nodeStates`, `actionStates`, `errors`) are stored
@@ -435,6 +435,7 @@ for the FYP; it is documented here as a known scaling characteristic.
   node/action/error rows automatically.
 - Enum-like columns use `CHECK` constraints (not PostgreSQL `ENUM` types) so the script
   stays simple to drop and re-run.
-- The write path is **Node-RED → FastAPI `/ingest/*` → PostgreSQL**; reads are
-  FastAPI `GET /robots/{serial}/state` and `/robots/{serial}/oee/*`. See
-  [REST_ENDPOINTS.md](REST_ENDPOINTS.md).
+- The write path is **FastAPI's MQTT subscriber → `app/ingest_service.py` →
+  PostgreSQL** (the HTTP `/ingest/*` routes share the same persistence layer as a
+  secondary path); reads are FastAPI `GET /robots/{serial}/state` and
+  `/robots/{serial}/oee/*`. See [REST_ENDPOINTS.md](REST_ENDPOINTS.md).

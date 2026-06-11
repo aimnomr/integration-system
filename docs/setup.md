@@ -255,7 +255,7 @@ psql -U postgres -d amr_integration -f docs/schema/schema.sql
 | `CANCEL_TOPIC` | ROS Bridge | `/move_base/cancel` | ROS topic for goal cancellation |
 | `LOG_LEVEL` | ROS Bridge | `info` | Log verbosity — `debug`/`info`/`warn`/`error` (optional) |
 | `MQTT_HOST` | Node-RED | `localhost` | MQTT broker host for `flows.json` (defaulted in `settings.js`) |
-| `FASTAPI_HOST` | Node-RED | `localhost` | FastAPI host for the `/ingest/*` calls in `flows.json` |
+| `FASTAPI_HOST` | Node-RED | `localhost` | Legacy — unused since 2026-06-09 (Node-RED no longer POSTs to `/ingest/*`; FastAPI ingests over MQTT) |
 | `VITE_API_URL` | Frontend | `http://localhost:8000` | FastAPI base URL — REST + Vite dev-proxy target |
 | `VITE_MQTT_WS_URL` | Frontend | `ws://localhost:9001` | Mosquitto WebSocket listener |
 | `VITE_API_KEY` | Frontend | _(empty)_ | Sent as `X-API-Key` on every REST call when set |

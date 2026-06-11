@@ -9,7 +9,8 @@ derivation) moved into FastAPI's own MQTT subscriber on 2026-06-09
 functions whether Node-RED is running or not**. It was already out of the command
 path — FastAPI publishes `order` / `instantActions` directly.
 
-The flow lives in `node-red/flows.json`, organised into **5 tabs**. Run it with
+The flow lives in `node-red/flows.json`, organised into **3 tabs** — Telemetry
+(view-only), Test Harness, and DB Admin. Run it with
 `node-red --settings settings.js --userDir .` (UI at `http://localhost:1880`). All
 MQTT nodes use the shared `Local MQTT` broker config (`localhost:1883`); all topic
 subscriptions use `+` wildcards so they capture every robot.
@@ -25,26 +26,32 @@ subscriptions use `+` wildcards so they capture every robot.
 
 ---
 
-> **Tabs 1–3 are view-only.** They end at a debug node, not an HTTP POST — FastAPI
-> persists these same topics over MQTT (see `app/ingest_service.py`). The `validate*`
-> / `tag*` / `deriveCycle` function nodes are kept only for the live status display.
+> **Tab 1 is view-only.** All its flows end at a debug node, not an HTTP POST —
+> FastAPI persists these same topics over MQTT (see `app/ingest_service.py`). The
+> `validate*` / `tag*` / `deriveCycle` function nodes are kept only for the live
+> status display.
 
 ## Tab 1 — Telemetry (view-only)
 
+A single tab holding three independent view-only flow groups (state + connection,
+command audit, and OEE). None of them write to the database.
+
+### State + connection
+
 ```
-amr/v2/+/+/state       → validateState      → debug   (state seen)
-amr/v2/+/+/connection  → validateConnection → debug   (connection seen)
+amr/v2/+/+/state       → validateState      → debug   (state seen (view-only))
+amr/v2/+/+/connection  → validateConnection → debug   (connection seen (view-only))
 ```
 
 Validates each VDA5050 `state` / `connection` message and shows live status. **No DB
 write** — FastAPI persists `state_snapshots` / `connection_log` from its own MQTT
 subscriber.
 
-## Tab 2 — Command Audit (view-only)
+### Command audit
 
 ```
-amr/v2/+/+/order           → tagOrder          → debug   (order seen)
-amr/v2/+/+/instantActions  → tagInstantActions → debug   (instantActions seen)
+amr/v2/+/+/order           → tagOrder          → debug   (order seen (view-only))
+amr/v2/+/+/instantActions  → tagInstantActions → debug   (instantActions seen (view-only))
 ```
 
 A **passive tap** on the command topics — observes a copy of every `order` /
@@ -52,10 +59,10 @@ A **passive tap** on the command topics — observes a copy of every `order` /
 *parallel* to the command path and cannot block delivery. The command audit log
 (`orders` / `instant_action_messages`) is now written by FastAPI's MQTT subscriber.
 
-## Tab 3 — OEE (view-only)
+### OEE
 
 ```
-amr/v2/+/+/state → deriveCycle → debug   (cycle derived)
+amr/v2/+/+/state → deriveCycle → debug   (cycle derived (view-only))
 ```
 
 `deriveCycle` tracks per-robot order state in flow context and emits one trip cycle
@@ -64,7 +71,7 @@ mid-order (`ABORTED`) — for display only. The authoritative copy of this logic
 ported to Python in `fastapi-service/app/ingest_service.py`, which persists
 `oee_cycles`.
 
-## Tab 4 — Test Harness
+## Tab 2 — Test Harness
 
 Manual VDA5050 injectors for `amr001`, plus outbound debug:
 
@@ -74,7 +81,7 @@ Manual VDA5050 injectors for `amr001`, plus outbound debug:
 
 Lets you exercise the robot directly, skipping FastAPI.
 
-## Tab 5 — DB Admin
+## Tab 3 — DB Admin
 
 ```
 Reset DB (A)     → Reset Schema (DDL)         → Setup Tables (seed) → debug
@@ -131,9 +138,9 @@ user=postgres, password=admin — matching `docker-compose.yml`):
 
 ## Notes
 
-- Tabs 1–3 no longer make HTTP calls — they are MQTT-in → function → debug only.
-  Persistence is FastAPI's job now (`app/mqtt.py` + `app/ingest_service.py`), so
-  whether Node-RED is up, down, or disconnected from FastAPI has **no effect on what
-  gets recorded**.
+- The Tab 1 flows no longer make HTTP calls — they are MQTT-in → function → debug
+  only. Persistence is FastAPI's job now (`app/mqtt.py` + `app/ingest_service.py`),
+  so whether Node-RED is up, down, or disconnected from FastAPI has **no effect on
+  what gets recorded**.
 - The legacy Command Router, State/Health/OEE handler tabs, the orphaned
   `handleBattery` tab, and the Library Init tab have all been removed.

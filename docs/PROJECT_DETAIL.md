@@ -30,7 +30,7 @@ Five components form the running system:
 1. **React Frontend** — operator console (Vite + React 19 + TypeScript).
 2. **FastAPI Service** — the FMS gateway.
 3. **Mosquitto** — the central MQTT broker.
-4. **Node-RED** — telemetry sink (and a DB admin tab).
+4. **Node-RED** — passive viewer / dev tool (and a DB admin tab).
 5. **ROS Bridge Service** — per-robot VDA5050 ↔ ROS translator.
 
 **PostgreSQL** sits behind FastAPI as the persistence layer and the
@@ -38,7 +38,7 @@ Five components form the running system:
 
 The project's primary working directory is `D:\FYP\integration-system`;
 the `master` branch holds the integrated build, with feature branches like
-the current `claude/170526` for ongoing work.
+the current `claude-090625` for ongoing work.
 
 ---
 
@@ -49,9 +49,9 @@ the current `claude/170526` for ongoing work.
 | Service          | Tech                                                                       | Address              | Role                                                                                                  |
 | ---------------- | -------------------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------- |
 | React Frontend   | Vite 6 + React 19 + TS + Tailwind 4 + MUI 7 + MUI X DataGrid/Charts        | `:5173` (dev)        | Operator console — REST commands, MQTT-over-WS telemetry, per-robot rosbridge for camera/teleop/map   |
-| FastAPI Service  | Python 3.11+, FastAPI, paho-mqtt, psycopg2, Pydantic                       | HTTP `:8000`         | FMS gateway — builds + publishes VDA5050 orders; serves state/OEE/order history; reference-data CRUD  |
+| FastAPI Service  | Python 3.11+, FastAPI, paho-mqtt, psycopg2, Pydantic                       | HTTP `:8000`         | FMS gateway — builds + publishes VDA5050 orders; subscribes telemetry over MQTT and persists to PostgreSQL; serves state/OEE/order history; reference-data CRUD |
 | Mosquitto        | Mosquitto MQTT broker                                                      | TCP `:1883`, WS `:9001` | Central message bus; TCP for backend services, WebSocket for the browser                              |
-| Node-RED         | Node-RED                                                                   | `:1880`              | Telemetry sink — ingests `state`/`connection`, audits commands, derives OEE; also a DB Admin tab      |
+| Node-RED         | Node-RED                                                                   | `:1880`              | Passive viewer — subscribes the VDA5050 telemetry topics for live display only (no DB writes); also a DB Admin tab |
 | ROS Bridge       | Node.js, `roslib`, `mqtt`                                                  | —                    | One isolated `Robot` per fleet entry; VDA5050 ↔ ROS translation                                        |
 | PostgreSQL       | PostgreSQL                                                                 | `:5432`              | 15-table normalized schema — state, connection, command audit, OEE, reference data                    |
 
@@ -100,15 +100,19 @@ ROS Bridge Service — Robot's StateBuilder + OrderStateMachine
   ↓ MQTT publish → amr/v2/moverobotic/{serial}/state | connection
 Mosquitto
   ↓
-Node-RED — ingests state/connection, derives OEE cycles
-  ↓ HTTP POST /ingest/state | /ingest/connection | /ingest/oee-cycle
-FastAPI  →  PostgreSQL
+FastAPI — subscribes state / connection / order / instantActions over MQTT,
+          derives OEE cycles, persists each (app/mqtt.py → app/ingest_service.py)
+  ↓
+PostgreSQL
 ```
 
-Node-RED also taps `order` / `instantActions` and POSTs them to
-`/ingest/command` as a **passive audit log**, sitting parallel to the
-command path. Because MQTT is pub/sub, this audit hop cannot block or
-delay delivery to the robot.
+Telemetry persistence lives in FastAPI's own MQTT subscriber (since
+2026-06-09); the same logic backs the HTTP `/ingest/*` routes, now a
+secondary path kept for manual injection, the Node-RED Test Harness, and
+the smoke suite. **Node-RED is a passive viewer** — it subscribes the same
+topics (including the `order` / `instantActions` audit tap) purely to
+display them live, and no longer writes to the database. The stack
+functions whether Node-RED is running or not.
 
 ### 2.5 Key design points
 
@@ -121,9 +125,10 @@ delay delivery to the robot.
   `connection` is QoS 1 and retained.
 - `state` is published on significant position/order/error change plus a
   5 s heartbeat (distance > 0.05 m or heading > 5°).
-- Node-RED persists via the FastAPI `/ingest/*` API rather than holding
-  its own database connection — a documented refinement of the migration
-  plan §5.3.
+- Telemetry persistence is triggered by FastAPI's own MQTT subscriber
+  (`app/mqtt.py` → `app/ingest_service.py` → `app/db.py`), not by Node-RED —
+  a documented refinement of migration plan §5.3 (2026-06-09; Node-RED
+  previously POSTed to `/ingest/*`).
 
 ---
 
@@ -328,24 +333,24 @@ subscriber receives the same retained `connection` as a TCP client.
 
 ### 4.4 Node-RED (`node-red/`)
 
-Five tabs in `flows.json`. All MQTT subscriptions use `+` wildcards so a
-single flow captures every robot.
+**Passive viewer since 2026-06-09** — three tabs in `flows.json`. All MQTT
+subscriptions use `+` wildcards so a single flow captures every robot.
 
 | Tab | Purpose                                                                                                                                  |
 | --- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| 1 — Telemetry Ingestion | `state` + `connection` → validate → POST `/ingest/*`                                                                          |
-| 2 — Command Audit       | Passive tap on `order` + `instantActions` → POST `/ingest/command`                                                            |
-| 3 — OEE                 | Derives one trip cycle when an order's `nodeStates` empties (SUCCEEDED) or `orderId` clears mid-order (ABORTED) → `/ingest/oee-cycle` |
-| 4 — Test Harness        | Manual VDA5050 injectors for `amr001`, plus outbound debug                                                                    |
-| 5 — DB Admin            | `node-red-contrib-postgresql` direct DB access — Reset DB, Row Counts, View `<table>`, Run custom SQL                          |
+| 1 — Telemetry (view-only) | Three view-only flow groups (state + connection, command audit, OEE) — subscribe → validate/tag/derive → debug. **No DB writes.** |
+| 2 — Test Harness          | Manual VDA5050 injectors for `amr001`, plus outbound debug                                                                    |
+| 3 — DB Admin              | `node-red-contrib-postgresql` direct DB access — Reset DB, Row Counts, View `<table>`, Run custom SQL                          |
 
-The runtime tabs (1–3) **POST to FastAPI** rather than holding their own
-DB connection. The DB Admin tab is the only exception: it uses
-`node-red-contrib-postgresql` directly for schema reset and ad-hoc admin
-SQL. Two equivalent Reset pipelines (A and B) exist side-by-side to
-let the maintainer pick whichever the Postgres driver handles cleanly
-when mixing DDL with seed DML. The inline SQL inside those nodes is a
-hand-maintained mirror of `docs/schema/schema.sql` — keep them in sync.
+The Tab 1 flows **end at a debug node**, not an HTTP POST — FastAPI persists
+these same topics over MQTT (`app/ingest_service.py`); the `validate*` /
+`tag*` / `deriveCycle` nodes are kept only for the live status display. The
+DB Admin tab is the exception: it uses `node-red-contrib-postgresql`
+directly for schema reset and ad-hoc admin SQL. Two equivalent Reset
+pipelines (A and B) exist side-by-side to let the maintainer pick whichever
+the Postgres driver handles cleanly when mixing DDL with seed DML. The
+inline SQL inside those nodes is a hand-maintained mirror of
+`docs/schema/schema.sql` — keep them in sync.
 
 ### 4.5 React Frontend (`frontend/`)
 
@@ -767,6 +772,9 @@ Distilled from `docs/decisions.md`; newest first.
    add it for the runtime tabs, Node-RED POSTs each message to FastAPI,
    keeping the SQL in one testable place. The DB Admin tab is the lone
    exception, using `node-red-contrib-postgresql` directly.
+   **Superseded 2026-06-09:** FastAPI's own MQTT subscriber now ingests and
+   persists telemetry (`app/ingest_service.py`); Node-RED is a passive viewer
+   and the `/ingest/*` routes are a secondary path.
 4. **Per-robot MQTT client in the ROS Bridge (2026-05-17).** MQTT
    permits only one Will per connection; the `connection` topic needs a
    per-robot retained `CONNECTIONBROKEN` Will, so each `Robot` owns its

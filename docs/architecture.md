@@ -17,7 +17,7 @@ and [schema/VDA5050_MESSAGES.md](schema/VDA5050_MESSAGES.md).
 | **React Frontend** | Vite + React 19 + TS + Tailwind + MUI | `:5173` (dev) | Operator console — commands via REST, telemetry via MQTT-over-WS, camera + teleop via per-robot rosbridge |
 | **FastAPI Service** | Python, FastAPI, paho-mqtt | HTTP `:8000` | FMS gateway — publishes VDA5050 orders, serves state/OEE/order history, ingests telemetry, reference-data CRUD |
 | **Mosquitto** | Mosquitto MQTT broker | TCP `:1883` + WS `:9001` | Central message broker; TCP for backend services, WS for the browser |
-| **Node-RED** | Node-RED | `:1880` | Telemetry sink — ingests `state`/`connection`, audits commands, derives OEE; also a DB Admin tab |
+| **Node-RED** | Node-RED | `:1880` | Passive viewer — subscribes the VDA5050 telemetry topics for live display only (no DB writes); also a DB Admin tab |
 | **ROS Bridge Service** | Node.js, roslib, mqtt | — | Per-robot VDA5050 ↔ ROS bridge (FleetManager + Robot) |
 | **PostgreSQL** | PostgreSQL | `:5432` | Persistent storage — state, connection, command audit, OEE, reference data |
 

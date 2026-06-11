@@ -156,6 +156,18 @@ export default class OrderStateMachine {
     }
 
     _sendCurrentNode() {
+        // Guard: an order can arrive over MQTT before (or without) a live
+        // rosbridge connection — in that case setup() has not run and the
+        // goal topic is null. Publishing on it would throw and crash the whole
+        // process (observed: ros-bridge exited with code 1 right after
+        // "Order accepted"). Skip instead; the order is still recorded in
+        // state, and execution resumes if/when ROS connects.
+        if (!this._goalTopic) {
+            logger.warn('Order received but rosbridge not connected — node not sent', {
+                orderId: this._order?.orderId,
+            })
+            return
+        }
         const node = this._nodes[this._nodeIdx]
         if (!node) {
             logger.info('No node to send')
@@ -177,7 +189,8 @@ export default class OrderStateMachine {
     }
 
     _cancelOrder() {
-        this._cancelTopic?.publish({ stamp: { sec: 0, nsec: 0 }, id: '' })
+        // `?.` guards the null-topic case (no rosbridge connection yet).
+        this._cancelTopic?.publish?.({ stamp: { sec: 0, nsec: 0 }, id: '' })
         this._order    = null
         this._nodes    = []
         this._nodeIdx  = 0

@@ -4,7 +4,9 @@
       "Read(//d/d/FYP/integration-system/**)",
       "Bash(node *)",
       "Bash(python -m pytest -q)",
-      "Bash(docker compose *)"
+      "Bash(docker compose *)",
+      "Read(//tmp/**)",
+      "Bash(npm test *)"
     ]
   }
 }

@@ -277,8 +277,13 @@ INSERT INTO maps (map_id, label) VALUES
     ('map-001', 'Default Sim World'),
     ('map-002', 'Office CPR');
 
+-- Use 127.0.0.1 (not `localhost`): on Windows `localhost` resolves to ::1
+-- (IPv6) first, but rosbridge_server typically listens on IPv4 only, so the
+-- browser's ws://localhost:9090 connect is refused. Forcing IPv4 fixes the
+-- browser; the ros-bridge container rewrites this loopback host to the Docker
+-- host via ROSBRIDGE_HOST_OVERRIDE.
 INSERT INTO robots (serial_number, rosbridge_url, map_id) VALUES
-    ('amr001', 'ws://localhost:9090', 'map-001');
+    ('amr001', 'ws://127.0.0.1:9090', 'map-001');
 
 -- theta is radians (the legacy angle.z values were degrees — converted here).
 -- These named locations belong to map-001 (Default Sim World).

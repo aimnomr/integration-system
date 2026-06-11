@@ -3,6 +3,33 @@
 Open items not yet addressed, consolidated for visibility. For what *is* working see
 [status.md](status.md). Resolved gaps are listed at the bottom.
 
+> Last updated: 2026-06-11 (**G42 + G43 — ros-bridge crash on order + Docker
+> can't reach the robot**). From a `docker compose up` log: dispatching an order
+> made `ros-bridge` exit code 1 right after `Order accepted` — `OrderStateMachine`
+> published on a `null` goal topic because rosbridge was never connected
+> (`ws://localhost:9090` is the container itself inside Docker). G42 fix: guard
+> the null goal/cancel topics so an order never crashes the process. G43 fix:
+> opt-in `ROSBRIDGE_HOST_OVERRIDE` (set to `host.docker.internal` in compose)
+> rewrites a loopback rosbridge host for the container only. **Still needs the
+> sim's rosbridge actually listening on host:9090.** Open follow-ups from the
+> same session (frontend, not yet root-caused): robot status stuck "idle" while
+> last-seen ticks (consistent with ROS never connecting), teleop hold-to-send not
+> reaching the robot (KeyboardPad/useRosPublisher logic looks correct — likely
+> the same no-connection cause or a cmd_vel topic mismatch on the robot side).
+>
+> Last updated: 2026-06-10 (**G41 closed — frontend production-build blank page
+> fixed**). `roslib`'s CommonJS entry does `var ROSLIB = this.ROSLIB || {…}`;
+> in a prod build `@rollup/plugin-commonjs` rewrites that top-level `this` to the
+> module's lazily-initialised exports var (still `undefined` at that point), so
+> the import threw `Cannot read properties of undefined (reading 'ROSLIB')` (`at
+> Joe`) and React never mounted (blank Docker page). Fix: a `pre`-enforced Vite
+> transform plugin in `frontend/vite.config.ts` patches that one line before the
+> commonjs plugin runs, turning `this.ROSLIB` into a safe
+> `globalThis.ROSLIB` lookup that falls through to the `|| {…}` literal. (An
+> earlier `build.rollupOptions.moduleContext` attempt was inert — the commonjs
+> plugin overrode it, producing a byte-identical bundle.) Verified by hash
+> change + bundle inspection; rebuild the frontend image and hard-refresh.
+>
 > Last updated: 2026-06-09 (**Node-RED demoted to a passive viewer — telemetry
 > persistence moved into FastAPI**). FastAPI's own MQTT client now subscribes the
 > four telemetry topics (`state` / `connection` / `order` / `instantActions`) and
@@ -179,6 +206,9 @@ out to be expected behaviour or test-setup issues.
 | G27 | Named-location pin labels invisible vs the dark MapCanvas background | 2026-05-25 |
 | G31 | No `GET /orders/{id}` detail endpoint — blocks Order History click-to-expand drill-down | 2026-05-25 |
 | G30 | Frontend has no Dockerfile / not in `docker-compose.yml` — local-dev only | 2026-05-25 |
+| G41 | Frontend production build (Docker / `vite build`) renders a blank page — `roslib` import crashes the bundle | 2026-06-10 |
+| G42 | ros-bridge exits with code 1 the moment an order is accepted while rosbridge is not connected (null goal topic), killing the whole fleet process | 2026-06-11 |
+| G43 | In Docker, ros-bridge can't reach the robot — DB stores `ws://localhost:9090`, but `localhost` inside the container is the container itself | 2026-06-11 |
 
 G1–G3 — the ROS Bridge Service consumes `/move_base` feedback and the VDA5050
 `OrderStateMachine` auto-advances orders node-by-node. G12 — JSON-line logging in the
@@ -444,6 +474,66 @@ always re-fetched. New `frontend/.dockerignore` keeps `node_modules`,
 depends on the `fastapi` healthcheck, has its own `wget /` healthcheck.
 Rebuild against different endpoints with
 `docker compose build --build-arg VITE_API_URL=... frontend`.
+
+**G42** — The ROS Bridge process exited with code 1 immediately after logging
+`Order accepted` (seen in `docker compose` logs: a `POST /robots/amr001/order/
+named` → 200, then `ros-bridge-1 exited with code 1`). Root cause: an order
+arrives over MQTT and `Robot._onMessage` → `OrderStateMachine.acceptOrder` →
+`_sendCurrentNode` → `this._goalTopic.publish(...)`, but `_goalTopic` is only
+created in `setup()`, which runs on `_onRosConnect`. When rosbridge is not
+connected (e.g. the robot is unreachable — see G43), `_goalTopic` is `null`, so
+`null.publish(...)` throws an unhandled `TypeError` and kills the whole fleet
+process. Fix (`ros-bridge-service/src/orderStateMachine.js`): `_sendCurrentNode`
+now guards `if (!this._goalTopic)` and logs a warning instead of publishing;
+`_cancelOrder` uses optional-chained `?.publish?.()`. The order is still
+recorded in `state`; nothing crashes. `node:test` suite 19/19. Note: this is a
+robustness fix — the robot still won't actually move until it can reach
+rosbridge (G43).
+
+**G43** — In the Docker stack the ROS Bridge logs
+`"Starting robot","url":"ws://localhost:9090"` and never connects, because the
+robot's rosbridge URL is seeded in the database as `ws://localhost:9090`
+(`docs/schema/schema.sql`) and served to both the browser and the container.
+`localhost` is correct from the browser (= the host) but inside the container
+it resolves to the container itself, so navigation can't run and orders pile up
+unsent (and used to crash it — G42). Fix: opt-in `ROSBRIDGE_HOST_OVERRIDE` env
+var. `Robot` now rewrites a *loopback* rosbridge host (`localhost`/`127.0.0.1`)
+to that value (`applyHostOverride`), leaving real hostnames/IPs and the
+browser's copy untouched. `docker-compose.yml` sets it to
+`host.docker.internal` for the `ros-bridge` service and adds
+`extra_hosts: ["host.docker.internal:host-gateway"]` (auto-resolved on Docker
+Desktop, explicit for Linux). **Requires the robot/sim's rosbridge to actually
+be listening on the host's port 9090** — otherwise the container connects to
+the host but finds nothing there. Unset the env var when the DB value is a real
+reachable host. Rebuild: `docker compose build ros-bridge && docker compose up
+-d ros-bridge`.
+
+**G41** — The Dockerised frontend (and any `npm run build`) rendered a blank
+page: only the body background painted, no UI. Console showed
+`Uncaught TypeError: Cannot read properties of undefined (reading 'ROSLIB')`
+thrown `at Joe (...)` at import time, so React never mounted. Root cause:
+`roslib`'s CommonJS entry `node_modules/roslib/src/RosLib.js` begins
+`var ROSLIB = this.ROSLIB || { REVISION: '1.4.1' }`. In the production build,
+`@rollup/plugin-commonjs` lazily wraps the module and rewrites that top-level
+`this` to the module's exports variable — which is still `undefined` when the
+line runs (the minified bundle showed `var e = wb.ROSLIB || {...}` with `wb`
+unassigned). So `wb.ROSLIB` throws. (Dev worked because esbuild handles CJS
+`this` differently.) The shipped `build/roslib.js` is a plain browserify bundle
+with no usable default export, so aliasing to it wasn't an option, and a
+`build.rollupOptions.moduleContext = 'globalThis'` attempt was **inert** — the
+commonjs plugin overrode the module context, leaving a byte-identical bundle
+(same content hash `index-B4-jYDby.js`, which is how the no-op was caught).
+Fix: a small `pre`-enforced Vite transform plugin (`fixRoslibThis` in
+`frontend/vite.config.ts`) rewrites the one offending line *before* the
+commonjs plugin sees it, turning `this.ROSLIB` into
+`(typeof globalThis !== "undefined" && globalThis.ROSLIB)`. `globalThis` is
+always defined in the browser and has no `ROSLIB` property, so the `|| { ... }`
+fallback runs. Verified: the emitted init is now
+`typeof globalThis<"u"&&globalThis.ROSLIB||{REVISION:"1.4.1"...}`, the bundle
+hash **changed** (local `index-CGAVpqOs.js`; Docker image `index-Dt_rQ_Rg.js`)
+— proving the patch actually altered the output, unlike the moduleContext
+attempt. Rebuild the image with `docker compose build frontend` (or
+`docker compose up --build frontend`) and hard-refresh.
 
 **G25** — Health pills now degrade live when `/system/status` fails. Root
 cause: `useSystemStatus` returns TanStack Query's default `data` retention

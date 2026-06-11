@@ -1,6 +1,6 @@
 # Implementation Status
 
-> **This is a point-in-time snapshot and decays.** Last updated: 2026-05-25.
+> **This is a point-in-time snapshot and decays.** Last updated: 2026-06-09.
 > When in doubt, the code is authoritative.
 
 ---
@@ -34,9 +34,14 @@ unreadable map pin labels). See [gaps.md](gaps.md) and
   `/move_base/result`, and applies `cancelOrder` / `retryNode` / `skipNode`.
   Publishes the consolidated VDA5050 `state` on change + 5 s heartbeat and a
   retained `connection` topic with a `CONNECTIONBROKEN` MQTT Last-Will.
-- **Node-RED — telemetry sink + DB admin.** Ingests `state` / `connection` and
-  the `order` / `instantActions` audit tap, derives OEE cycles, and persists
-  via the FastAPI `/ingest/*` API. A separate **DB Admin** tab uses
+- **FastAPI — sole telemetry ingester (since 2026-06-09).** FastAPI's own MQTT
+  client subscribes the four telemetry topics (`state` / `connection` /
+  `order` / `instantActions`) and persists each — including OEE cycle
+  derivation — via `app/ingest_service.py` (shared with the HTTP `/ingest/*`
+  routes). The stack fully functions whether Node-RED runs or not.
+- **Node-RED — passive viewer + DB admin.** Subscribes the same VDA5050
+  telemetry topics purely to display them live (node status + debug sidebar)
+  for development — **no DB writes**. A separate **DB Admin** tab uses
   `node-red-contrib-postgresql` to reset the schema and run ad-hoc admin SQL
   directly against Postgres — for setup/maintenance only.
 - **Mosquitto** — two listeners: TCP on `:1883` (backend services) and

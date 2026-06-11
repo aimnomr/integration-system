@@ -7,6 +7,28 @@ import { createMqttClient } from './mqttClient.js'
 import { buildTopic, HeaderFactory, isValidOrder, isValidInstantActions } from './vda5050.js'
 import logger from './logger.js'
 
+// The rosbridge URL is stored once in the database and served to *both* the
+// browser and this service. From the browser, `localhost` means the host
+// machine — correct. From inside a Docker container, `localhost` means the
+// container itself, so the robot is unreachable. ROSBRIDGE_HOST_OVERRIDE lets
+// the container (only) rewrite a loopback host to e.g. `host.docker.internal`
+// without changing the value the browser receives. No-op when unset, or when
+// the URL host isn't loopback (real robots on real IPs are left alone).
+function applyHostOverride(url) {
+    const override = process.env.ROSBRIDGE_HOST_OVERRIDE
+    if (!override) return url
+    try {
+        const u = new URL(url)
+        if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') {
+            u.hostname = override
+            return u.toString().replace(/\/$/, '')
+        }
+    } catch {
+        logger.warn('Could not parse rosbridge URL for host override', { url })
+    }
+    return url
+}
+
 // One robot: owns its rosbridge connection, its own MQTT client, all per-robot
 // bridges, the order state machine and the state builder. A fleet is N of these.
 //
@@ -18,7 +40,7 @@ export default class Robot {
         this.serialNumber  = robotConfig.serialNumber
         this.manufacturer  = fleetConfig.manufacturer
         this.mapId         = robotConfig.mapId
-        this._rosbridgeUrl = robotConfig.rosbridgeUrl
+        this._rosbridgeUrl = applyHostOverride(robotConfig.rosbridgeUrl)
 
         this._header = new HeaderFactory(fleetConfig, this.serialNumber)
 

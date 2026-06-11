@@ -70,7 +70,11 @@ author) don't have to re-derive them. Newest decisions first.
   testable place (`fastapi-service/app/db.py`) and uses only core Node-RED nodes.
 - **Trade-off:** Telemetry persistence makes one extra hop through FastAPI. The rate is
   low (`state` on change + 5 s heartbeat), so this is negligible.
-- **Status:** Implemented — refinement of migration plan §5.3.
+- **Status:** **Superseded 2026-06-09.** Node-RED no longer writes to the database.
+  FastAPI's own MQTT client now subscribes the four telemetry topics and persists each
+  via `app/ingest_service.py`, so the stack functions whether Node-RED runs or not. The
+  HTTP `/ingest/*` routes remain as a secondary path (manual injection, Test Harness,
+  smoke suite); Node-RED is now a passive viewer. See architecture.md / services/node-red.md.
 
 ---
 
