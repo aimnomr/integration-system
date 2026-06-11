@@ -2,6 +2,20 @@
 
 > A point-in-time handoff snapshot so work can resume without re-deriving context.
 > **This decays** — trust the code and the canonical docs over this page.
+> Last updated: 2026-06-11 (**Centralised deploy config — `.env`**). Extracted
+> all per-device settings into a root `.env` (git-ignored) + committed
+> `.env.example`; `docker-compose.yml` now uses `${VAR:-default}` everywhere, so
+> the stack still runs with no `.env` (defaults = same-machine localhost) and a
+> fresh deploy is `cp .env.example .env` → edit → `docker compose up --build -d`.
+> Key var `PUBLIC_HOST` (browser/phone-facing address) feeds the frontend build
+> args + `CORS_ORIGINS`; baked at build time so changing it needs `up --build`.
+> Also parameterised: ports, DB creds, `API_KEY`, `RATE_LIMIT_PER_MINUTE`,
+> `ROSBRIDGE_HOST_OVERRIDE`. Verified with `docker compose config` both with and
+> without `.env`. Robot rosbridge URL stays `ws://127.0.0.1:9090` in the DB seed.
+> Docs: setup.md gained a "Configuration (`.env`) & deploying to another device"
+> section. No image rebuild required to land this (compose-only), but the
+> frontend must be rebuilt per target to bake its `PUBLIC_HOST`.
+>
 > Last updated: 2026-06-11 (**G42 + G43 — ros-bridge crash + Docker robot
 > reachability**). Diagnosed from a user-supplied `docker compose up` log
 > (`logs.txt`, UTF-16): dispatching an order → `ros-bridge-1 exited with code 1`

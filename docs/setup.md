@@ -46,14 +46,51 @@ build on Alpine, FastAPI on `python:3.12-slim` (glibc, required by the
 
 > A real robot's `rosbridge_server` must be reachable **from the ros-bridge
 > container** for navigation to actually run; the per-robot `rosbridge_url`
-> comes from the database. To rebuild the frontend against non-default
-> endpoints: `docker compose build --build-arg VITE_API_URL=... frontend`.
+> comes from the database.
 
 Quick check: `curl http://localhost:8000/openapi.json` and open
 `http://localhost:5173/`.
 
 For a fuller command reference (images, volumes, debugging, cleanup,
 deployment), see the [Docker cheatsheet](docker-cheatsheet/README.md).
+
+### Configuration (`.env`) & deploying to another device
+
+All per-device settings live in a single **`.env`** file next to
+`docker-compose.yml` (auto-loaded by Compose). Every value has a default baked
+into the compose file with `${VAR:-default}`, so the stack runs **with no `.env`
+at all** — the file only *overrides* defaults. Template: **`.env.example`**
+(committed); real `.env` is git-ignored.
+
+To deploy on a fresh machine (build-from-repo):
+
+```bash
+# 1. Copy the repo to the target (git clone or copy the folder)
+cp .env.example .env          # 2. then edit .env for this machine
+docker compose up --build -d  # 3. build + run
+```
+
+The values you actually change per device:
+
+| Variable | Set it to | Notes |
+|---|---|---|
+| `PUBLIC_HOST` | the machine's **LAN IP** (e.g. `192.168.1.50`) if phones / other PCs will reach it; `localhost` if only this machine's browser | **Baked into the frontend at build time** — change it, then `docker compose up --build -d frontend`. Also feeds `CORS_ORIGINS`. |
+| `POSTGRES_PASSWORD` | a real password | Only applies on a fresh volume (`down -v`). |
+| `API_KEY` | a secret to require `X-API-Key`; blank = open | Picked up by FastAPI, the frontend, and ros-bridge together. |
+| `ROSBRIDGE_HOST_OVERRIDE` | `host.docker.internal` (robot on this machine) or **blank** (robot on a separate machine — then set its `rosbridge_url` in the DB to `ws://<robot-ip>:9090`) | Lets the ros-bridge *container* reach the robot. |
+
+**Why `PUBLIC_HOST` needs a rebuild:** the frontend is static JS served to the
+browser, and Vite inlines `VITE_*` env vars into that JS at *build* time. So the
+API/MQTT addresses are frozen into the image when you build — the browser then
+uses those baked-in values. Backend services (FastAPI, ros-bridge, Postgres)
+read their env at *runtime*, so changing their `.env` values only needs a
+restart (`docker compose up -d`), not a rebuild.
+
+Alternatives to build-from-repo: ship image tarballs (`docker save` / `docker
+load`) for an offline target, or push to a registry and `docker compose pull` —
+see the [Docker cheatsheet](docker-cheatsheet/README.md). In both cases the
+frontend image is the one piece that must be (re)built with the target's
+`PUBLIC_HOST`.
 
 ---
 

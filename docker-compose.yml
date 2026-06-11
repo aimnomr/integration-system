@@ -7,6 +7,13 @@
 #
 #   docker compose up --build
 #
+# Per-device configuration lives in a `.env` file next to this one (copy it
+# from `.env.example`). Every value below uses ${VAR:-default}, so the stack
+# still runs with no `.env` present — the defaults reproduce the same-machine
+# localhost setup. The one value you usually change per deployment is
+# PUBLIC_HOST (the address browsers/phones use to reach this machine); because
+# it is baked into the frontend at build time, change it then `up --build`.
+#
 # The database is auto-initialised from docs/schema/schema.sql on first run
 # (the postgres volume is empty). Delete the volume to re-seed:
 #   docker compose down -v
@@ -15,17 +22,18 @@ services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_DB: amr_integration
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: ${POSTGRES_DB:-amr_integration}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       # Auto-applied once, only when the data volume is empty.
       - ./docs/schema/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d amr_integration"]
+      # $$ escapes to $ so the container's own shell expands these env vars.
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -33,8 +41,8 @@ services:
   mosquitto:
     image: eclipse-mosquitto:2
     ports:
-      - "1883:1883"   # TCP — FastAPI, Node-RED, ROS Bridge
-      - "9001:9001"   # WebSocket — browser frontend (mqtt.js)
+      - "${MQTT_TCP_PORT:-1883}:1883"   # TCP — FastAPI, Node-RED, ROS Bridge
+      - "${MQTT_WS_PORT:-9001}:9001"    # WebSocket — browser frontend (mqtt.js)
     volumes:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - mosquitto-data:/mosquitto/data
@@ -47,18 +55,22 @@ services:
   fastapi:
     build: ./fastapi-service
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
     environment:
       MQTT_BROKER: mosquitto
       MQTT_PORT: "1883"
       DB_HOST: postgres
       DB_PORT: "5432"
-      DB_NAME: amr_integration
-      DB_USER: postgres
-      DB_PASSWORD: admin
+      DB_NAME: ${POSTGRES_DB:-amr_integration}
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-admin}
       NODE_RED_URL: http://node-red:1880
-      # API_KEY: change-me            # uncomment to enable auth (G10)
-      RATE_LIMIT_PER_MINUTE: "120"
+      # Blank = open API. Set API_KEY in .env to require X-API-Key (G10).
+      API_KEY: ${API_KEY:-}
+      # Origins allowed to call the API from a browser. Includes the frontend
+      # at PUBLIC_HOST and a localhost fallback for same-machine access.
+      CORS_ORIGINS: http://${PUBLIC_HOST:-localhost}:${FRONTEND_PORT:-5173},http://localhost:${FRONTEND_PORT:-5173}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-120}
     depends_on:
       postgres:
         condition: service_healthy
@@ -75,12 +87,14 @@ services:
     environment:
       MQTT_BROKER: mqtt://mosquitto:1883
       FLEET_API_URL: http://fastapi:8000/fleet
-      # The DB stores the robot's rosbridge URL as ws://localhost:9090 (correct
-      # for the browser). Inside this container `localhost` is the container, so
-      # rewrite a loopback host to the Docker host. Comment this out if the
-      # robot is reachable by a real hostname/IP from the DB value.
-      ROSBRIDGE_HOST_OVERRIDE: host.docker.internal
-      # API_KEY: change-me            # must match fastapi's API_KEY if auth is on
+      # The DB stores the robot's rosbridge URL as ws://127.0.0.1:9090 (correct
+      # for the browser). Inside this container a loopback host is the container
+      # itself, so rewrite it to reach the Docker host. Set ROSBRIDGE_HOST_OVERRIDE
+      # blank in .env if the robot is a separate machine reachable by real IP
+      # (and point the DB rosbridge_url at that IP instead).
+      ROSBRIDGE_HOST_OVERRIDE: ${ROSBRIDGE_HOST_OVERRIDE-host.docker.internal}
+      # Must match fastapi's API_KEY when auth is on (sent on GET /fleet).
+      API_KEY: ${API_KEY:-}
     extra_hosts:
       # Lets `host.docker.internal` resolve on Linux too (auto on Docker Desktop).
       - "host.docker.internal:host-gateway"
@@ -93,7 +107,7 @@ services:
   node-red:
     image: nodered/node-red:4.0
     ports:
-      - "1880:1880"
+      - "${NODE_RED_PORT:-1880}:1880"
     environment:
       MQTT_HOST: mosquitto
       FASTAPI_HOST: fastapi
@@ -105,21 +119,19 @@ services:
       mosquitto:
         condition: service_healthy
 
-  # G30 — React frontend served by nginx. VITE_* vars are baked in at build
-  # time; defaults point at the host-published ports (localhost from the
-  # browser's POV) so the compose stack works out of the box. To rebuild
-  # against different endpoints:
-  #   docker compose build --build-arg VITE_API_URL=... frontend
+  # G30 — React frontend served by nginx. VITE_* vars are baked in at BUILD
+  # time (Vite inlines them into the JS the browser downloads), so changing
+  # PUBLIC_HOST requires a rebuild: `docker compose up --build -d frontend`.
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: http://localhost:8000
-        VITE_MQTT_WS_URL: ws://localhost:9001
-        VITE_API_KEY: ""
+        VITE_API_URL: http://${PUBLIC_HOST:-localhost}:${API_PORT:-8000}
+        VITE_MQTT_WS_URL: ws://${PUBLIC_HOST:-localhost}:${MQTT_WS_PORT:-9001}
+        VITE_API_KEY: ${API_KEY:-}
     ports:
-      - "5173:80"
+      - "${FRONTEND_PORT:-5173}:80"
     depends_on:
       fastapi:
         condition: service_healthy
