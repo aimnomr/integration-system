@@ -124,8 +124,6 @@ export function KeyboardPad({ rosbridgeUrl, engaged }: Props) {
             onMouseDown={() => start(k)}
             onMouseUp={stop}
             onMouseLeave={stop}
-            onTouchStart={(e) => { e.preventDefault(); start(k); }}
-            onTouchEnd={stop}
             className={`teleop-key h-14 w-14 select-none rounded font-mono text-lg font-semibold uppercase ${
               engaged
                 ? 'bg-surface-2 text-white'
