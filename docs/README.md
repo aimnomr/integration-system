@@ -37,6 +37,7 @@ contracts and as-built internals.
 | Page | What it gives you |
 |---|---|
 | [Architecture](reference/architecture.md) | Full topology, the three realtime lanes, key design points |
+| [Extending the system](reference/extending.md) | How to add an endpoint, message, topic, screen, or table — one recipe per service |
 | [Services](reference/services/) | As-built internals per service: [FastAPI](reference/services/fastapi-service.md), [ROS Bridge](reference/services/ros-bridge-service.md), [Node-RED](reference/services/node-red.md), [Frontend](reference/services/frontend.md) |
 | [Contracts](schema/) | The source of truth — [REST](schema/REST_ENDPOINTS.md), [MQTT](schema/MQTT_TOPICS.md), [VDA5050 messages](schema/VDA5050_MESSAGES.md), [ROS topics](schema/ROS_TOPICS.md), [database](schema/DATABASE_SCHEMA.md) |
 | [Decisions](reference/decisions.md) | Why the key design choices were made |

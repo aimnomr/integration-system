@@ -1,0 +1,1 @@
+netsh interface portproxy add v4tov4 listenport=9090 listenaddress=0.0.0.0 connectport=9090 connectaddress=<change-to-wsl-ip>

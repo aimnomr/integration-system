@@ -23,7 +23,7 @@ All project documentation lives under `docs/`, organised by audience. Start at
 | Doc map + audience router | `docs/README.md` |
 | **User guide** (run as-is): quickstart, `.env` config, console tour, connecting a robot, troubleshooting | `docs/user-guide/` |
 | **Getting started** (beginners): introduction, concepts/glossary, architecture tour, manual dev setup | `docs/getting-started/` |
-| **Reference** (advanced): architecture, per-service internals, decisions, failure matrix, testing, Docker cheatsheet | `docs/reference/` |
+| **Reference** (advanced): architecture, **extending the system** (how-to recipes), per-service internals, decisions, failure matrix, testing, Docker cheatsheet | `docs/reference/` |
 | Contracts — REST, MQTT, VDA5050, ROS, database | `docs/schema/` |
 | Newman API smoke suite (collection + runner) | `docs/postman/` |
 | PowerShell integration scripts | `scripts/test/` (+ `scripts/test/README.md`) |

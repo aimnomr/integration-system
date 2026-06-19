@@ -25,23 +25,31 @@ fastapi-service/
     ├── ingest_service.py     # shared persistence (state/connection/command/OEE)
     │                         #   — called by mqtt.py AND routers/ingest.py
     ├── db.py                 # PostgreSQL access (lazy psycopg2) — reads + writes
+    ├── auth.py               # require_api_key dependency (G10 — X-API-Key gate)
+    ├── ratelimit.py          # per-IP sliding-window rate limiter (G11)
     ├── config.py             # startup env-var validation (validate_env)
     ├── schemas.py            # Pydantic request models
     ├── logging_config.py     # JSON-line logging
     └── routers/
         ├── __init__.py
-        ├── robots.py         # /robots/* — FMS gateway routes
+        ├── robots.py         # /robots/* — FMS gateway + robot CRUD/archive
         ├── fleet.py          # /fleet — fleet definition (read by the ROS Bridge)
         ├── system.py         # /system/status
         ├── oee.py            # /robots/{serial}/oee/*
+        ├── orders.py         # /orders, /orders/{order_id} — order history
+        ├── maps.py           # /maps — reference-data CRUD (G15)
+        ├── locations.py      # /locations — reference-data CRUD (G15)
         └── ingest.py         # /ingest/* — HTTP ingest (secondary; tests/manual)
 ```
 
 ## Module Responsibilities
 
 ### `main.py`
-`load_dotenv()` first, then `validate_env()`, then creates the app and mounts the five
-routers.
+`load_dotenv()` first, then `validate_env()`, then creates the app and mounts the
+**eight** routers. Wires the cross-cutting middleware: `CORSMiddleware` (origins from
+`CORS_ORIGINS`) and the `rate_limit_middleware`. Every client-facing router is mounted
+with `dependencies=[Depends(require_api_key)]`; only `ingest.router` is left open (the
+internal telemetry boundary).
 
 ### `app/robots.py` — `RobotRegistry`
 Loads the fleet from the **database** (`fleet_config` + `robots` tables) at startup —
@@ -70,17 +78,40 @@ Refuses archived serials (`ArchivedRobot`). The SQL itself stays in `app/db.py`.
 
 ### `app/db.py`
 PostgreSQL access. `psycopg2` is imported **lazily**; queries raise
-`DatabaseUnavailable` → HTTP 503 when the DB is down. Provides write helpers
-(`insert_state`/`insert_connection`/`insert_command`/`insert_oee_cycle`) and read
-helpers (`fetch_fleet_config`, `fetch_robots`, `fetch_named_locations`,
-`fetch_latest_state`, `fetch_oee_*`, `ping`). Note: `RobotRegistry` reads the fleet
-through this module at startup, so a live DB is required for the service to boot.
+`DatabaseUnavailable` → HTTP 503 when the DB is down, and `IntegrityConflict` → HTTP
+409 on a constraint clash. Provides telemetry writes
+(`insert_state`/`insert_connection`/`insert_command`/`insert_oee_cycle`), read helpers
+(`fetch_fleet_config`, `fetch_robots`, `fetch_named_locations`, `fetch_latest_state`,
+`fetch_oee_*`, `fetch_orders`/`fetch_order`, `ping`), and the reference-data CRUD +
+archive helpers (`insert_/update_/delete_map`, `..._robot`, `..._named_location`,
+`archive_robot`/`restore_robot`, `update_fleet_config`). Note: `RobotRegistry` reads
+the fleet through this module at startup, so a live DB is required for the service to
+boot.
+
+### `app/auth.py`
+`require_api_key` — the FastAPI dependency behind the **G10** API-key gate. A no-op
+when `API_KEY` is unset (the local-dev default); when set, every guarded request must
+carry a matching `X-API-Key` header or it is rejected with **401**. Mounted on all
+client-facing routers from `main.py`.
+
+### `app/ratelimit.py`
+`rate_limit_middleware` — the **G11** per-client-IP sliding-window limiter.
+`RATE_LIMIT_PER_MINUTE` requests per 60 s (default 120; `0` disables). Over-limit
+returns **429** with a `Retry-After` header. The `/ingest/*` and docs routes are
+exempt.
 
 ### `app/schemas.py`
-`Node`, `OrderRequest`, `NamedOrderRequest`, `InstantActionRequest`.
+The Pydantic request models — `Node`, `OrderRequest`, `NamedOrderRequest`,
+`InstantActionRequest`; the `Ingest*` models for `/ingest/*`; and the reference-data
+CRUD bodies (`MapIn`/`MapUpdate`, `RobotIn`/`RobotUpdate`,
+`NamedLocationIn`/`NamedLocationUpdate`, `FleetConfigIn`).
 
 ### `app/routers/robots.py`
-`/robots`, `/robots/{serial}/order`, `/order/named`, `/instant-actions`, `/state`.
+The FMS gateway routes — `/robots/{serial}/order`, `/order/named`, `/instant-actions`,
+`/state` — plus the robot **registry CRUD**: `GET /robots` (with `include_archived`),
+`GET/POST/PUT/DELETE /robots/{serial}`, and `POST /robots/{serial}/archive|restore`
+(soft-delete; archived serials return **410** on command/ingest paths). Reloads the
+in-memory `RobotRegistry` after any write.
 
 ### `app/routers/fleet.py`
 `GET /fleet` — the full fleet definition (`interfaceName`, `majorVersion`, `version`,
@@ -93,6 +124,15 @@ disconnect` endpoints were removed — the rosbridge URL is fixed config.)
 ### `app/routers/oee.py`
 `/robots/{serial}/oee/summary|cycles|availability` — PostgreSQL-backed.
 
+### `app/routers/orders.py`
+`GET /orders` (paged, filterable by serial) and `GET /orders/{order_id}` (header +
+joined nodes/edges) — backs the Order History screen.
+
+### `app/routers/maps.py` / `app/routers/locations.py`
+Reference-data CRUD (**G15**) for the `maps` and `named_locations` tables, so editing
+them no longer means re-applying `schema.sql`. A `DELETE` that an existing foreign key
+still references is refused with **409** (the FK is never cascaded).
+
 ### `app/routers/ingest.py`
 `/ingest/state|connection|command|oee-cycle` — a **secondary** HTTP path (manual
 injection, the Node-RED Test Harness, the Newman smoke suite). The live ingest path
@@ -102,14 +142,17 @@ is the MQTT subscriber above; both delegate to `app/ingest_service.py`. Maps
 ## Dependency Graph (no cycles)
 
 ```
-main.py
+main.py  (+ auth, ratelimit, CORS middleware)
   └── app/routers/
-        ├── robots.py  ← robots, vda5050, mqtt, db, schemas
-        ├── fleet.py   ← robots
-        ├── system.py  ← mqtt, db
-        ├── oee.py     ← db, robots
-        └── ingest.py  ← db
-  (vda5050 ← robots ; mqtt ← vda5050, robots ; robots ← db)
+        ├── robots.py     ← robots, vda5050, mqtt, db, schemas
+        ├── fleet.py      ← robots, db, schemas
+        ├── system.py     ← mqtt, db
+        ├── oee.py        ← db, robots
+        ├── orders.py     ← db
+        ├── maps.py       ← db, schemas
+        ├── locations.py  ← db, schemas
+        └── ingest.py     ← ingest_service, db
+  (vda5050 ← robots ; mqtt ← vda5050, robots, ingest_service ; robots ← db)
 ```
 
 ## Notes

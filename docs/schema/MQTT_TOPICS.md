@@ -106,7 +106,7 @@ deployment concern beyond the FYP scope.
 
 ### amr/v2/moverobotic/{serialNumber}/state
 
-**Direction:** ROS Bridge Service → Mosquitto → Node-RED  
+**Direction:** ROS Bridge Service → Mosquitto → FastAPI (telemetry ingester) + browser (live UI); Node-RED optional viewer  
 **QoS:** 0  
 **Purpose:** The consolidated robot state snapshot; published on a significant position/order/error change plus a 5 s heartbeat.
 
@@ -138,7 +138,7 @@ deployment concern beyond the FYP scope.
 
 ### amr/v2/moverobotic/{serialNumber}/connection
 
-**Direction:** ROS Bridge Service → Mosquitto → Node-RED  
+**Direction:** ROS Bridge Service → Mosquitto → FastAPI (telemetry ingester) + browser (live UI); Node-RED optional viewer  
 **QoS:** 1  
 **Purpose:** Reports robot liveness; published **retained** — `ONLINE` on rosbridge connect, `OFFLINE` on graceful shutdown, `CONNECTIONBROKEN` emitted by the broker as the Last-Will if the bridge process dies.
 

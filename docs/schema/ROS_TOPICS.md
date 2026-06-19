@@ -22,7 +22,26 @@ happens at the rosbridge boundary (`src/helper/angleHelper.ts`). Goals sent via
 the FastAPI `/order` endpoint use VDA5050 conventions (radians, `frame_id =
 'map'`) — handled by FastAPI / ROS Bridge, not the browser.
 
+## Topics used by the ROS Bridge service (backend)
 
+The bridge holds its own rosbridge WebSocket per robot (separate from the
+browser's) and translates between ROS and VDA5050. This is its full ROS
+interface — the navigation lane that turns a VDA5050 `order` into motion:
+
+| Topic | Message type | Direction | Used by |
+|---|---|---|---|
+| `/diff_controller/odom` | `nav_msgs/Odometry` | subscribe | `OdomBridge` — `state.velocity` + driving flag |
+| `/amcl_pose` | `geometry_msgs/PoseWithCovarianceStamped` | subscribe | `PoseBridge` — `state.agvPosition` (`mapping:=false` only) |
+| `/move_base/status` | `actionlib_msgs/GoalStatusArray` | subscribe | `OrderStateMachine` — goal lifecycle |
+| `/move_base/result` | `move_base_msgs/MoveBaseActionResult` | subscribe | `OrderStateMachine` — the node-advance trigger (`SUCCEEDED` → next node) |
+| `/move_base_simple/goal` | `geometry_msgs/PoseStamped` | publish | `OrderStateMachine` — one goal per node |
+| `/move_base/cancel` | `actionlib_msgs/GoalID` | publish | `OrderStateMachine` — `cancelOrder` |
+
+The two published topics are **configurable** via env vars — `NAV_GOAL_TOPIC`
+(default `/move_base_simple/goal`) and `CANCEL_TOPIC` (default
+`/move_base/cancel`) — so the bridge can target a different navigation stack
+without code changes. See [running-locally.md](../getting-started/running-locally.md)
+and [ros-bridge-service.md](../reference/services/ros-bridge-service.md).
 
 > **Two launch modes.**
 > - **`mapping:=true`** — SLAM / mapping mode; the robot builds a map (gmapping).
@@ -35,8 +54,9 @@ the FastAPI `/order` endpoint use VDA5050 conventions (radians, `frame_id =
 > `mapping:=false` mode. It is the AGV pose source for the VDA5050
 > `state.agvPosition` — see [VDA5050_MESSAGES.md](VDA5050_MESSAGES.md).
 >
-> Integration-relevant topics today — present in both modes: `/diff_controller/odom`
-> (subscribed), `/move_base_simple/goal` and `/move_base/cancel` (published).
+> Integration-relevant topics today — present in both modes: `/diff_controller/odom`,
+> `/move_base/status`, `/move_base/result` (subscribed); `/move_base_simple/goal` and
+> `/move_base/cancel` (published). The full backend set is tabled above.
 > See [architecture.md](../reference/architecture.md) and [MQTT_TOPICS.md](MQTT_TOPICS.md).
 
 ---
