@@ -58,5 +58,4 @@ node-red/            Passive viewer / dev tool flows
 mosquitto/           MQTT broker config
 docs/                This knowledge base (+ schema/ contracts, postman/ smoke suite)
 scripts/             start-all.ps1 + integration test scripts
-thesis/              Thesis-writing snapshot (not part of this knowledge base)
 ```

@@ -41,5 +41,4 @@ The knowledge base lives in [`docs/`](docs/README.md), organised by audience:
 | Node-RED (optional viewer) | Node-RED | `:1880` |
 | PostgreSQL | PostgreSQL | `:5432` |
 
-`CLAUDE.md` holds guidance for the Claude Code agent. `thesis/` is a
-thesis-writing snapshot, separate from the live documentation.
+`CLAUDE.md` holds guidance for the Claude Code agent.

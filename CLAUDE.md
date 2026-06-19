@@ -29,7 +29,6 @@ All project documentation lives under `docs/`, organised by audience. Start at
 | PowerShell integration scripts | `scripts/test/` (+ `scripts/test/README.md`) |
 | Playwright E2E suite (frontend, non-robot) | `frontend/tests/e2e/` (+ `frontend/tests/README.md`) |
 | The React frontend itself | `frontend/` (see `frontend/README.md`) |
-| Thesis-writing snapshot (NOT project docs — don't update with code changes) | `thesis/` |
 
 ## Source of Truth
 
